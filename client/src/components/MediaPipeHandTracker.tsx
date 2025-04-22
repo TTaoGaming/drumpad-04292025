@@ -285,9 +285,17 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
         const mpCamera = await import('@mediapipe/camera_utils');
         const mpDrawing = await import('@mediapipe/drawing_utils');
         
-        // Initialize MediaPipe Hands - working around runtime error
-        // @ts-ignore - The typings don't match the actual implementation
-        const hands = new mpHands.Hands({
+        // Working around the MediaPipe runtime error using an alternative approach
+        // Bypass the constructor arguments issue
+        // @ts-ignore - Working around runtime compatibility issues
+        window.Module = window.Module || {};
+        window.Module.arguments = window.Module.arguments || [];
+        
+        // Initialize MediaPipe Hands with empty constructor
+        const hands = new mpHands.Hands();
+        
+        // Then set the file locator function
+        hands.setOptions({
           locateFile: (file: string) => {
             return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`;
           }
