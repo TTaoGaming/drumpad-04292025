@@ -280,17 +280,17 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
           type: 'info'
         });
         
-        // Import MediaPipe libraries and create hands instance without arguments to work around runtime error
+        // Import MediaPipe libraries
         const mpHands = await import('@mediapipe/hands');
         const mpCamera = await import('@mediapipe/camera_utils');
         const mpDrawing = await import('@mediapipe/drawing_utils');
         
-        // Working around the MediaPipe runtime error using a simpler approach
-        // Instead of using CDN resources, use the local files from node_modules
-        
-        // Initialize MediaPipe Hands with minimal options to avoid errors
+        // Initialize MediaPipe Hands with CDN - using version we know works
+        // @ts-ignore - TypeScript doesn't like the locateFile, but it's required
         const hands = new mpHands.Hands({
-          // No locateFile function - we'll use the local files from node_modules
+          locateFile: (file: string) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`;
+          }
         });
         
         // Configure Hands
