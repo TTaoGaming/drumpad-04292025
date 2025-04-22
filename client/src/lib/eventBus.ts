@@ -9,7 +9,13 @@ export enum EventType {
   LOG = 'log',
   NOTIFICATION = 'notification',
   OPENCV_STATUS = 'opencv-status',
-  PIPELINE_STATUS = 'pipeline-status'
+  PIPELINE_STATUS = 'pipeline-status',
+  // Settings panel events
+  SETTINGS_PANEL_OPEN = 'settings-panel-open',
+  SETTINGS_PANEL_CLOSE = 'settings-panel-close',
+  SETTINGS_TAB_CHANGE = 'settings-tab-change',
+  SETTINGS_SUBTAB_CHANGE = 'settings-subtab-change',
+  SETTINGS_VALUE_CHANGE = 'settings-value-change'
 }
 
 type EventCallback = (data: any) => void;
