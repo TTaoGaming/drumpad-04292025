@@ -36,11 +36,19 @@ const HandVisualization: React.FC<HandVisualizationProps> = ({
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [debugInfo, setDebugInfo] = useState<string>('No hand data');
+  // Debug information: log when this component renders
+  console.log("HandVisualization component rendering");
+  
   const [knuckleRulerSettings, setKnuckleRulerSettings] = useState<KnuckleRulerSettings>({
     enabled: true,
     showMeasurement: true,
     knuckleDistanceCm: 8.0
   });
+  
+  // Debug log for knuckle ruler settings
+  useEffect(() => {
+    console.log("Current knuckle ruler settings:", knuckleRulerSettings);
+  }, [knuckleRulerSettings]);
   
   // Listen for changes to knuckle ruler settings
   useEffect(() => {
@@ -171,11 +179,17 @@ const HandVisualization: React.FC<HandVisualizationProps> = ({
     
     // Draw knuckle ruler measurement if enabled
     if (knuckleRulerSettings.enabled && handData.landmarks) {
+      // Log the ruler state for debugging
+      console.log("Knuckle ruler is enabled:", knuckleRulerSettings.enabled);
+      console.log("Show measurement:", knuckleRulerSettings.showMeasurement);
+      console.log("Landmarks:", handData.landmarks.length);
+      
       // The index knuckle is landmark 5, pinky knuckle is landmark 17
       const indexKnuckle = handData.landmarks[5];
       const pinkyKnuckle = handData.landmarks[17];
       
       if (indexKnuckle && pinkyKnuckle) {
+        console.log("Found both index and pinky knuckles, drawing ruler");
         // Calculate the Euclidean distance between knuckles in normalized space (0-1)
         const normalizedDistance = Math.sqrt(
           Math.pow(indexKnuckle.x - pinkyKnuckle.x, 2) + 
@@ -197,37 +211,47 @@ const HandVisualization: React.FC<HandVisualizationProps> = ({
         
         // Only draw the visualization if showMeasurement is true
         if (knuckleRulerSettings.showMeasurement) {
-        // Draw a line connecting the knuckles
+        // Draw a line connecting the knuckles - make it much more visible
         ctx.beginPath();
         ctx.moveTo(indexKnuckle.x * canvas.width, indexKnuckle.y * canvas.height);
         ctx.lineTo(pinkyKnuckle.x * canvas.width, pinkyKnuckle.y * canvas.height);
         ctx.setLineDash([5, 3]); // Dashed line
-        ctx.strokeStyle = 'white';
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#ffff00'; // Bright yellow for better visibility
+        ctx.lineWidth = 3; // Thicker line
         ctx.stroke();
         ctx.setLineDash([]); // Reset to solid line
         
         // Calculate the midpoint for the text
         const midX = (indexKnuckle.x + pinkyKnuckle.x) / 2 * canvas.width;
-        const midY = (indexKnuckle.y + pinkyKnuckle.y) / 2 * canvas.height;
+        const midY = (indexKnuckle.y + pinkyKnuckle.y) / 2 * canvas.height - 15; // Move text up a bit
         
         // Display the measurement
         const measurementText = `${knuckleRulerSettings.knuckleDistanceCm.toFixed(1)} cm`;
         
-        // Create a background for the text
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        // Create a more visible background for the text
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
         const textWidth = ctx.measureText(measurementText).width;
-        const padding = 4;
+        const padding = 6;
         ctx.fillRect(
           midX - textWidth / 2 - padding, 
           midY - 10, 
           textWidth + padding * 2, 
-          20
+          24
+        );
+        
+        // Add a border to the background
+        ctx.strokeStyle = '#ffff00'; // Match the line color
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(
+          midX - textWidth / 2 - padding, 
+          midY - 10, 
+          textWidth + padding * 2, 
+          24
         );
         
         // Draw the text
-        ctx.fillStyle = 'white';
-        ctx.font = '12px sans-serif';
+        ctx.fillStyle = '#ffffff'; // Pure white
+        ctx.font = 'bold 14px sans-serif'; // Bold and bigger font
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(measurementText, midX, midY);
@@ -245,7 +269,8 @@ const HandVisualization: React.FC<HandVisualizationProps> = ({
     <>
       <canvas 
         ref={canvasRef}
-        className="absolute inset-0 z-10 pointer-events-none border-2 border-red-500"
+        className="absolute inset-0 z-10 pointer-events-none"
+        style={{ border: '1px solid rgba(255, 0, 0, 0.5)' }}
       />
       <div className="absolute top-8 left-4 z-20 bg-black/70 text-white p-2 rounded text-sm">
         Debug: {debugInfo}

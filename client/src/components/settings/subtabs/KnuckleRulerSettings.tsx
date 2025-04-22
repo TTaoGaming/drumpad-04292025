@@ -80,6 +80,14 @@ const KnuckleRulerSettings: React.FC = () => {
     
     // The pixel-to-cm ratio is based on the configured knuckle distance
     const calculatedCm = (realtimePixelDistance / 100 * (knuckleDistance / 8)).toFixed(1);
+    
+    // Log debug info for this calculation
+    console.log("Realtime measurement:", {
+      pixelDistance: realtimePixelDistance,
+      knuckleDistanceCm: knuckleDistance,
+      calculatedCm
+    });
+    
     return calculatedCm;
   };
   
