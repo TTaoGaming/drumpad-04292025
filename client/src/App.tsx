@@ -7,6 +7,7 @@ import ConsoleOutput from "@/components/ConsoleOutput";
 import HandVisualization from "@/components/HandVisualization";
 import PerformanceDisplay from "@/components/PerformanceDisplay";
 import MediaPipeHandTracker from "@/components/MediaPipeHandTracker";
+import SettingsPanel from "@/components/settings/SettingsPanel";
 import { EventType, addListener, dispatch } from "@/lib/eventBus";
 import { Notification, HandData, PerformanceMetrics } from "@/lib/types";
 import { getVideoFrame } from "@/lib/cameraManager";
@@ -287,6 +288,9 @@ function App() {
       <ConsoleOutput 
         logs={logs}
       />
+      
+      {/* Settings Panel */}
+      <SettingsPanel />
     </div>
   );
 }
