@@ -1,6 +1,8 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { EventType, dispatch } from '@/lib/eventBus';
 import { HandData, HandLandmark, HandConnection } from '@/lib/types';
+import { OneEuroFilterArray, DEFAULT_FILTER_OPTIONS } from '@/lib/oneEuroFilter';
+import FilterSettingsPanel from '@/components/FilterSettingsPanel';
 
 interface MediaPipeHandTrackerProps {
   videoRef: React.RefObject<HTMLVideoElement>;
@@ -30,6 +32,56 @@ const FINGER_INDICES = {
 const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const lastFrameTimeRef = useRef<number | null>(null);
+  const handFiltersRef = useRef<Map<number, OneEuroFilterArray[]>>(new Map());
+  
+  // Filter settings state
+  const [filterOptions, setFilterOptions] = useState({
+    minCutoff: DEFAULT_FILTER_OPTIONS.minCutoff,
+    beta: DEFAULT_FILTER_OPTIONS.beta,
+    dcutoff: DEFAULT_FILTER_OPTIONS.dcutoff
+  });
+  
+  // Filter settings change handler
+  const handleFilterSettingsChange = useCallback((newSettings: {
+    minCutoff: number;
+    beta: number;
+    dcutoff: number;
+  }) => {
+    setFilterOptions(newSettings);
+    
+    // Update all existing filters with new settings
+    handFiltersRef.current.forEach(handFilters => {
+      handFilters.forEach(filter => {
+        filter.updateOptions(newSettings);
+      });
+    });
+  }, []);
+  
+  // Apply the 1€ filter to hand landmarks
+  const applyFilter = useCallback((landmarks: any, handIndex: number, timestamp: number): any => {
+    if (!handFiltersRef.current.has(handIndex)) {
+      // Create new filter array for each landmark (each has x,y,z coordinates)
+      const handFilters: OneEuroFilterArray[] = [];
+      for (let i = 0; i < landmarks.length; i++) {
+        handFilters.push(new OneEuroFilterArray(3, filterOptions));
+      }
+      handFiltersRef.current.set(handIndex, handFilters);
+    }
+    
+    const handFilters = handFiltersRef.current.get(handIndex)!;
+    
+    // Apply filter to each landmark
+    return landmarks.map((landmark: any, i: number) => {
+      const values = [landmark.x, landmark.y, landmark.z];
+      const filteredValues = handFilters[i].filter(values, timestamp / 1000); // Convert to seconds
+      
+      return {
+        x: filteredValues[0],
+        y: filteredValues[1],
+        z: filteredValues[2]
+      };
+    });
+  }, [filterOptions]);
   
   // Initialize MediaPipe when the component mounts
   useEffect(() => {
@@ -81,9 +133,12 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
           
           // Process hands if available
           if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-            results.multiHandLandmarks.forEach((landmarks: any) => {
-              // Draw landmarks
-              mpDrawing.drawLandmarks(ctx, landmarks, {
+            results.multiHandLandmarks.forEach((landmarks: any, handIndex: number) => {
+              // Apply 1€ filter to hand landmarks
+              const filteredLandmarks = applyFilter(landmarks, handIndex, now);
+              
+              // Draw filtered landmarks
+              mpDrawing.drawLandmarks(ctx, filteredLandmarks, {
                 color: '#ffffff',
                 lineWidth: 2,
                 radius: 4
@@ -113,7 +168,7 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                 }
                 
                 // Draw the connection with appropriate color
-                mpDrawing.drawConnectors(ctx, landmarks, [connection], {
+                mpDrawing.drawConnectors(ctx, filteredLandmarks, [connection], {
                   color: FINGER_COLORS[colorIndex],
                   lineWidth: 5
                 });
@@ -164,7 +219,7 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
     };
     
     loadDependencies();
-  }, [videoRef]);
+  }, [videoRef, applyFilter]);
   
   // Resize canvas to match video dimensions
   useEffect(() => {
@@ -186,10 +241,22 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
   }, [videoRef]);
   
   return (
-    <canvas
-      ref={canvasRef}
-      className="absolute inset-0 z-10 pointer-events-none"
-    />
+    <>
+      <canvas
+        ref={canvasRef}
+        className="absolute inset-0 z-10 pointer-events-none"
+      />
+      
+      {/* 1€ Filter Settings Panel */}
+      <FilterSettingsPanel 
+        onSettingsChange={handleFilterSettingsChange}
+      />
+      
+      {/* Filter status indication */}
+      <div className="absolute bottom-4 left-4 bg-black/70 text-white px-3 py-1 rounded-full text-xs z-20">
+        1€ Filter: Active
+      </div>
+    </>
   );
 };
 
