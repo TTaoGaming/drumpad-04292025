@@ -32,11 +32,11 @@ const JOINT_NAMES = [
 // Initial default thresholds for each finger
 // Format: [straightThreshold, bentThreshold]
 const DEFAULT_THRESHOLDS = {
-  thumb: { pip: [5, 40], dip: [5, 40] },
-  index: { pip: [5, 60], dip: [5, 60] },
-  middle: { pip: [5, 60], dip: [5, 60] },
-  ring: { pip: [5, 60], dip: [5, 60] },
-  pinky: { pip: [5, 60], dip: [5, 60] }
+  thumb: { pip: [5, 30], dip: [5, 30] },
+  index: { pip: [5, 30], dip: [5, 30] },
+  middle: { pip: [5, 30], dip: [5, 30] },
+  ring: { pip: [5, 30], dip: [5, 30] },
+  pinky: { pip: [5, 30], dip: [5, 30] }
 };
 
 type JointType = 'flex';
@@ -82,19 +82,19 @@ const FingerFlexionSettings: React.FC = () => {
   // Simplified threshold settings - one combined flexion value per finger
   const [thresholds, setThresholds] = useState({
     thumb: { 
-      flex: { min: 5, max: 40 }
+      flex: { min: 5, max: 30 }
     },
     index: { 
-      flex: { min: 5, max: 60 }
+      flex: { min: 5, max: 30 }
     },
     middle: { 
-      flex: { min: 5, max: 60 }
+      flex: { min: 5, max: 30 }
     },
     ring: { 
-      flex: { min: 5, max: 60 }
+      flex: { min: 5, max: 30 }
     },
     pinky: { 
-      flex: { min: 5, max: 60 }
+      flex: { min: 5, max: 30 }
     }
   });
   
