@@ -15,11 +15,37 @@ export interface FrameData {
   timestamp: number;
 }
 
+export interface HandLandmark {
+  x: number; // Normalized x coordinate (0-1)
+  y: number; // Normalized y coordinate (0-1)
+  z: number; // Normalized z coordinate (depth)
+}
+
+export interface HandConnection {
+  start: number; // Index of first landmark
+  end: number;   // Index of second landmark
+  colorIndex: number; // Index in the colors array
+}
+
+export interface HandData {
+  landmarks: HandLandmark[];
+  connections: HandConnection[];
+  colors: string[]; // Rainbow colors for visualization
+}
+
+export interface PerformanceMetrics {
+  [moduleId: string]: number; // Duration in milliseconds
+  totalProcessingMs: number;
+  estimatedFps: number;
+}
+
 export interface ProcessedFrameResult {
   originalFrame: FrameData;
   processedData: any;
   timestamp: number;
   processingTimeMs: number;
+  performance?: PerformanceMetrics;
+  handData?: HandData;
 }
 
 export interface WorkerMessage<T = any> {
