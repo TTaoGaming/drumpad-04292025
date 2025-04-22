@@ -3,7 +3,7 @@ import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { EventType, dispatch } from '@/lib/eventBus';
+import { EventType, dispatch, addListener } from '@/lib/eventBus';
 import { Info } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -20,6 +20,7 @@ const KnuckleRulerSettings: React.FC = () => {
   const [isEnabled, setIsEnabled] = useState(true);
   const [showMeasurement, setShowMeasurement] = useState(true);
   const [knuckleDistance, setKnuckleDistance] = useState(DEFAULT_KNUCKLE_DISTANCE);
+  const [realtimePixelDistance, setRealtimePixelDistance] = useState<number | null>(null);
   
   // Update the app when settings change
   useEffect(() => {
@@ -34,11 +35,52 @@ const KnuckleRulerSettings: React.FC = () => {
     });
   }, [isEnabled, showMeasurement, knuckleDistance]);
   
+  // Listen for real-time knuckle measurements
+  useEffect(() => {
+    const listener = addListener(EventType.SETTINGS_VALUE_CHANGE, (data: {
+      section: string;
+      setting: string;
+      value: {
+        pixelDistance?: number;
+        normalizedDistance?: number;
+      }
+    }) => {
+      if (data.section === 'calibration' && data.setting === 'knuckleRulerRealtime') {
+        setRealtimePixelDistance(data.value.pixelDistance || null);
+      }
+    });
+    
+    return () => {
+      listener.remove();
+    };
+  }, []);
+  
   // Handle slider or input changes
   const handleDistanceChange = (value: number) => {
     // Ensure the value is within reasonable limits (5-12cm covers small to large hands)
     const clampedValue = Math.min(Math.max(value, 5), 12);
     setKnuckleDistance(clampedValue);
+  };
+  
+  // Calculate the real-time centimeter value
+  const getRealtimeCentimeters = (): string => {
+    if (!realtimePixelDistance || !isEnabled) {
+      return "--.--";
+    }
+    
+    // Create calibration factor based on the configured knuckle distance
+    // This allows us to convert from pixels to real-world centimeters
+    // by using the known reference (knuckle distance in cm)
+    
+    // For now using simplified conversion
+    // In a more complex version, we'd need to account for:
+    // - Distance from camera (z-coordinate from MediaPipe)
+    // - Camera field of view
+    // - Lens distortion
+    
+    // The pixel-to-cm ratio is based on the configured knuckle distance
+    const calculatedCm = (realtimePixelDistance / 100 * (knuckleDistance / 8)).toFixed(1);
+    return calculatedCm;
   };
   
   return (
@@ -107,8 +149,7 @@ const KnuckleRulerSettings: React.FC = () => {
           <div className="flex justify-between items-center">
             <p className="text-xs text-white/70">Measured distance in realtime</p>
             <span className="text-xs font-semibold bg-black/30 px-2 py-1 rounded">
-              {/* This would be populated from hand tracking data */}
-              --.-- cm
+              {getRealtimeCentimeters()} cm
             </span>
           </div>
           

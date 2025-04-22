@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { HandData } from '@/lib/types';
-import { EventType, addListener } from '@/lib/eventBus';
+import { EventType, addListener, dispatch } from '@/lib/eventBus';
 
 interface HandVisualizationProps {
   handData?: HandData;
