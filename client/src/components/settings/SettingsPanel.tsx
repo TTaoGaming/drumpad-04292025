@@ -106,22 +106,37 @@ const SettingsPanel: React.FC = () => {
       {/* Settings panel when open */}
       {isOpen && (
         <div 
-          className="fixed right-0 top-0 bottom-12 z-30 flex h-[calc(100vh-48px)]"
+          className="fixed right-0 top-0 bottom-16 z-30 flex h-[calc(100vh-64px)]"
           style={{ width: `${panelWidth}px` }}
         >
-          {/* Resize handle */}
+          {/* Resize handle - mobile style */}
           <div 
             ref={resizeHandleRef}
-            className="absolute left-0 top-0 bottom-0 w-4 cursor-ew-resize flex items-center justify-center hover:bg-white/10 group z-10"
+            className="absolute left-0 top-0 bottom-0 w-8 cursor-ew-resize flex items-center justify-center bg-gray-800/80 hover:bg-gray-700/80 active:bg-gray-600/80 transition-colors z-10 rounded-l-md shadow-lg"
             onMouseDown={handleResizeStart}
           >
-            <div className="h-12 w-1 flex items-center justify-center group-hover:opacity-100 opacity-0">
-              <GripVertical size={12} className="text-white/70" />
+            <div className="h-40 w-8 flex flex-col items-center justify-center">
+              {/* Resize indicator lines */}
+              <div className="h-24 w-2 flex flex-col items-center justify-around py-1">
+                <div className="w-1.5 h-5 bg-white/40 rounded-full"></div>
+                <div className="w-1.5 h-5 bg-white/40 rounded-full"></div>
+                <div className="w-1.5 h-5 bg-white/40 rounded-full"></div>
+              </div>
+              
+              {/* Resize icon */}
+              <div className="mt-3 bg-white/20 p-1 rounded-full">
+                <GripVertical size={16} className="text-white/70" />
+              </div>
+              
+              {/* Resize text */}
+              <div className="mt-3 rotate-90 text-white/50 text-[9px] tracking-wide">
+                RESIZE
+              </div>
             </div>
           </div>
           
           {/* Main panel */}
-          <div className="flex-1 bg-black/80 backdrop-blur-sm text-white rounded-l-lg shadow-lg animate-in slide-in-from-right duration-300 overflow-hidden flex flex-col">
+          <div className="flex-1 bg-black/80 backdrop-blur-sm text-white rounded-l-lg shadow-lg animate-in slide-in-from-right duration-300 overflow-hidden flex flex-col ml-1">
             {/* Header with title and close button */}
             <div className="flex justify-between items-center px-4 py-3 border-b border-white/10">
               <h3 className="font-semibold text-lg">Settings</h3>
@@ -188,7 +203,7 @@ const SettingsPanel: React.FC = () => {
               {/* Scrollable content area */}
               <div className="flex-1 overflow-hidden">
                 <ScrollArea className="h-full w-full">
-                  <div className="px-4 py-2">
+                  <div className="px-4 py-4">
                     {/* Tab content */}
                     <TabsContent value="getting-started" className="m-0 p-0">
                       <GettingStartedSettings />
