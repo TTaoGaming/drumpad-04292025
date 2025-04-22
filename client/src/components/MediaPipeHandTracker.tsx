@@ -59,12 +59,19 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
   // Finger flexion settings
   const [fingerFlexionSettings, setFingerFlexionSettings] = useState({
     enabled: true,
+    enabledFingers: {
+      thumb: true,
+      index: true,
+      middle: true,
+      ring: false,  // Disabled by default to save performance
+      pinky: false  // Disabled by default to save performance
+    },
     thresholds: {
-      thumb: { pip: { min: 5, max: 40 }, dip: { min: 5, max: 40 } },
-      index: { pip: { min: 5, max: 60 }, dip: { min: 5, max: 60 } },
-      middle: { pip: { min: 5, max: 60 }, dip: { min: 5, max: 60 } },
-      ring: { pip: { min: 5, max: 60 }, dip: { min: 5, max: 60 } },
-      pinky: { pip: { min: 5, max: 60 }, dip: { min: 5, max: 60 } }
+      thumb: { flex: { min: 5, max: 40 } },
+      index: { flex: { min: 5, max: 60 } },
+      middle: { flex: { min: 5, max: 60 } },
+      ring: { flex: { min: 5, max: 60 } },
+      pinky: { flex: { min: 5, max: 60 } }
     }
   });
   
@@ -127,7 +134,7 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
     }
     
     // Pre-allocate the angles object with simplified flex measurements
-    const angles = {
+    const angles: {[finger: string]: {flex: number | null}} = {
       thumb: { flex: null },
       index: { flex: null },
       middle: { flex: null },
@@ -451,78 +458,78 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
             
             // Calculate and send finger joint angles if finger flexion is enabled
             if (fingerFlexionSettings.enabled && results.multiHandLandmarks.length > 0) {
-              // Performance monitoring - start timing finger angle calculations
-              const angleCalcStartTime = performance.now();
-              
-              // Get the first detected hand
-              const hand = results.multiHandLandmarks[0];
-              
-              // Use filtered landmarks for angle calculation
-              const landmarks = applyFilter(hand, 0, now);
-              
-              // Calculate finger angles (PIP and DIP angles for each finger)
-              const fingerAngles = calculateFingerAngles(landmarks);
-              
-              // Performance monitoring - measure time spent on angle calculations
-              const angleCalcTime = performance.now() - angleCalcStartTime;
-              console.log(`Finger angle calculation time: ${angleCalcTime.toFixed(2)}ms`);
-              
               // Only process angles at a reduced rate (every 3rd frame) to improve performance
               // Increment the frame counter
-              flexionFrameCountRef.current += 1;
+              flexionFrameCountRef.current = (flexionFrameCountRef.current + 1) % 3;
               
-              if (fingerAngles && flexionFrameCountRef.current % 3 === 0) {
-                // Performance monitoring - start timing state calculation and dispatch
-                const stateCalcStartTime = performance.now();
+              // Only calculate on every 3rd frame
+              if (flexionFrameCountRef.current === 0) {
+                // Performance monitoring - start timing finger angle calculations
+                const angleCalcStartTime = performance.now();
                 
-                // Send angle data to the settings panel for real-time display
-                dispatch(EventType.SETTINGS_VALUE_CHANGE, {
-                  section: 'gestures',
-                  setting: 'fingerFlexionAngles',
-                  value: fingerAngles
-                });
+                // Get the first detected hand
+                const hand = results.multiHandLandmarks[0];
                 
-                // Check for thresholds and trigger events if needed
-                const fingerStates: {[finger: string]: {pip: string, dip: string}} = {};
+                // Use filtered landmarks for angle calculation
+                const landmarks = applyFilter(hand, 0, now);
                 
-                // For each finger, check if the joints are bent or straight based on thresholds
-                Object.keys(fingerAngles).forEach((finger) => {
-                  const key = finger as keyof typeof fingerAngles;
-                  const angles = fingerAngles[key];
-                  const thresholds = fingerFlexionSettings.thresholds[key];
+                // Calculate finger angles (only for enabled fingers)
+                const fingerAngles = calculateFingerAngles(landmarks, fingerFlexionSettings.enabledFingers);
+                
+                // Performance monitoring - measure time spent on angle calculations
+                const angleCalcTime = performance.now() - angleCalcStartTime;
+                console.log(`Finger angle calculation time: ${angleCalcTime.toFixed(2)}ms`);
+                
+                if (fingerAngles) {
+                  // Performance monitoring - start timing state calculation and dispatch
+                  const stateCalcStartTime = performance.now();
                   
-                  // Determine PIP joint state
-                  let pipState = 'in-between';
-                  if (angles.pip < thresholds.pip.min) {
-                    pipState = 'straight';
-                  } else if (angles.pip > thresholds.pip.max) {
-                    pipState = 'bent';
-                  }
+                  // Send angle data to the settings panel for real-time display
+                  dispatch(EventType.SETTINGS_VALUE_CHANGE, {
+                    section: 'gestures',
+                    setting: 'fingerFlexionAngles',
+                    value: fingerAngles
+                  });
                   
-                  // Determine DIP joint state
-                  let dipState = 'in-between';
-                  if (angles.dip < thresholds.dip.min) {
-                    dipState = 'straight';
-                  } else if (angles.dip > thresholds.dip.max) {
-                    dipState = 'bent';
-                  }
+                  // Check for thresholds and trigger events if needed
+                  const fingerStates: {[finger: string]: {state: string}} = {};
                   
-                  fingerStates[finger] = {
-                    pip: pipState,
-                    dip: dipState
-                  };
-                });
-                
-                // Dispatch the finger states for gesture recognition
-                dispatch(EventType.SETTINGS_VALUE_CHANGE, {
-                  section: 'gestures',
-                  setting: 'fingerFlexionStates',
-                  value: fingerStates
-                });
-                
-                // Performance monitoring - measure time spent on state calculation and dispatch
-                const stateCalcTime = performance.now() - stateCalcStartTime;
-                console.log(`Finger state calculation and dispatch time: ${stateCalcTime.toFixed(2)}ms`);
+                  // For each finger, check if it's bent or straight based on thresholds
+                  Object.keys(fingerAngles).forEach((finger) => {
+                    // Skip fingers that aren't enabled
+                    if (!fingerFlexionSettings.enabledFingers[finger]) return;
+                    
+                    const key = finger as keyof typeof fingerAngles;
+                    const angle = fingerAngles[key].flex;
+                    
+                    // Skip null values (fingers that weren't calculated)
+                    if (angle === null) return;
+                    
+                    const threshold = fingerFlexionSettings.thresholds[key].flex;
+                    
+                    // Determine finger state
+                    let state = 'in-between';
+                    if (angle < threshold.min) {
+                      state = 'straight';
+                    } else if (angle > threshold.max) {
+                      state = 'bent';
+                    }
+                    
+                    // Store state for event dispatch
+                    fingerStates[finger] = { state };
+                  });
+                  
+                  // Dispatch the finger states for gesture recognition
+                  dispatch(EventType.SETTINGS_VALUE_CHANGE, {
+                    section: 'gestures',
+                    setting: 'fingerFlexionStates',
+                    value: fingerStates
+                  });
+                  
+                  // Performance monitoring - measure time spent on state calculation and dispatch
+                  const stateCalcTime = performance.now() - stateCalcStartTime;
+                  console.log(`Finger state calculation and dispatch time: ${stateCalcTime.toFixed(2)}ms`);
+                }
               }
             }
           }
