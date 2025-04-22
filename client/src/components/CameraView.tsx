@@ -1,19 +1,32 @@
-import { useEffect, useRef } from "react";
+import { useEffect, RefObject } from "react";
 import { dispatch, EventType } from "@/lib/eventBus";
 import { startCamera, stopCamera } from "@/lib/cameraManager";
 
 interface CameraViewProps {
   isCameraRunning: boolean;
+  videoRef: RefObject<HTMLVideoElement>;
 }
 
-const CameraView = ({ isCameraRunning }: CameraViewProps) => {
-  const videoRef = useRef<HTMLVideoElement>(null);
-
+const CameraView = ({ isCameraRunning, videoRef }: CameraViewProps) => {
   const handleStartCamera = async () => {
     try {
       if (videoRef.current) {
         const stream = await startCamera(videoRef.current);
-        dispatch(EventType.CAMERA_STATUS_CHANGE, { isRunning: true });
+        
+        // Get video dimensions for proper visualization
+        if (videoRef.current) {
+          const { videoWidth, videoHeight } = videoRef.current;
+          dispatch(EventType.CAMERA_STATUS_CHANGE, { 
+            isRunning: true,
+            resolution: { 
+              width: videoWidth || 640, 
+              height: videoHeight || 480 
+            }
+          });
+        } else {
+          dispatch(EventType.CAMERA_STATUS_CHANGE, { isRunning: true });
+        }
+        
         dispatch(EventType.LOG, { message: 'Requesting camera access...' });
       }
     } catch (error) {
@@ -31,7 +44,7 @@ const CameraView = ({ isCameraRunning }: CameraViewProps) => {
         stopCamera(videoRef.current);
       }
     };
-  }, []);
+  }, [videoRef]);
 
   return (
     <>
