@@ -6,7 +6,7 @@ import Notifications from "@/components/Notifications";
 import ConsoleOutput from "@/components/ConsoleOutput";
 import HandVisualization from "@/components/HandVisualization";
 import PerformanceDisplay from "@/components/PerformanceDisplay";
-import SimpleHandVisualizer from "@/components/SimpleHandVisualizer";
+import MediaPipeHandTracker from "@/components/MediaPipeHandTracker";
 import { EventType, addListener, dispatch } from "@/lib/eventBus";
 import { Notification, HandData, PerformanceMetrics } from "@/lib/types";
 import { getVideoFrame } from "@/lib/cameraManager";
@@ -246,12 +246,12 @@ function App() {
         videoRef={videoRef}
       />
       
-      {/* SimpleHandVisualizer - direct visualization with no worker dependency */}
+      {/* MediaPipe Hand Tracking - tracks your actual hands via webcam */}
       {isCameraRunning && (
-        <SimpleHandVisualizer videoRef={videoRef} />
+        <MediaPipeHandTracker videoRef={videoRef} />
       )}
       
-      {/* Advanced hand visualization overlay (currently not working) */}
+      {/* Legacy hand visualization components (not used) */}
       {false && isCameraRunning && handData && (
         <HandVisualization
           handData={handData}
