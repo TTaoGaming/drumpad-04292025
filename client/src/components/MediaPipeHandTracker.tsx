@@ -55,7 +55,7 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
         
         // Configure Hands
         hands.setOptions({
-          selfieMode: true,
+          selfieMode: false, // Disabled mirror effect for desktop surface scenarios
           maxNumHands: 2,
           modelComplexity: 1,
           minDetectionConfidence: 0.5,
