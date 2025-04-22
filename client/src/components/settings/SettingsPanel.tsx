@@ -3,7 +3,7 @@ import { Settings, X, GripVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
-import { EventType, dispatch } from '@/lib/eventBus';
+import { EventType, dispatch, addListener } from '@/lib/eventBus';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 // Import settings content components
@@ -27,6 +27,24 @@ const SettingsPanel: React.FC = () => {
   const resizeHandleRef = useRef<HTMLDivElement>(null);
   const startXRef = useRef<number>(0);
   const startWidthRef = useRef<number>(DEFAULT_WIDTH);
+
+  // Listen for events to open/close the settings panel
+  useEffect(() => {
+    // Listen for open settings panel event (from controls overlay)
+    const openListener = addListener(EventType.SETTINGS_PANEL_OPEN, () => {
+      setIsOpen(true);
+    });
+    
+    // Listen for close settings panel event
+    const closeListener = addListener(EventType.SETTINGS_PANEL_CLOSE, () => {
+      setIsOpen(false);
+    });
+    
+    return () => {
+      openListener.remove();
+      closeListener.remove();
+    };
+  }, []);
 
   const handleTabChange = (value: string) => {
     setActiveTab(value as SettingsTab);
