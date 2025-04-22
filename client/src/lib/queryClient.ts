@@ -7,35 +7,15 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
-export async function apiRequest(url: string, options?: RequestInit): Promise<Response>;
-export async function apiRequest(method: string, url: string, data?: unknown): Promise<Response>;
 export async function apiRequest(
-  urlOrMethod: string,
-  optionsOrUrl?: RequestInit | string,
-  data?: unknown,
+  method: string,
+  url: string,
+  data?: unknown | undefined,
 ): Promise<Response> {
-  // Handle the method, url, data overload
-  if (typeof optionsOrUrl === 'string') {
-    const method = urlOrMethod;
-    const url = optionsOrUrl;
-    const options: RequestInit = {
-      method,
-      headers: data ? { "Content-Type": "application/json" } : {},
-      body: data ? JSON.stringify(data) : undefined,
-      credentials: "include",
-    };
-    
-    const res = await fetch(url, options);
-    await throwIfResNotOk(res);
-    return res;
-  }
-  
-  // Handle the url, options overload
-  const url = urlOrMethod;
-  const options = optionsOrUrl as RequestInit | undefined;
-  
   const res = await fetch(url, {
-    ...options,
+    method,
+    headers: data ? { "Content-Type": "application/json" } : {},
+    body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });
 
