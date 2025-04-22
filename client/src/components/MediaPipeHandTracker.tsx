@@ -49,6 +49,13 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
     colorScheme: 'rainbow'
   });
   
+  // Knuckle ruler settings
+  const [knuckleRulerSettings, setKnuckleRulerSettings] = useState({
+    enabled: true,
+    showMeasurement: true,
+    knuckleDistanceCm: 8.0
+  });
+  
   // Filter settings change handler
   const handleFilterSettingsChange = useCallback((newSettings: {
     minCutoff: number;
@@ -191,6 +198,91 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                 });
               }
             });
+            
+            // Add knuckle ruler visualization
+            if (knuckleRulerSettings.enabled && knuckleRulerSettings.showMeasurement) {
+              console.log("Drawing knuckle ruler, first hand landmarks:", results.multiHandLandmarks[0].length);
+              // Get the first detected hand for the knuckle ruler
+              const hand = results.multiHandLandmarks[0];
+              
+              // Use filtered landmarks if available
+              const landmarks = applyFilter(hand, 0, now);
+              
+              // The index knuckle is landmark 5, pinky knuckle is landmark 17
+              const indexKnuckle = landmarks[5];
+              const pinkyKnuckle = landmarks[17];
+              
+              if (indexKnuckle && pinkyKnuckle) {
+                console.log("Found index and pinky knuckle landmarks for ruler");
+                // Calculate the Euclidean distance between knuckles in normalized space (0-1)
+                const normalizedDistance = Math.sqrt(
+                  Math.pow(indexKnuckle.x - pinkyKnuckle.x, 2) + 
+                  Math.pow(indexKnuckle.y - pinkyKnuckle.y, 2)
+                );
+                
+                // Calculate the actual measurement in pixels
+                const pixelDistance = normalizedDistance * canvas.width;
+                
+                // Dispatch an event with the real-time measurement
+                dispatch(EventType.SETTINGS_VALUE_CHANGE, {
+                  section: 'calibration',
+                  setting: 'knuckleRulerRealtime',
+                  value: {
+                    normalizedDistance,
+                    pixelDistance
+                  }
+                });
+                
+                // Draw a line connecting the knuckles - make it much more visible
+                ctx.beginPath();
+                ctx.moveTo(indexKnuckle.x * canvas.width, indexKnuckle.y * canvas.height);
+                ctx.lineTo(pinkyKnuckle.x * canvas.width, pinkyKnuckle.y * canvas.height);
+                ctx.setLineDash([5, 3]); // Dashed line
+                ctx.strokeStyle = '#ffff00'; // Bright yellow for better visibility
+                ctx.lineWidth = 3; // Thicker line
+                ctx.stroke();
+                ctx.setLineDash([]); // Reset to solid line
+                
+                // Calculate the midpoint for the text
+                const midX = (indexKnuckle.x + pinkyKnuckle.x) / 2 * canvas.width;
+                const midY = (indexKnuckle.y + pinkyKnuckle.y) / 2 * canvas.height - 15; // Move text up a bit
+                
+                // Display the measurement
+                const measurementText = `${knuckleRulerSettings.knuckleDistanceCm.toFixed(1)} cm`;
+                
+                // Create a more visible background for the text
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                const textWidth = ctx.measureText(measurementText).width;
+                const padding = 6;
+                ctx.fillRect(
+                  midX - textWidth / 2 - padding, 
+                  midY - 10, 
+                  textWidth + padding * 2, 
+                  24
+                );
+                
+                // Add a border to the background
+                ctx.strokeStyle = '#ffff00'; // Match the line color
+                ctx.lineWidth = 1.5;
+                ctx.strokeRect(
+                  midX - textWidth / 2 - padding, 
+                  midY - 10, 
+                  textWidth + padding * 2, 
+                  24
+                );
+                
+                // Draw the text
+                ctx.fillStyle = '#ffffff'; // Pure white
+                ctx.font = 'bold 14px sans-serif'; // Bold and bigger font
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(measurementText, midX, midY);
+                
+                // Reset text alignment
+                ctx.textAlign = 'start';
+                ctx.textBaseline = 'alphabetic';
+              }
+            }
           }
           
           // Draw FPS counter
@@ -236,7 +328,7 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
     };
     
     loadDependencies();
-  }, [videoRef, applyFilter, landmarksSettings]);
+  }, [videoRef, applyFilter, landmarksSettings, knuckleRulerSettings]);
   
   // Resize canvas to match video dimensions
   useEffect(() => {
@@ -275,6 +367,12 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
           ...prev,
           ...data.value
         }));
+      }
+      
+      // Handle knuckle ruler settings
+      if (data.section === 'calibration' && data.setting === 'knuckleRuler') {
+        console.log("Received knuckle ruler settings:", data.value);
+        setKnuckleRulerSettings(data.value);
       }
     });
     
