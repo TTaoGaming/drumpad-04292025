@@ -28,16 +28,17 @@ export interface OneEuroFilterState {
 
 /**
  * Default filter parameters, tuned for hand tracking
+ * Optimized for responsiveness (important for finger drumming)
  */
 export const DEFAULT_FILTER_OPTIONS: FilterOptions = {
-  // Minimum cutoff - lower values smooth more but increase lag
-  minCutoff: 1.0,
+  // Minimum cutoff - higher values reduce lag but may be less smooth
+  minCutoff: 2.0,
   
   // Beta - higher values reduce lag on faster movements
-  beta: 0.007,
+  beta: 0.01,
   
   // Derivative cutoff - low-pass filter for speed (usually leave this alone)
-  dcutoff: 1.0
+  dcutoff: 1.5
 };
 
 /**

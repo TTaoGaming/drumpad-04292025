@@ -17,9 +17,18 @@ interface FilterSettings {
 
 // Define filter presets
 const PRESETS = {
+  responsive: {
+    name: "Responsive",
+    description: "Default setting optimized for quick movements like finger drumming",
+    settings: {
+      minCutoff: 2.0,
+      beta: 0.01,
+      dcutoff: 1.5
+    }
+  },
   balanced: {
     name: "Balanced",
-    description: "Default setting with balanced smoothing and responsiveness",
+    description: "Moderate smoothing with decent responsiveness",
     settings: {
       minCutoff: 1.0,
       beta: 0.007,
@@ -28,20 +37,11 @@ const PRESETS = {
   },
   smooth: {
     name: "Smooth",
-    description: "More smoothing, better for slow movements",
+    description: "Maximum smoothing, better for precise slow movements",
     settings: {
-      minCutoff: 0.5,
+      minCutoff: 0.5, 
       beta: 0.004,
       dcutoff: 0.7
-    }
-  },
-  responsive: {
-    name: "Responsive",
-    description: "Less smoothing, better for quick movements",
-    settings: {
-      minCutoff: 2.0,
-      beta: 0.01,
-      dcutoff: 1.5
     }
   },
   custom: {
@@ -53,10 +53,10 @@ const PRESETS = {
 
 const OneEuroFilterSettings: React.FC = () => {
   const [isEnabled, setIsEnabled] = useState(true);
-  const [activePreset, setActivePreset] = useState<'balanced' | 'smooth' | 'responsive' | 'custom'>('balanced');
-  const [minCutoff, setMinCutoff] = useState(PRESETS.balanced.settings.minCutoff);
-  const [beta, setBeta] = useState(PRESETS.balanced.settings.beta);
-  const [dcutoff, setDcutoff] = useState(PRESETS.balanced.settings.dcutoff);
+  const [activePreset, setActivePreset] = useState<'balanced' | 'smooth' | 'responsive' | 'custom'>('responsive');
+  const [minCutoff, setMinCutoff] = useState(PRESETS.responsive.settings.minCutoff);
+  const [beta, setBeta] = useState(PRESETS.responsive.settings.beta);
+  const [dcutoff, setDcutoff] = useState(PRESETS.responsive.settings.dcutoff);
   const [isCustomMode, setIsCustomMode] = useState(false);
   
   // Update parent component when settings change
@@ -87,9 +87,9 @@ const OneEuroFilterSettings: React.FC = () => {
     setActivePreset(preset);
   };
   
-  // Reset to default balanced values
+  // Reset to default responsive values
   const handleReset = () => {
-    applyPreset('balanced');
+    applyPreset('responsive');
   };
 
   // Set value and switch to custom mode when sliders are used
@@ -135,11 +135,20 @@ const OneEuroFilterSettings: React.FC = () => {
             className="gap-2"
           >
             <div className="flex items-center space-x-2">
+              <RadioGroupItem value="responsive" id="responsive" className="h-3 w-3" />
+              <Label htmlFor="responsive" className="text-xs font-medium">
+                Responsive
+                <span className="ml-1 text-[10px] text-white/60 font-normal">
+                  (Default)
+                </span>
+              </Label>
+            </div>
+            <div className="flex items-center space-x-2">
               <RadioGroupItem value="balanced" id="balanced" className="h-3 w-3" />
               <Label htmlFor="balanced" className="text-xs font-medium">
                 Balanced
                 <span className="ml-1 text-[10px] text-white/60 font-normal">
-                  (Default)
+                  (Moderate)
                 </span>
               </Label>
             </div>
@@ -148,16 +157,7 @@ const OneEuroFilterSettings: React.FC = () => {
               <Label htmlFor="smooth" className="text-xs font-medium">
                 Smooth
                 <span className="ml-1 text-[10px] text-white/60 font-normal">
-                  (More filtering)
-                </span>
-              </Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="responsive" id="responsive" className="h-3 w-3" />
-              <Label htmlFor="responsive" className="text-xs font-medium">
-                Responsive
-                <span className="ml-1 text-[10px] text-white/60 font-normal">
-                  (Fast reactions)
+                  (Maximum filtering)
                 </span>
               </Label>
             </div>
