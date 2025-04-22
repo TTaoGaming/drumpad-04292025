@@ -82,7 +82,7 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
    * @param p1 First point
    * @param p2 Second point (joint)
    * @param p3 Third point
-   * @returns Angle in degrees
+   * @returns Angle in degrees (normalized for flexion: 0 = straight, 180 = fully bent)
    */
   const calculateAngle = useCallback((p1: any, p2: any, p3: any): number => {
     // Optimized angle calculation - avoid excessive object creation
@@ -106,8 +106,11 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
     const cosVal = Math.max(-1.0, Math.min(1.0, dotProduct / (mag1 * mag2)));
     const angleRad = Math.acos(cosVal);
     
-    // Convert to degrees
-    return angleRad * (180 / Math.PI);
+    // Convert to degrees - normalize the range for finger flexion
+    // When a finger is straight, this will be close to 180 degrees,
+    // so we invert it (180 - angle) to make it more intuitive:
+    // 0 degrees = straight, higher values = more bent
+    return 180 - (angleRad * (180 / Math.PI));
   }, []);
   
   // Pre-defined finger joint indices to avoid recreating the object on each frame
@@ -497,16 +500,19 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                   
                   // For each finger, check if it's bent or straight based on thresholds
                   Object.keys(fingerAngles).forEach((finger) => {
-                    // Skip fingers that aren't enabled
-                    if (!fingerFlexionSettings.enabledFingers[finger]) return;
+                    // Cast to the proper type for type safety
+                    const fingerKey = finger as 'thumb' | 'index' | 'middle' | 'ring' | 'pinky';
                     
-                    const key = finger as keyof typeof fingerAngles;
+                    // Skip fingers that aren't enabled
+                    if (!fingerFlexionSettings.enabledFingers[fingerKey]) return;
+                    
+                    const key = fingerKey as keyof typeof fingerAngles;
                     const angle = fingerAngles[key].flex;
                     
                     // Skip null values (fingers that weren't calculated)
                     if (angle === null) return;
                     
-                    const threshold = fingerFlexionSettings.thresholds[key].flex;
+                    const threshold = fingerFlexionSettings.thresholds[fingerKey].flex;
                     
                     // Determine finger state
                     let state = 'in-between';
@@ -526,6 +532,57 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                     setting: 'fingerFlexionStates',
                     value: fingerStates
                   });
+                  
+                  // Draw visual indicators for finger states on the canvas
+                  if (fingerFlexionSettings.enabled) {
+                    const hand = results.multiHandLandmarks[0];
+                    const filteredLandmarks = applyFilter(hand, 0, now);
+                    
+                    // Draw state indicators for each finger
+                    Object.keys(fingerStates).forEach((finger) => {
+                      // Cast to the proper type for type safety
+                      const fingerKey = finger as 'thumb' | 'index' | 'middle' | 'ring' | 'pinky';
+                      const state = fingerStates[finger].state;
+                      
+                      // Only draw for fingers that have a state and are enabled
+                      if (state && fingerFlexionSettings.enabledFingers[fingerKey]) {
+                        // Get the finger tip landmark
+                        const tipIndex = fingerJointIndices[fingerKey][fingerJointIndices[fingerKey].length - 1];
+                        const tipLandmark = filteredLandmarks[tipIndex];
+                        
+                        // Draw a circle at the fingertip with color based on state
+                        if (tipLandmark) {
+                          const x = tipLandmark.x * canvas.width;
+                          const y = tipLandmark.y * canvas.height;
+                          const radius = 10; // Size of the indicator
+                          
+                          // Choose color based on state
+                          let color;
+                          switch (state) {
+                            case 'straight':
+                              color = 'rgba(0, 255, 0, 0.7)'; // Green for straight
+                              break;
+                            case 'bent':
+                              color = 'rgba(255, 0, 0, 0.7)'; // Red for bent
+                              break;
+                            default:
+                              color = 'rgba(255, 255, 0, 0.7)'; // Yellow for in-between
+                          }
+                          
+                          // Draw the state indicator
+                          ctx.beginPath();
+                          ctx.arc(x, y, radius, 0, 2 * Math.PI);
+                          ctx.fillStyle = color;
+                          ctx.fill();
+                          
+                          // Add a border to make it more visible
+                          ctx.strokeStyle = 'white';
+                          ctx.lineWidth = 1;
+                          ctx.stroke();
+                        }
+                      }
+                    });
+                  }
                   
                   // Performance monitoring - measure time spent on state calculation and dispatch
                   const stateCalcTime = performance.now() - stateCalcStartTime;
