@@ -68,6 +68,110 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
     }
   });
   
+  /**
+   * Calculate the angle between three points in 3D space
+   * Used for calculating finger joint angles
+   * 
+   * @param p1 First point
+   * @param p2 Second point (joint)
+   * @param p3 Third point
+   * @returns Angle in degrees
+   */
+  const calculateAngle = useCallback((p1: any, p2: any, p3: any): number => {
+    // Calculate vectors between points
+    const vec1 = {
+      x: p1.x - p2.x,
+      y: p1.y - p2.y,
+      z: p1.z - p2.z
+    };
+    
+    const vec2 = {
+      x: p3.x - p2.x,
+      y: p3.y - p2.y,
+      z: p3.z - p2.z
+    };
+    
+    // Calculate dot product
+    const dotProduct = vec1.x * vec2.x + vec1.y * vec2.y + vec1.z * vec2.z;
+    
+    // Calculate magnitudes
+    const mag1 = Math.sqrt(vec1.x * vec1.x + vec1.y * vec1.y + vec1.z * vec1.z);
+    const mag2 = Math.sqrt(vec2.x * vec2.x + vec2.y * vec2.y + vec2.z * vec2.z);
+    
+    // Calculate angle in radians
+    const angleRad = Math.acos(dotProduct / (mag1 * mag2));
+    
+    // Convert to degrees
+    const angleDeg = angleRad * (180 / Math.PI);
+    
+    return angleDeg;
+  }, []);
+  
+  /**
+   * Calculate all finger joint angles from hand landmarks
+   * 
+   * @param landmarks Array of hand landmarks from MediaPipe
+   * @returns Object with angle measurements for each finger joint
+   */
+  const calculateFingerAngles = useCallback((landmarks: any) => {
+    // Ensure we have landmarks
+    if (!landmarks || landmarks.length < 21) {
+      return null;
+    }
+    
+    // Fingers and joints mapping
+    // For each finger we need 3 joints to calculate 2 angles (PIP and DIP)
+    const fingerJointIndices = {
+      thumb: [1, 2, 3, 4],         // CMC, MCP, IP, TIP
+      index: [0, 5, 6, 7, 8],      // Wrist, MCP, PIP, DIP, TIP
+      middle: [0, 9, 10, 11, 12],  // Wrist, MCP, PIP, DIP, TIP
+      ring: [0, 13, 14, 15, 16],   // Wrist, MCP, PIP, DIP, TIP
+      pinky: [0, 17, 18, 19, 20]   // Wrist, MCP, PIP, DIP, TIP
+    };
+    
+    const angles = {
+      thumb: { pip: 0, dip: 0 },
+      index: { pip: 0, dip: 0 },
+      middle: { pip: 0, dip: 0 },
+      ring: { pip: 0, dip: 0 },
+      pinky: { pip: 0, dip: 0 }
+    };
+    
+    // Calculate angles for each finger
+    // Thumb
+    angles.thumb.pip = calculateAngle(
+      landmarks[fingerJointIndices.thumb[0]],
+      landmarks[fingerJointIndices.thumb[1]],
+      landmarks[fingerJointIndices.thumb[2]]
+    );
+    angles.thumb.dip = calculateAngle(
+      landmarks[fingerJointIndices.thumb[1]],
+      landmarks[fingerJointIndices.thumb[2]],
+      landmarks[fingerJointIndices.thumb[3]]
+    );
+    
+    // Other fingers (index, middle, ring, pinky)
+    ['index', 'middle', 'ring', 'pinky'].forEach((finger: string) => {
+      const indices = fingerJointIndices[finger as keyof typeof fingerJointIndices];
+      
+      // PIP joint angle (between proximal and middle phalanges)
+      angles[finger as keyof typeof angles].pip = calculateAngle(
+        landmarks[indices[1]], // MCP
+        landmarks[indices[2]], // PIP
+        landmarks[indices[3]]  // DIP
+      );
+      
+      // DIP joint angle (between middle and distal phalanges)
+      angles[finger as keyof typeof angles].dip = calculateAngle(
+        landmarks[indices[2]], // PIP
+        landmarks[indices[3]], // DIP
+        landmarks[indices[4]]  // TIP
+      );
+    });
+    
+    return angles;
+  }, [calculateAngle]);
+  
   // Filter settings change handler
   const handleFilterSettingsChange = useCallback((newSettings: {
     minCutoff: number;
@@ -399,7 +503,7 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
     };
     
     loadDependencies();
-  }, [videoRef, applyFilter, landmarksSettings, knuckleRulerSettings, fingerFlexionSettings, calculateFingerAngles]);
+  }, [videoRef, applyFilter, landmarksSettings, knuckleRulerSettings, fingerFlexionSettings]);
   
   // Resize canvas to match video dimensions
   useEffect(() => {
@@ -419,110 +523,6 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
     // Cleanup
     return () => window.removeEventListener('resize', resizeCanvas);
   }, [videoRef]);
-  
-  /**
-   * Calculate the angle between three points in 3D space
-   * Used for calculating finger joint angles
-   * 
-   * @param p1 First point
-   * @param p2 Second point (joint)
-   * @param p3 Third point
-   * @returns Angle in degrees
-   */
-  const calculateAngle = useCallback((p1: any, p2: any, p3: any): number => {
-    // Calculate vectors between points
-    const vec1 = {
-      x: p1.x - p2.x,
-      y: p1.y - p2.y,
-      z: p1.z - p2.z
-    };
-    
-    const vec2 = {
-      x: p3.x - p2.x,
-      y: p3.y - p2.y,
-      z: p3.z - p2.z
-    };
-    
-    // Calculate dot product
-    const dotProduct = vec1.x * vec2.x + vec1.y * vec2.y + vec1.z * vec2.z;
-    
-    // Calculate magnitudes
-    const mag1 = Math.sqrt(vec1.x * vec1.x + vec1.y * vec1.y + vec1.z * vec1.z);
-    const mag2 = Math.sqrt(vec2.x * vec2.x + vec2.y * vec2.y + vec2.z * vec2.z);
-    
-    // Calculate angle in radians
-    const angleRad = Math.acos(dotProduct / (mag1 * mag2));
-    
-    // Convert to degrees
-    const angleDeg = angleRad * (180 / Math.PI);
-    
-    return angleDeg;
-  }, []);
-  
-  /**
-   * Calculate all finger joint angles from hand landmarks
-   * 
-   * @param landmarks Array of hand landmarks from MediaPipe
-   * @returns Object with angle measurements for each finger joint
-   */
-  const calculateFingerAngles = useCallback((landmarks: any) => {
-    // Ensure we have landmarks
-    if (!landmarks || landmarks.length < 21) {
-      return null;
-    }
-    
-    // Fingers and joints mapping
-    // For each finger we need 3 joints to calculate 2 angles (PIP and DIP)
-    const fingerJointIndices = {
-      thumb: [1, 2, 3, 4],         // CMC, MCP, IP, TIP
-      index: [0, 5, 6, 7, 8],      // Wrist, MCP, PIP, DIP, TIP
-      middle: [0, 9, 10, 11, 12],  // Wrist, MCP, PIP, DIP, TIP
-      ring: [0, 13, 14, 15, 16],   // Wrist, MCP, PIP, DIP, TIP
-      pinky: [0, 17, 18, 19, 20]   // Wrist, MCP, PIP, DIP, TIP
-    };
-    
-    const angles = {
-      thumb: { pip: 0, dip: 0 },
-      index: { pip: 0, dip: 0 },
-      middle: { pip: 0, dip: 0 },
-      ring: { pip: 0, dip: 0 },
-      pinky: { pip: 0, dip: 0 }
-    };
-    
-    // Calculate angles for each finger
-    // Thumb
-    angles.thumb.pip = calculateAngle(
-      landmarks[fingerJointIndices.thumb[0]],
-      landmarks[fingerJointIndices.thumb[1]],
-      landmarks[fingerJointIndices.thumb[2]]
-    );
-    angles.thumb.dip = calculateAngle(
-      landmarks[fingerJointIndices.thumb[1]],
-      landmarks[fingerJointIndices.thumb[2]],
-      landmarks[fingerJointIndices.thumb[3]]
-    );
-    
-    // Other fingers (index, middle, ring, pinky)
-    ['index', 'middle', 'ring', 'pinky'].forEach((finger: string) => {
-      const indices = fingerJointIndices[finger as keyof typeof fingerJointIndices];
-      
-      // PIP joint angle (between proximal and middle phalanges)
-      angles[finger as keyof typeof angles].pip = calculateAngle(
-        landmarks[indices[1]], // MCP
-        landmarks[indices[2]], // PIP
-        landmarks[indices[3]]  // DIP
-      );
-      
-      // DIP joint angle (between middle and distal phalanges)
-      angles[finger as keyof typeof angles].dip = calculateAngle(
-        landmarks[indices[2]], // PIP
-        landmarks[indices[3]], // DIP
-        landmarks[indices[4]]  // TIP
-      );
-    });
-    
-    return angles;
-  }, [calculateAngle]);
   
   // Listen for settings changes
   useEffect(() => {
