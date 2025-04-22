@@ -1,4 +1,5 @@
 import { FC } from "react";
+import { Settings } from "lucide-react";
 import { dispatch, EventType } from "@/lib/eventBus";
 import { stopCamera } from "@/lib/cameraManager";
 
@@ -54,15 +55,20 @@ const ControlsOverlay: FC<ControlsOverlayProps> = ({
     }
   };
 
+  const toggleSettings = () => {
+    dispatch(EventType.SETTINGS_PANEL_OPEN, {});
+  };
+
   return (
-    <div className="absolute bottom-0 left-0 right-0 p-4 z-10">
+    <div className="absolute bottom-0 left-0 right-0 p-4 z-20">
       <div className="flex justify-center">
-        <div className="bg-surface/80 backdrop-blur-sm rounded-full px-6 py-3 flex items-center space-x-4">
+        <div className="bg-black/60 backdrop-blur-md rounded-full px-6 py-3 flex items-center space-x-4">
           {isCameraRunning && (
             <button 
               id="stop-camera" 
               className="rounded-full w-12 h-12 flex items-center justify-center bg-status-error"
               onClick={handleStopCamera}
+              title="Stop Camera"
             >
               <span className="material-icons">videocam_off</span>
             </button>
@@ -73,6 +79,7 @@ const ControlsOverlay: FC<ControlsOverlayProps> = ({
               id="restart-camera" 
               className="rounded-full w-12 h-12 flex items-center justify-center bg-status-info"
               onClick={handleRestartCamera}
+              title="Restart Camera"
             >
               <span className="material-icons">refresh</span>
             </button>
@@ -82,10 +89,20 @@ const ControlsOverlay: FC<ControlsOverlayProps> = ({
             id="fullscreen-toggle" 
             className="rounded-full w-12 h-12 flex items-center justify-center bg-primary"
             onClick={toggleFullscreen}
+            title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
           >
             <span className="material-icons">
               {isFullscreen ? 'fullscreen_exit' : 'fullscreen'}
             </span>
+          </button>
+          
+          <button 
+            id="settings-toggle" 
+            className="rounded-full w-12 h-12 flex items-center justify-center bg-white/20 hover:bg-white/30 transition-colors"
+            onClick={toggleSettings}
+            title="Settings"
+          >
+            <Settings size={20} />
           </button>
         </div>
       </div>
