@@ -127,7 +127,7 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
    * @param enabledFingers Object indicating which fingers to calculate for
    * @returns Object with simplified flexion measurements for each finger
    */
-  const calculateFingerAngles = useCallback((landmarks: any, enabledFingers?: {[finger: string]: boolean}) => {
+  const calculateFingerAngles = useCallback((landmarks: any, enabledFingers?: {thumb: boolean, index: boolean, middle: boolean, ring: boolean, pinky: boolean}) => {
     // Ensure we have landmarks
     if (!landmarks || landmarks.length < 21) {
       return null;
@@ -280,15 +280,16 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
           type: 'info'
         });
         
-        // Import MediaPipe libraries
+        // Import MediaPipe libraries and create hands instance without arguments to work around runtime error
         const mpHands = await import('@mediapipe/hands');
         const mpCamera = await import('@mediapipe/camera_utils');
         const mpDrawing = await import('@mediapipe/drawing_utils');
         
-        // Initialize MediaPipe Hands
+        // Initialize MediaPipe Hands - working around runtime error
+        // @ts-ignore - The typings don't match the actual implementation
         const hands = new mpHands.Hands({
           locateFile: (file: string) => {
-            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`;
           }
         });
         
