@@ -1,68 +1,45 @@
 import React from 'react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Camera, Info, RotateCw, Settings } from 'lucide-react';
 
 const GettingStartedSettings: React.FC = () => {
   return (
-    <div className="space-y-4">
-      <h4 className="text-md font-medium mb-2">Getting Started</h4>
+    <div className="px-1 py-2">
+      <h3 className="text-lg font-semibold mb-4">Getting Started</h3>
       
       <div className="space-y-4">
-        <Card className="bg-black/20 border-0">
-          <CardContent className="p-4">
-            <div className="flex items-start space-x-3">
-              <Camera className="h-5 w-5 mt-0.5 text-blue-400" />
-              <div>
-                <h5 className="font-medium text-sm">Step 1: Start the Camera</h5>
-                <p className="text-xs text-white/70 mt-1">
-                  Begin by clicking the "Start Camera" button in the control panel.
-                  Allow camera permissions when prompted by your browser.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <div>
+          <h4 className="text-sm font-medium mb-2">Welcome!</h4>
+          <p className="text-sm opacity-80">
+            This computer vision application uses your webcam to track hand movements
+            and recognize gestures for interactive control.
+          </p>
+        </div>
         
-        <Card className="bg-black/20 border-0">
-          <CardContent className="p-4">
-            <div className="flex items-start space-x-3">
-              <Settings className="h-5 w-5 mt-0.5 text-green-400" />
-              <div>
-                <h5 className="font-medium text-sm">Step 2: Configure Settings</h5>
-                <p className="text-xs text-white/70 mt-1">
-                  Adjust tracking and visualization settings based on your needs.
-                  Each tab contains different configuration options.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <div>
+          <h4 className="text-sm font-medium mb-2">Quick Start Guide</h4>
+          <ol className="list-decimal list-inside text-sm opacity-80 space-y-2">
+            <li>Click "Start Camera" to enable your webcam</li>
+            <li>Position your hand in view of the camera</li>
+            <li>Use the settings panel (where you are now) to customize tracking</li>
+            <li>Try different gestures like pinching or grabbing</li>
+          </ol>
+        </div>
         
-        <Card className="bg-black/20 border-0">
-          <CardContent className="p-4">
-            <div className="flex items-start space-x-3">
-              <RotateCw className="h-5 w-5 mt-0.5 text-purple-400" />
-              <div>
-                <h5 className="font-medium text-sm">Step 3: Use the Application</h5>
-                <p className="text-xs text-white/70 mt-1">
-                  Once configured, your movements will be tracked and responded to 
-                  according to your settings.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <div>
+          <h4 className="text-sm font-medium mb-2">Settings Overview</h4>
+          <ul className="list-disc list-inside text-sm opacity-80 space-y-2">
+            <li><strong>Markers tab:</strong> Settings for feature tracking on surfaces</li>
+            <li><strong>Hands tab:</strong> Configure hand tracking visualization and gestures</li>
+            <li><strong>Debug tab:</strong> Display performance metrics and diagnostics</li>
+          </ul>
+        </div>
         
-        <div className="flex justify-center mt-4">
-          <Button 
-            variant="outline" 
-            size="sm"
-            className="text-xs bg-white/10 border-white/20 hover:bg-white/20"
-          >
-            <Info className="mr-1 h-3 w-3" />
-            View Full Documentation
-          </Button>
+        <div>
+          <h4 className="text-sm font-medium mb-2">System Requirements</h4>
+          <ul className="list-disc list-inside text-sm opacity-80 space-y-1">
+            <li>Modern web browser (Chrome recommended)</li>
+            <li>Webcam access</li>
+            <li>Reasonable processor (for real-time tracking)</li>
+          </ul>
         </div>
       </div>
     </div>
