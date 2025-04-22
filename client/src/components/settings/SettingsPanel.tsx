@@ -142,11 +142,13 @@ const SettingsPanel: React.FC = () => {
               onValueChange={handleTabChange}
               className="flex-1 flex flex-col overflow-hidden"
             >
-              <TabsList className="grid grid-cols-4 px-4 pt-2 bg-transparent border-b border-white/10">
+              <TabsList className="grid grid-cols-4 px-4 pt-2 bg-transparent border-b border-white/10 gap-1">
                 <TabsTrigger 
                   value="getting-started"
                   className={cn(
-                    "h-9 rounded-b-none border-b-2 border-transparent data-[state=active]:border-white text-white/70 data-[state=active]:text-white"
+                    "h-9 rounded-t-md border-b-2 border-transparent",
+                    "bg-transparent data-[state=active]:bg-gray-700/70 hover:bg-gray-800/40",
+                    "text-white/70 data-[state=active]:text-white transition-colors"
                   )}
                 >
                   Get Started
@@ -154,7 +156,9 @@ const SettingsPanel: React.FC = () => {
                 <TabsTrigger 
                   value="marker-tracking"
                   className={cn(
-                    "h-9 rounded-b-none border-b-2 border-transparent data-[state=active]:border-white text-white/70 data-[state=active]:text-white"
+                    "h-9 rounded-t-md border-b-2 border-transparent",
+                    "bg-transparent data-[state=active]:bg-gray-700/70 hover:bg-gray-800/40",
+                    "text-white/70 data-[state=active]:text-white transition-colors"
                   )}
                 >
                   Markers
@@ -162,7 +166,9 @@ const SettingsPanel: React.FC = () => {
                 <TabsTrigger 
                   value="hand-tracking"
                   className={cn(
-                    "h-9 rounded-b-none border-b-2 border-transparent data-[state=active]:border-white text-white/70 data-[state=active]:text-white"
+                    "h-9 rounded-t-md border-b-2 border-transparent",
+                    "bg-transparent data-[state=active]:bg-gray-700/70 hover:bg-gray-800/40",
+                    "text-white/70 data-[state=active]:text-white transition-colors"
                   )}
                 >
                   Hands
@@ -170,7 +176,9 @@ const SettingsPanel: React.FC = () => {
                 <TabsTrigger 
                   value="debugging"
                   className={cn(
-                    "h-9 rounded-b-none border-b-2 border-transparent data-[state=active]:border-white text-white/70 data-[state=active]:text-white"
+                    "h-9 rounded-t-md border-b-2 border-transparent",
+                    "bg-transparent data-[state=active]:bg-gray-700/70 hover:bg-gray-800/40",
+                    "text-white/70 data-[state=active]:text-white transition-colors"
                   )}
                 >
                   Debug
