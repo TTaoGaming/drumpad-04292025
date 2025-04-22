@@ -273,6 +273,22 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
   // Frame counter for limiting computation frequency
   const flexionFrameCountRef = useRef(0);
   
+  // State memory for hysteresis to prevent flickering
+  const fingerStateMemoryRef = useRef<{
+    [finger: string]: {
+      state: string;
+      stable: boolean;
+      stableCount: number;
+      lastAngle: number | null;
+    }
+  }>({
+    thumb: { state: 'straight', stable: true, stableCount: 0, lastAngle: null },
+    index: { state: 'straight', stable: true, stableCount: 0, lastAngle: null },
+    middle: { state: 'straight', stable: true, stableCount: 0, lastAngle: null },
+    ring: { state: 'straight', stable: true, stableCount: 0, lastAngle: null },
+    pinky: { state: 'straight', stable: true, stableCount: 0, lastAngle: null }
+  });
+  
   // Initialize MediaPipe when the component mounts
   useEffect(() => {
     // Dynamic imports to avoid bundling these heavy libraries
@@ -514,16 +530,44 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                     
                     const threshold = fingerFlexionSettings.thresholds[fingerKey].flex;
                     
-                    // Determine finger state
-                    let state = 'in-between';
+                    // Get the current memory for this finger
+                    const memory = fingerStateMemoryRef.current[fingerKey];
+                    
+                    // Determine new state based on angle
+                    let newState = 'in-between';
                     if (angle < threshold.min) {
-                      state = 'straight';
+                      newState = 'straight';
                     } else if (angle > threshold.max) {
-                      state = 'bent';
+                      newState = 'bent';
                     }
                     
-                    // Store state for event dispatch
-                    fingerStates[finger] = { state };
+                    // Apply hysteresis - only change state after several consistent readings
+                    // This prevents flickering when the angle is near a threshold
+                    const STABILITY_THRESHOLD = 3; // Frames needed to confirm state change
+                    
+                    if (newState === memory.state) {
+                      // Increase stability counter when state is consistent
+                      memory.stableCount = Math.min(memory.stableCount + 1, STABILITY_THRESHOLD + 2);
+                      memory.stable = true;
+                    } else {
+                      // State is different - might be changing or just noise
+                      if (memory.stableCount > 0) {
+                        // Decrement counter - require multiple frames to change state
+                        memory.stableCount--;
+                        
+                        // Only change state after confirmed with multiple frames
+                        if (memory.stableCount === 0) {
+                          memory.state = newState;
+                          memory.stable = false; // Mark as transitioning
+                        }
+                      }
+                    }
+                    
+                    // Store angle for next frame comparison
+                    memory.lastAngle = angle;
+                    
+                    // Always use the stable memory state for display and events
+                    fingerStates[finger] = { state: memory.state };
                   });
                   
                   // Dispatch the finger states for gesture recognition
@@ -556,37 +600,40 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                           const y = tipLandmark.y * canvas.height;
                           const radius = 10; // Size of the indicator
                           
-                          // Choose color based on state
+                          // Use a more stable color scheme for solid indicator circles
                           let color;
                           switch (state) {
                             case 'straight':
-                              color = 'rgba(255, 255, 255, 0.7)'; // White for straight
+                              color = 'rgba(255, 255, 255, 0.5)'; // White for straight
                               break;
                             case 'bent':
-                              color = 'rgba(255, 0, 0, 0.7)'; // Red for bent
+                              color = 'rgba(255, 0, 0, 0.5)'; // Red for bent
                               break;
                             default:
-                              color = 'rgba(255, 255, 0, 0.7)'; // Yellow for in-between
+                              color = 'rgba(255, 255, 0, 0.5)'; // Yellow for in-between
                           }
                           
-                          // Draw the state indicator as a ring around the fingertip
-                          // This creates a more subtle, elegant indicator
-                          const ringWidth = 3; // Width of the indicator ring
-                          const outerRadius = radius + 2; // Slightly larger than landmark
+                          // Draw a solid circle with transparency
+                          const circleRadius = 8; // Size of the indicator
                           
-                          // Draw the ring
+                          // Fill with color
                           ctx.beginPath();
-                          ctx.arc(x, y, outerRadius, 0, 2 * Math.PI);
-                          ctx.lineWidth = ringWidth;
-                          ctx.strokeStyle = color;
+                          ctx.arc(x, y, circleRadius, 0, 2 * Math.PI);
+                          ctx.fillStyle = color;
+                          ctx.fill();
+                          
+                          // Add a subtle border
+                          ctx.lineWidth = 1.5;
+                          ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
                           ctx.stroke();
                           
-                          // Add a more subtle border
-                          ctx.beginPath();
-                          ctx.arc(x, y, outerRadius, 0, 2 * Math.PI);
-                          ctx.lineWidth = 1;
-                          ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
-                          ctx.stroke();
+                          // Add a persistent state label below the fingertip
+                          // This makes the state more obvious without increasing flashing
+                          const stateLabel = state.charAt(0).toUpperCase(); // Just use first letter (S, B, I)
+                          ctx.font = 'bold 10px Arial';
+                          ctx.textAlign = 'center';
+                          ctx.fillStyle = 'white';
+                          ctx.fillText(stateLabel, x, y + circleRadius + 10);
                         }
                       }
                     });
