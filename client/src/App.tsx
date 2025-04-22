@@ -9,6 +9,12 @@ import PerformanceDisplay from "@/components/PerformanceDisplay";
 import { EventType, addListener, dispatch } from "@/lib/eventBus";
 import { Notification, HandData, PerformanceMetrics } from "@/lib/types";
 import { getVideoFrame } from "@/lib/cameraManager";
+import { 
+  initializeDatabaseService,
+  startTrackingSession,
+  endTrackingSession,
+  saveHandLandmarkData
+} from "@/lib/databaseService";
 
 function App() {
   const [isOpenCVReady, setIsOpenCVReady] = useState(false);
