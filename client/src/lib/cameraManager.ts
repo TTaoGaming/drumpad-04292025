@@ -79,7 +79,17 @@ export function takeSnapshot(videoElement: HTMLVideoElement): HTMLCanvasElement 
  * @returns ImageData object containing the frame pixels
  */
 export function getVideoFrame(videoElement: HTMLVideoElement): ImageData | null {
-  if (!videoElement || !videoElement.videoWidth) {
+  if (!videoElement) {
+    console.error("getVideoFrame: No video element provided");
+    return null;
+  }
+  
+  if (!videoElement.videoWidth || !videoElement.videoHeight) {
+    console.warn("getVideoFrame: Video dimensions not available yet", {
+      videoWidth: videoElement.videoWidth,
+      videoHeight: videoElement.videoHeight,
+      readyState: videoElement.readyState
+    });
     return null;
   }
   
@@ -87,13 +97,20 @@ export function getVideoFrame(videoElement: HTMLVideoElement): ImageData | null 
   const ctx = canvas.getContext('2d');
   
   if (!ctx) {
+    console.error("getVideoFrame: Could not get 2D context from canvas");
     return null;
   }
   
   canvas.width = videoElement.videoWidth;
   canvas.height = videoElement.videoHeight;
   
-  ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-  
-  return ctx.getImageData(0, 0, canvas.width, canvas.height);
+  // Attempt to draw the current frame
+  try {
+    ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    return imageData;
+  } catch (error) {
+    console.error("getVideoFrame: Error capturing frame", error);
+    return null;
+  }
 }

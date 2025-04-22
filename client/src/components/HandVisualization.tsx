@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { HandData } from '@/lib/types';
 
 interface HandVisualizationProps {
@@ -28,14 +28,35 @@ const HandVisualization: React.FC<HandVisualizationProps> = ({
   height 
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [debugInfo, setDebugInfo] = useState<string>('No hand data');
   
   // Draw hand landmarks and connections
   useEffect(() => {
+    console.log("HandVisualization useEffect triggered", { handData, width, height });
+    
+    if (!handData) {
+      setDebugInfo('No hand data');
+      return;
+    }
+    
+    // Show how many landmarks we have
+    setDebugInfo(`Landmarks: ${handData.landmarks.length}, Connections: ${handData.connections.length}`);
+    
     const canvas = canvasRef.current;
-    if (!canvas || !handData) return;
+    if (!canvas) {
+      console.error("Canvas ref is null");
+      return;
+    }
+    
+    // Set canvas dimensions
+    canvas.width = width;
+    canvas.height = height;
     
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) {
+      console.error("Could not get 2D context");
+      return;
+    }
     
     // Clear the canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -45,6 +66,13 @@ const HandVisualization: React.FC<HandVisualizationProps> = ({
     if (videoElement) {
       // ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
     }
+    
+    // Draw a visual debug indicator in the corner
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fillRect(0, 0, 180, 30);
+    ctx.fillStyle = 'white';
+    ctx.font = '12px sans-serif';
+    ctx.fillText(`Canvas size: ${width}x${height}`, 5, 20);
     
     // Draw connections first (so they appear behind landmarks)
     if (handData.connections && handData.landmarks) {
@@ -119,12 +147,15 @@ const HandVisualization: React.FC<HandVisualizationProps> = ({
   }, [handData, videoElement, width, height]);
   
   return (
-    <canvas 
-      ref={canvasRef}
-      width={width}
-      height={height}
-      className="absolute inset-0 z-10 pointer-events-none"
-    />
+    <>
+      <canvas 
+        ref={canvasRef}
+        className="absolute inset-0 z-10 pointer-events-none border-2 border-red-500"
+      />
+      <div className="absolute top-8 left-4 z-20 bg-black/70 text-white p-2 rounded text-sm">
+        Debug: {debugInfo}
+      </div>
+    </>
   );
 };
 

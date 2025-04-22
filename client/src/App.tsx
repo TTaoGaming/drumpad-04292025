@@ -68,13 +68,18 @@ function App() {
       } else if (e.data.type === 'status') {
         setIsMediaPipelineReady(e.data.ready);
       } else if (e.data.type === 'processed-frame') {
+        // Debug message
+        console.log('Received from media worker:', e.data);
+        
         // Handle MediaPipe processed frame 
         if (e.data.handData) {
+          console.log('Setting hand data:', e.data.handData);
           setHandData(e.data.handData);
         }
         
         // Update performance metrics
         if (e.data.performance) {
+          console.log('Setting performance metrics:', e.data.performance);
           setPerformanceMetrics(prev => ({
             ...(prev || {}),
             ...e.data.performance
@@ -192,6 +197,8 @@ function App() {
         const frameData = getVideoFrame(videoRef.current);
         
         if (frameData && mediaPipelineWorkerRef.current) {
+          console.log('Sending frame to worker', frameData ? 'Frame available' : 'No frame');
+          
           // Send frame to Media Pipeline worker for hand detection
           mediaPipelineWorkerRef.current.postMessage({
             command: 'process-frame',
