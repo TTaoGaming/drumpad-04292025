@@ -1,4 +1,4 @@
-import { FC } from "react";
+import { FC, useState } from "react";
 
 interface StatusIndicatorsProps {
   isCameraRunning: boolean;
@@ -11,62 +11,101 @@ const StatusIndicators: FC<StatusIndicatorsProps> = ({
   isOpenCVReady,
   isMediaPipelineReady
 }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  
+  const toggleExpanded = () => {
+    setIsExpanded(prev => !prev);
+  };
+  
   return (
-    <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-start z-10">
-      {/* Left side statuses */}
-      <div className="flex flex-col space-y-2">
-        {/* Camera status indicator */}
-        <div 
-          id="camera-status" 
-          className="status-indicator flex items-center px-3 py-1 rounded-full bg-surface/80 backdrop-blur-sm"
+    <div className="absolute top-0 left-0 z-20 m-2">
+      {/* Collapsible panel with status indicators */}
+      <div className="bg-black/70 rounded-lg overflow-hidden">
+        {/* Panel header with toggle button */}
+        <button 
+          onClick={toggleExpanded}
+          className="w-full flex items-center justify-between px-3 py-2 text-white text-sm font-medium"
         >
-          <span 
-            className={`w-2 h-2 rounded-full ${
-              isCameraRunning ? 'bg-status-success' : 'bg-status-error'
-            } mr-2`} 
-            id="camera-status-dot"
-          />
-          <span id="camera-status-text">
-            {isCameraRunning ? 'Camera: Active (480p)' : 'Camera: Off'}
-          </span>
-        </div>
+          <div className="flex items-center">
+            <span 
+              className={`w-2 h-2 rounded-full ${
+                isCameraRunning && isOpenCVReady && isMediaPipelineReady 
+                  ? 'bg-green-500' 
+                  : 'bg-yellow-500'
+              } mr-2`}
+            />
+            <span>System Status</span>
+          </div>
+          <svg 
+            className={`w-4 h-4 transform transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+            fill="none" 
+            stroke="currentColor" 
+            viewBox="0 0 24 24" 
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
         
-        {/* Resolution indicator */}
-        <div className="status-indicator flex items-center px-3 py-1 rounded-full bg-surface/80 backdrop-blur-sm">
-          <span id="resolution-text">Resolution: 480p</span>
-        </div>
-      </div>
-      
-      {/* Right side statuses */}
-      <div className="flex flex-col space-y-2 items-end">
-        {/* OpenCV status */}
+        {/* Collapsible content */}
         <div 
-          id="opencv-status" 
-          className={`status-indicator flex items-center px-3 py-1 rounded-full bg-surface/80 backdrop-blur-sm ${
-            isOpenCVReady ? 'bg-status-success/20' : ''
+          className={`overflow-hidden transition-all duration-300 ${
+            isExpanded ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'
           }`}
         >
-          {!isOpenCVReady && (
-            <div className="loading-spinner mr-2 border-3 border-opacity-30 border-radius-50 border-t-white w-[24px] h-[24px] animate-spin"></div>
-          )}
-          <span id="opencv-status-text">
-            {isOpenCVReady ? 'OpenCV: Ready' : 'OpenCV: Loading'}
-          </span>
-        </div>
-        
-        {/* Media Pipeline status */}
-        <div 
-          id="pipeline-status" 
-          className={`status-indicator flex items-center px-3 py-1 rounded-full bg-surface/80 backdrop-blur-sm ${
-            isMediaPipelineReady ? 'bg-status-success/20' : ''
-          }`}
-        >
-          {!isMediaPipelineReady && (
-            <div className="loading-spinner mr-2 border-3 border-opacity-30 border-radius-50 border-t-white w-[24px] h-[24px] animate-spin"></div>
-          )}
-          <span id="pipeline-status-text">
-            {isMediaPipelineReady ? 'Pipeline: Ready' : 'Pipeline: Initializing'}
-          </span>
+          <div className="p-3 space-y-2 text-white">
+            {/* Camera status indicator */}
+            <div 
+              id="camera-status" 
+              className="status-indicator flex items-center"
+            >
+              <span 
+                className={`w-2 h-2 rounded-full ${
+                  isCameraRunning ? 'bg-green-500' : 'bg-red-500'
+                } mr-2`} 
+                id="camera-status-dot"
+              />
+              <span id="camera-status-text" className="text-sm">
+                {isCameraRunning ? 'Camera: Active (480p)' : 'Camera: Off'}
+              </span>
+            </div>
+            
+            {/* OpenCV status */}
+            <div 
+              id="opencv-status" 
+              className="status-indicator flex items-center"
+            >
+              <span 
+                className={`w-2 h-2 rounded-full ${
+                  isOpenCVReady ? 'bg-green-500' : 'bg-yellow-500'
+                } mr-2`} 
+              />
+              <span id="opencv-status-text" className="text-sm">
+                {isOpenCVReady ? 'OpenCV: Ready' : 'OpenCV: Loading'}
+              </span>
+              {!isOpenCVReady && (
+                <div className="ml-2 w-3 h-3 border-t-2 border-white animate-spin rounded-full"></div>
+              )}
+            </div>
+            
+            {/* Media Pipeline status */}
+            <div 
+              id="pipeline-status" 
+              className="status-indicator flex items-center"
+            >
+              <span 
+                className={`w-2 h-2 rounded-full ${
+                  isMediaPipelineReady ? 'bg-green-500' : 'bg-yellow-500'
+                } mr-2`} 
+              />
+              <span id="pipeline-status-text" className="text-sm">
+                {isMediaPipelineReady ? 'Pipeline: Ready' : 'Pipeline: Initializing'}
+              </span>
+              {!isMediaPipelineReady && (
+                <div className="ml-2 w-3 h-3 border-t-2 border-white animate-spin rounded-full"></div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>

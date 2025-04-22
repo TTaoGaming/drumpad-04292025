@@ -104,13 +104,13 @@ const SimpleHandVisualizer: React.FC<SimpleHandVisualizerProps> = ({ videoRef })
       }
     }
     
-    // Add FPS counter
+    // Add FPS counter - positioned in bottom left for better visibility
     ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-    ctx.fillRect(10, 10, 100, 30);
+    ctx.fillRect(10, height - 40, 120, 30);
     ctx.fillStyle = 'white';
-    ctx.font = '14px Arial';
+    ctx.font = 'bold 16px Arial';
     const fps = Math.round(1000 / (performance.now() - (lastFrameTime || performance.now())));
-    ctx.fillText(`FPS: ${fps}`, 20, 30);
+    ctx.fillText(`FPS: ${fps}`, 20, height - 18);
   };
   
   let lastFrameTime: number | null = null;
