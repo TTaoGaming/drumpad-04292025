@@ -1,120 +1,94 @@
 import React, { useState, useEffect } from 'react';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { EventType, dispatch } from '@/lib/eventBus';
-import { Plus, Trash2 } from 'lucide-react';
 
 const GestureRecognitionSettings: React.FC = () => {
-  const [gestureRecognitionEnabled, setGestureRecognitionEnabled] = useState(false);
-  const [confidenceThreshold, setConfidenceThreshold] = useState(0.7);
-  const [showVisualizations, setShowVisualizations] = useState(true);
+  const [isEnabled, setIsEnabled] = useState(true);
+  const [detectionConfidence, setDetectionConfidence] = useState(0.8);
+  const [recognizeType, setRecognizeType] = useState('pinch');
+  const [showGestureMarkers, setShowGestureMarkers] = useState(true);
   
   // Update app state when settings change
   useEffect(() => {
     dispatch(EventType.SETTINGS_VALUE_CHANGE, {
       section: 'gestureRecognition',
       value: {
-        enabled: gestureRecognitionEnabled,
-        confidenceThreshold,
-        showVisualizations
+        enabled: isEnabled,
+        detectionConfidence,
+        recognizeType,
+        showGestureMarkers
       }
     });
-  }, [gestureRecognitionEnabled, confidenceThreshold, showVisualizations]);
+  }, [isEnabled, detectionConfidence, recognizeType, showGestureMarkers]);
   
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h5 className="text-sm font-medium">Gesture Recognition</h5>
-          <p className="text-xs text-white/70">Detect hand gestures</p>
+          <p className="text-xs text-white/70">Recognize hand gestures</p>
         </div>
         <Switch 
-          checked={gestureRecognitionEnabled}
-          onCheckedChange={setGestureRecognitionEnabled}
+          checked={isEnabled}
+          onCheckedChange={setIsEnabled}
         />
       </div>
       
-      <div className={gestureRecognitionEnabled ? "space-y-4" : "space-y-4 opacity-50 pointer-events-none"}>
+      <div className={isEnabled ? "space-y-5" : "space-y-5 opacity-50 pointer-events-none"}>
         <div className="space-y-2">
           <div className="flex justify-between">
-            <Label htmlFor="confidenceThreshold" className="text-xs">Confidence Threshold</Label>
-            <span className="text-xs opacity-80">{(confidenceThreshold * 100).toFixed(0)}%</span>
+            <Label htmlFor="detectionConfidence" className="text-xs">Detection Confidence</Label>
+            <span className="text-xs opacity-80">{(detectionConfidence * 100).toFixed(0)}%</span>
           </div>
           <Slider
-            id="confidenceThreshold"
+            id="detectionConfidence"
             min={0.5}
-            max={0.95}
-            step={0.05}
-            value={[confidenceThreshold]}
-            onValueChange={(value) => setConfidenceThreshold(value[0])}
+            max={0.99}
+            step={0.01}
+            value={[detectionConfidence]}
+            onValueChange={(value) => setDetectionConfidence(value[0])}
             className="flex-1"
           />
           <p className="text-[10px] opacity-70">
-            Higher values reduce false positives
+            Higher values mean fewer false positives
+          </p>
+        </div>
+        
+        <div className="space-y-2">
+          <Label htmlFor="gestureType" className="text-xs">Gesture Type</Label>
+          <Select 
+            value={recognizeType} 
+            onValueChange={setRecognizeType}
+          >
+            <SelectTrigger id="gestureType" className="w-full h-8 text-xs bg-black/30 border-white/20">
+              <SelectValue placeholder="Select gesture type" />
+            </SelectTrigger>
+            <SelectContent className="bg-black/90 border-white/20">
+              <SelectItem value="pinch" className="text-xs">Pinch</SelectItem>
+              <SelectItem value="grab" className="text-xs">Grab</SelectItem>
+              <SelectItem value="point" className="text-xs">Point</SelectItem>
+              <SelectItem value="open-palm" className="text-xs">Open Palm</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-[10px] opacity-70">
+            Type of gesture to recognize
           </p>
         </div>
         
         <div className="flex items-center justify-between">
-          <Label className="text-xs">Show Gesture Visualizations</Label>
+          <Label className="text-xs">Show Gesture Markers</Label>
           <Switch 
-            checked={showVisualizations}
-            onCheckedChange={setShowVisualizations}
+            checked={showGestureMarkers}
+            onCheckedChange={setShowGestureMarkers}
           />
         </div>
-        
-        <Card className="bg-black/20 border-0">
-          <CardContent className="p-3">
-            <div className="flex justify-between items-center mb-2">
-              <h6 className="text-xs font-medium">Predefined Gestures</h6>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled
-                className="h-6 px-2 text-[10px]"
-              >
-                <Plus className="h-3 w-3 mr-1" />
-                Add Custom
-              </Button>
-            </div>
-            
-            <div className="space-y-2">
-              <div className="flex items-center justify-between bg-black/30 p-2 rounded-sm">
-                <div className="text-xs">Open Palm</div>
-                <div className="flex items-center gap-1">
-                  <Switch checked={true} disabled />
-                </div>
-              </div>
-              
-              <div className="flex items-center justify-between bg-black/30 p-2 rounded-sm">
-                <div className="text-xs">Pinch</div>
-                <div className="flex items-center gap-1">
-                  <Switch checked={true} disabled />
-                </div>
-              </div>
-              
-              <div className="flex items-center justify-between bg-black/30 p-2 rounded-sm">
-                <div className="text-xs">Fist</div>
-                <div className="flex items-center gap-1">
-                  <Switch checked={true} disabled />
-                </div>
-              </div>
-              
-              <div className="flex items-center justify-between bg-black/30 p-2 rounded-sm">
-                <div className="text-xs">Point</div>
-                <div className="flex items-center gap-1">
-                  <Switch checked={true} disabled />
-                </div>
-              </div>
-            </div>
-            
-            <p className="text-[10px] italic opacity-70 mt-2">
-              Gesture customization coming soon
-            </p>
-          </CardContent>
-        </Card>
+      </div>
+      
+      <div className="pt-2 text-[10px] italic opacity-60">
+        Gesture recognition is used to define selection regions and actions.
       </div>
     </div>
   );

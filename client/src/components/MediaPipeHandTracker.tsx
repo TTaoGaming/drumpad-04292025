@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { EventType, dispatch } from '@/lib/eventBus';
+import { EventType, dispatch, addListener } from '@/lib/eventBus';
 import { HandData, HandLandmark, HandConnection } from '@/lib/types';
 import { OneEuroFilterArray, DEFAULT_FILTER_OPTIONS } from '@/lib/oneEuroFilter';
-import FilterSettingsPanel from '@/components/FilterSettingsPanel';
 
 interface MediaPipeHandTrackerProps {
   videoRef: React.RefObject<HTMLVideoElement>;
@@ -39,6 +38,15 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
     minCutoff: DEFAULT_FILTER_OPTIONS.minCutoff,
     beta: DEFAULT_FILTER_OPTIONS.beta,
     dcutoff: DEFAULT_FILTER_OPTIONS.dcutoff
+  });
+  
+  // Landmark visualization settings
+  const [landmarksSettings, setLandmarksSettings] = useState({
+    showLandmarks: true,
+    showConnections: true,
+    landmarkSize: 4,
+    connectionWidth: 5,
+    colorScheme: 'rainbow'
   });
   
   // Filter settings change handler
@@ -137,42 +145,51 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
               // Apply 1€ filter to hand landmarks
               const filteredLandmarks = applyFilter(landmarks, handIndex, now);
               
-              // Draw filtered landmarks
-              mpDrawing.drawLandmarks(ctx, filteredLandmarks, {
-                color: '#ffffff',
-                lineWidth: 2,
-                radius: 4
-              });
-              
-              // Draw connections with colors
-              mpHands.HAND_CONNECTIONS.forEach((connection: any) => {
-                // Determine which finger this connection belongs to
-                let colorIndex = 5; // Default to palm (indigo)
-                
-                // Identify which finger the connection belongs to
-                if (FINGER_INDICES.THUMB.includes(connection[0]) && 
-                    FINGER_INDICES.THUMB.includes(connection[1])) {
-                  colorIndex = 0; // Thumb - red
-                } else if (FINGER_INDICES.INDEX.includes(connection[0]) && 
-                           FINGER_INDICES.INDEX.includes(connection[1])) {
-                  colorIndex = 1; // Index - orange
-                } else if (FINGER_INDICES.MIDDLE.includes(connection[0]) && 
-                           FINGER_INDICES.MIDDLE.includes(connection[1])) {
-                  colorIndex = 2; // Middle - yellow
-                } else if (FINGER_INDICES.RING.includes(connection[0]) && 
-                           FINGER_INDICES.RING.includes(connection[1])) {
-                  colorIndex = 3; // Ring - green
-                } else if (FINGER_INDICES.PINKY.includes(connection[0]) && 
-                           FINGER_INDICES.PINKY.includes(connection[1])) {
-                  colorIndex = 4; // Pinky - blue
-                }
-                
-                // Draw the connection with appropriate color
-                mpDrawing.drawConnectors(ctx, filteredLandmarks, [connection], {
-                  color: FINGER_COLORS[colorIndex],
-                  lineWidth: 5
+              // Draw filtered landmarks if enabled
+              if (landmarksSettings.showLandmarks) {
+                mpDrawing.drawLandmarks(ctx, filteredLandmarks, {
+                  color: '#ffffff',
+                  lineWidth: 2,
+                  radius: landmarksSettings.landmarkSize
                 });
-              });
+              }
+              
+              // Draw connections if enabled
+              if (landmarksSettings.showConnections) {
+                mpHands.HAND_CONNECTIONS.forEach((connection: any) => {
+                  // Determine which finger this connection belongs to
+                  let colorIndex = 5; // Default to palm (indigo)
+                  
+                  if (landmarksSettings.colorScheme === 'rainbow') {
+                    // Identify which finger the connection belongs to for rainbow coloring
+                    if (FINGER_INDICES.THUMB.includes(connection[0]) && 
+                        FINGER_INDICES.THUMB.includes(connection[1])) {
+                      colorIndex = 0; // Thumb - red
+                    } else if (FINGER_INDICES.INDEX.includes(connection[0]) && 
+                              FINGER_INDICES.INDEX.includes(connection[1])) {
+                      colorIndex = 1; // Index - orange
+                    } else if (FINGER_INDICES.MIDDLE.includes(connection[0]) && 
+                              FINGER_INDICES.MIDDLE.includes(connection[1])) {
+                      colorIndex = 2; // Middle - yellow
+                    } else if (FINGER_INDICES.RING.includes(connection[0]) && 
+                              FINGER_INDICES.RING.includes(connection[1])) {
+                      colorIndex = 3; // Ring - green
+                    } else if (FINGER_INDICES.PINKY.includes(connection[0]) && 
+                              FINGER_INDICES.PINKY.includes(connection[1])) {
+                      colorIndex = 4; // Pinky - blue
+                    }
+                  } else if (landmarksSettings.colorScheme === 'single') {
+                    // Use a single color (white) for all connections
+                    colorIndex = 6; // Use violet (last color)
+                  }
+                  
+                  // Draw the connection with appropriate color
+                  mpDrawing.drawConnectors(ctx, filteredLandmarks, [connection], {
+                    color: landmarksSettings.colorScheme === 'single' ? '#FFFFFF' : FINGER_COLORS[colorIndex],
+                    lineWidth: landmarksSettings.connectionWidth
+                  });
+                });
+              }
             });
           }
           
@@ -219,7 +236,7 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
     };
     
     loadDependencies();
-  }, [videoRef, applyFilter]);
+  }, [videoRef, applyFilter, landmarksSettings]);
   
   // Resize canvas to match video dimensions
   useEffect(() => {
@@ -240,16 +257,37 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
     return () => window.removeEventListener('resize', resizeCanvas);
   }, [videoRef]);
   
+  // Listen for settings changes
+  useEffect(() => {
+    // Listen for filter settings from the settings panel
+    const settingsListener = addListener(EventType.SETTINGS_VALUE_CHANGE, (data) => {
+      // Handle 1€ Filter settings
+      if (data.section === 'filters' && data.setting === 'oneEuroFilter') {
+        if (data.value.enabled !== undefined) {
+          // Update filter options
+          handleFilterSettingsChange(data.value.params);
+        }
+      }
+      
+      // Handle hand landmarks visualization settings
+      if (data.section === 'handLandmarks') {
+        setLandmarksSettings(prev => ({
+          ...prev,
+          ...data.value
+        }));
+      }
+    });
+    
+    return () => {
+      settingsListener.remove();
+    };
+  }, [handleFilterSettingsChange]);
+  
   return (
     <>
       <canvas
         ref={canvasRef}
         className="absolute inset-0 z-10 pointer-events-none"
-      />
-      
-      {/* 1€ Filter Settings Panel */}
-      <FilterSettingsPanel 
-        onSettingsChange={handleFilterSettingsChange}
       />
     </>
   );
