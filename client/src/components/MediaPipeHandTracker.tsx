@@ -67,11 +67,11 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
       pinky: false  // Disabled by default to save performance
     },
     thresholds: {
-      thumb: { flex: { min: 5, max: 40 } },
-      index: { flex: { min: 5, max: 60 } },
-      middle: { flex: { min: 5, max: 60 } },
-      ring: { flex: { min: 5, max: 60 } },
-      pinky: { flex: { min: 5, max: 60 } }
+      thumb: { flex: { min: 5, max: 30 } },
+      index: { flex: { min: 5, max: 30 } },
+      middle: { flex: { min: 5, max: 30 } },
+      ring: { flex: { min: 5, max: 30 } },
+      pinky: { flex: { min: 5, max: 30 } }
     }
   });
   
@@ -560,7 +560,7 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                           let color;
                           switch (state) {
                             case 'straight':
-                              color = 'rgba(0, 255, 0, 0.7)'; // Green for straight
+                              color = 'rgba(255, 255, 255, 0.7)'; // White for straight
                               break;
                             case 'bent':
                               color = 'rgba(255, 0, 0, 0.7)'; // Red for bent
@@ -569,15 +569,23 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                               color = 'rgba(255, 255, 0, 0.7)'; // Yellow for in-between
                           }
                           
-                          // Draw the state indicator
-                          ctx.beginPath();
-                          ctx.arc(x, y, radius, 0, 2 * Math.PI);
-                          ctx.fillStyle = color;
-                          ctx.fill();
+                          // Draw the state indicator as a ring around the fingertip
+                          // This creates a more subtle, elegant indicator
+                          const ringWidth = 3; // Width of the indicator ring
+                          const outerRadius = radius + 2; // Slightly larger than landmark
                           
-                          // Add a border to make it more visible
-                          ctx.strokeStyle = 'white';
+                          // Draw the ring
+                          ctx.beginPath();
+                          ctx.arc(x, y, outerRadius, 0, 2 * Math.PI);
+                          ctx.lineWidth = ringWidth;
+                          ctx.strokeStyle = color;
+                          ctx.stroke();
+                          
+                          // Add a more subtle border
+                          ctx.beginPath();
+                          ctx.arc(x, y, outerRadius, 0, 2 * Math.PI);
                           ctx.lineWidth = 1;
+                          ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
                           ctx.stroke();
                         }
                       }
