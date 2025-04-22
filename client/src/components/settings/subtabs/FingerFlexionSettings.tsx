@@ -39,7 +39,7 @@ const DEFAULT_THRESHOLDS = {
   pinky: { pip: [5, 60], dip: [5, 60] }
 };
 
-type JointType = 'pip' | 'dip';
+type JointType = 'flex';
 type FingerType = 'thumb' | 'index' | 'middle' | 'ring' | 'pinky';
 
 /**
@@ -49,8 +49,19 @@ type FingerType = 'thumb' | 'index' | 'middle' | 'ring' | 'pinky';
  * For each finger, two joints are measured and can be configured for threshold detection
  */
 const FingerFlexionSettings: React.FC = () => {
-  // Enable/disable finger flexion detection
+  // Global enable/disable finger flexion detection
   const [isEnabled, setIsEnabled] = useState(true);
+  
+  // Per-finger enable/disable
+  const [enabledFingers, setEnabledFingers] = useState<{
+    [finger in FingerType]: boolean
+  }>({
+    thumb: true,
+    index: true,
+    middle: true,
+    ring: false,  // Disabled by default to save performance
+    pinky: false  // Disabled by default to save performance
+  });
   
   // Currently selected finger tab
   const [activeFingerTab, setActiveFingerTab] = useState<FingerType>('index');
@@ -58,39 +69,42 @@ const FingerFlexionSettings: React.FC = () => {
   // Real-time angle measurements from hand tracking
   const [currentAngles, setCurrentAngles] = useState<{
     [finger in FingerType]: {
-      [joint in JointType]: number | null
+      flex: number | null  // Combined flexion angle (replaces separate pip/dip)
     }
   }>({
-    thumb: { pip: null, dip: null },
-    index: { pip: null, dip: null },
-    middle: { pip: null, dip: null },
-    ring: { pip: null, dip: null },
-    pinky: { pip: null, dip: null }
+    thumb: { flex: null },
+    index: { flex: null },
+    middle: { flex: null },
+    ring: { flex: null },
+    pinky: { flex: null }
   });
   
-  // Threshold settings
+  // Simplified threshold settings - one combined flexion value per finger
   const [thresholds, setThresholds] = useState({
     thumb: { 
-      pip: { min: DEFAULT_THRESHOLDS.thumb.pip[0], max: DEFAULT_THRESHOLDS.thumb.pip[1] },
-      dip: { min: DEFAULT_THRESHOLDS.thumb.dip[0], max: DEFAULT_THRESHOLDS.thumb.dip[1] }
+      flex: { min: 5, max: 40 }
     },
     index: { 
-      pip: { min: DEFAULT_THRESHOLDS.index.pip[0], max: DEFAULT_THRESHOLDS.index.pip[1] },
-      dip: { min: DEFAULT_THRESHOLDS.index.dip[0], max: DEFAULT_THRESHOLDS.index.dip[1] }
+      flex: { min: 5, max: 60 }
     },
     middle: { 
-      pip: { min: DEFAULT_THRESHOLDS.middle.pip[0], max: DEFAULT_THRESHOLDS.middle.pip[1] },
-      dip: { min: DEFAULT_THRESHOLDS.middle.dip[0], max: DEFAULT_THRESHOLDS.middle.dip[1] }
+      flex: { min: 5, max: 60 }
     },
     ring: { 
-      pip: { min: DEFAULT_THRESHOLDS.ring.pip[0], max: DEFAULT_THRESHOLDS.ring.pip[1] },
-      dip: { min: DEFAULT_THRESHOLDS.ring.dip[0], max: DEFAULT_THRESHOLDS.ring.dip[1] }
+      flex: { min: 5, max: 60 }
     },
     pinky: { 
-      pip: { min: DEFAULT_THRESHOLDS.pinky.pip[0], max: DEFAULT_THRESHOLDS.pinky.pip[1] },
-      dip: { min: DEFAULT_THRESHOLDS.pinky.dip[0], max: DEFAULT_THRESHOLDS.pinky.dip[1] }
+      flex: { min: 5, max: 60 }
     }
   });
+  
+  // Toggle specific finger
+  const toggleFinger = (finger: FingerType) => {
+    setEnabledFingers(prev => ({
+      ...prev,
+      [finger]: !prev[finger]
+    }));
+  };
   
   // Send settings to the application
   useEffect(() => {
@@ -99,10 +113,11 @@ const FingerFlexionSettings: React.FC = () => {
       setting: 'fingerFlexion',
       value: {
         enabled: isEnabled,
+        enabledFingers,
         thresholds
       }
     });
-  }, [isEnabled, thresholds]);
+  }, [isEnabled, enabledFingers, thresholds]);
   
   // Listen for real-time angle measurements
   useEffect(() => {
@@ -122,27 +137,26 @@ const FingerFlexionSettings: React.FC = () => {
   }, []);
   
   // Update threshold values for the currently selected finger
-  const handleThresholdChange = (
-    joint: JointType,
+  const handleFlexThresholdChange = (
     type: 'min' | 'max',
     value: number
   ) => {
     setThresholds(prev => {
       const newThresholds = { ...prev };
       // Ensure constraints: min < max
-      if (type === 'min' && value < newThresholds[activeFingerTab][joint].max) {
-        newThresholds[activeFingerTab][joint].min = value;
-      } else if (type === 'max' && value > newThresholds[activeFingerTab][joint].min) {
-        newThresholds[activeFingerTab][joint].max = value;
+      if (type === 'min' && value < newThresholds[activeFingerTab].flex.max) {
+        newThresholds[activeFingerTab].flex.min = value;
+      } else if (type === 'max' && value > newThresholds[activeFingerTab].flex.min) {
+        newThresholds[activeFingerTab].flex.max = value;
       }
       return newThresholds;
     });
   };
   
   // Get status badge for current angle measurement
-  const getStatusBadge = (finger: FingerType, joint: JointType) => {
-    const angle = currentAngles[finger][joint];
-    const threshold = thresholds[finger][joint];
+  const getStatusBadge = (finger: FingerType) => {
+    const angle = currentAngles[finger].flex;
+    const threshold = thresholds[finger].flex;
     
     if (angle === null) {
       return <Badge variant="outline" className="text-xs bg-gray-800/50">No data</Badge>;
@@ -167,10 +181,10 @@ const FingerFlexionSettings: React.FC = () => {
               <TooltipTrigger asChild>
                 <Info size={14} className="text-white/60 hover:text-white/80 cursor-help" />
               </TooltipTrigger>
-              <TooltipContent className="max-w-[250px]">
+              <TooltipContent className="max-w-[280px]">
                 <p className="text-xs">
-                  Measures the angles between finger joints and detects when fingers 
-                  are straight or bent. Each finger can have its own thresholds configured.
+                  Measures the combined flexion angle of finger joints and detects when fingers 
+                  are straight or bent. Enable only the specific fingers you need to save performance.
                 </p>
               </TooltipContent>
             </Tooltip>
@@ -180,6 +194,26 @@ const FingerFlexionSettings: React.FC = () => {
           checked={isEnabled}
           onCheckedChange={setIsEnabled}
         />
+      </div>
+      
+      {/* Per-finger enable/disable section */}
+      <div className={isEnabled ? "space-y-1 border-b border-white/10 pb-3" : "space-y-1 border-b border-white/10 pb-3 opacity-50 pointer-events-none"}>
+        <Label className="text-xs font-medium">Active Fingers</Label>
+        <p className="text-[10px] text-white/60 mb-2">
+          Enable only the fingers you need to track. Disabling unused fingers improves performance.
+        </p>
+        <div className="grid grid-cols-5 gap-2">
+          {(['thumb', 'index', 'middle', 'ring', 'pinky'] as FingerType[]).map((finger) => (
+            <div key={finger} className="flex flex-col items-center gap-1">
+              <Switch 
+                checked={enabledFingers[finger]}
+                onCheckedChange={() => toggleFinger(finger)}
+                className="data-[state=checked]:bg-gradient-to-r data-[state=checked]:from-indigo-500 data-[state=checked]:to-purple-600"
+              />
+              <span className="text-[10px]">{FINGER_NAMES[['thumb', 'index', 'middle', 'ring', 'pinky'].indexOf(finger)]}</span>
+            </div>
+          ))}
+        </div>
       </div>
       
       <div className={isEnabled ? "space-y-4" : "space-y-4 opacity-50 pointer-events-none"}>
@@ -199,104 +233,58 @@ const FingerFlexionSettings: React.FC = () => {
           
           {/* Content for each finger tab */}
           {(['thumb', 'index', 'middle', 'ring', 'pinky'] as FingerType[]).map((finger) => (
-            <TabsContent key={finger} value={finger} className="pt-3 space-y-4">
-              <div className="text-sm font-medium mb-2">
-                {FINGER_NAMES[['thumb', 'index', 'middle', 'ring', 'pinky'].indexOf(finger)]} Finger Joints
+            <TabsContent key={finger} value={finger} className={`pt-3 space-y-4 ${enabledFingers[finger] ? '' : 'opacity-50'}`}>
+              <div className="text-sm font-medium mb-2 flex justify-between items-center">
+                <span>{FINGER_NAMES[['thumb', 'index', 'middle', 'ring', 'pinky'].indexOf(finger)]} Finger Flexion</span>
+                {!enabledFingers[finger] && 
+                  <Badge variant="outline" className="text-xs bg-gray-800/50">Disabled</Badge>
+                }
               </div>
               
-              {/* PIP Joint (middle joint) */}
+              {/* Combined Flexion Measurement */}
               <div className="pt-2 pb-2 border-t border-white/10 space-y-3">
                 <div className="flex justify-between items-center">
                   <div>
-                    <p className="text-xs font-medium">{finger === 'thumb' ? 'MCP (Base)' : 'PIP (Middle Joint)'}</p>
+                    <p className="text-xs font-medium">Finger Flexion</p>
                     <p className="text-[10px] text-white/60 mt-0.5">
-                      The second joint of the finger
+                      Combined measurement of finger bending
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs opacity-80">
-                      {currentAngles[finger].pip !== null 
-                        ? `${Math.round(currentAngles[finger].pip as number)}°` 
+                      {currentAngles[finger].flex !== null 
+                        ? `${Math.round(currentAngles[finger].flex as number)}°` 
                         : '--°'}
                     </span>
-                    {getStatusBadge(finger, 'pip')}
+                    {getStatusBadge(finger)}
                   </div>
                 </div>
                 
-                {/* PIP Threshold sliders */}
+                {/* Threshold sliders */}
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
                     <Label className="text-xs">Straight Threshold</Label>
-                    <span className="text-xs opacity-80">Below {thresholds[finger].pip.min}°</span>
+                    <span className="text-xs opacity-80">Below {thresholds[finger].flex.min}°</span>
                   </div>
                   <Slider
                     min={0}
                     max={30}
                     step={1}
-                    value={[thresholds[finger].pip.min]}
-                    onValueChange={(value) => handleThresholdChange('pip', 'min', value[0])}
+                    value={[thresholds[finger].flex.min]}
+                    onValueChange={(value) => handleFlexThresholdChange('min', value[0])}
                     className="flex-1"
                   />
                   
                   <div className="flex justify-between items-center mt-3">
                     <Label className="text-xs">Bent Threshold</Label>
-                    <span className="text-xs opacity-80">Above {thresholds[finger].pip.max}°</span>
+                    <span className="text-xs opacity-80">Above {thresholds[finger].flex.max}°</span>
                   </div>
                   <Slider
                     min={30}
                     max={90}
                     step={1}
-                    value={[thresholds[finger].pip.max]}
-                    onValueChange={(value) => handleThresholdChange('pip', 'max', value[0])}
-                    className="flex-1"
-                  />
-                </div>
-              </div>
-              
-              {/* DIP Joint (tip joint) */}
-              <div className="pt-3 pb-2 border-t border-white/10 space-y-3">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className="text-xs font-medium">{finger === 'thumb' ? 'IP (Tip)' : 'DIP (Tip Joint)'}</p>
-                    <p className="text-[10px] text-white/60 mt-0.5">
-                      The joint closest to the fingertip
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs opacity-80">
-                      {currentAngles[finger].dip !== null 
-                        ? `${Math.round(currentAngles[finger].dip as number)}°` 
-                        : '--°'}
-                    </span>
-                    {getStatusBadge(finger, 'dip')}
-                  </div>
-                </div>
-                
-                {/* DIP Threshold sliders */}
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <Label className="text-xs">Straight Threshold</Label>
-                    <span className="text-xs opacity-80">Below {thresholds[finger].dip.min}°</span>
-                  </div>
-                  <Slider
-                    min={0}
-                    max={30}
-                    step={1}
-                    value={[thresholds[finger].dip.min]}
-                    onValueChange={(value) => handleThresholdChange('dip', 'min', value[0])}
-                    className="flex-1"
-                  />
-                  
-                  <div className="flex justify-between items-center mt-3">
-                    <Label className="text-xs">Bent Threshold</Label>
-                    <span className="text-xs opacity-80">Above {thresholds[finger].dip.max}°</span>
-                  </div>
-                  <Slider
-                    min={30}
-                    max={90}
-                    step={1}
-                    value={[thresholds[finger].dip.max]}
-                    onValueChange={(value) => handleThresholdChange('dip', 'max', value[0])}
+                    value={[thresholds[finger].flex.max]}
+                    onValueChange={(value) => handleFlexThresholdChange('max', value[0])}
                     className="flex-1"
                   />
                 </div>
@@ -306,8 +294,8 @@ const FingerFlexionSettings: React.FC = () => {
         </Tabs>
         
         <div className="pt-2 text-[10px] italic opacity-60">
-          Angle thresholds determine when a finger is considered straight or bent, 
-          which can be used for gesture recognition and control inputs.
+          Simplified flexion measurement improves performance while still detecting finger movement.
+          For best results, enable only the fingers you need to track.
         </div>
       </div>
     </div>
