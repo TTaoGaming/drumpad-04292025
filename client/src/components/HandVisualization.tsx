@@ -1,11 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { HandData } from '@/lib/types';
+import { EventType, addListener } from '@/lib/eventBus';
 
 interface HandVisualizationProps {
   handData?: HandData;
   videoElement?: HTMLVideoElement | null;
   width: number;
   height: number;
+}
+
+interface KnuckleRulerSettings {
+  enabled: boolean;
+  showMeasurement: boolean;
+  knuckleDistanceCm: number;
 }
 
 /**
@@ -29,6 +36,24 @@ const HandVisualization: React.FC<HandVisualizationProps> = ({
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [debugInfo, setDebugInfo] = useState<string>('No hand data');
+  const [knuckleRulerSettings, setKnuckleRulerSettings] = useState<KnuckleRulerSettings>({
+    enabled: true,
+    showMeasurement: true,
+    knuckleDistanceCm: 8.0
+  });
+  
+  // Listen for changes to knuckle ruler settings
+  useEffect(() => {
+    const listener = addListener(EventType.SETTINGS_VALUE_CHANGE, (data) => {
+      if (data.section === 'calibration' && data.setting === 'knuckleRuler') {
+        setKnuckleRulerSettings(data.value);
+      }
+    });
+    
+    return () => {
+      listener.remove();
+    };
+  }, []);
   
   // Draw hand landmarks and connections
   useEffect(() => {
@@ -144,7 +169,77 @@ const HandVisualization: React.FC<HandVisualizationProps> = ({
       });
     }
     
-  }, [handData, videoElement, width, height]);
+    // Draw knuckle ruler measurement if enabled
+    if (knuckleRulerSettings.enabled && handData.landmarks) {
+      // The index knuckle is landmark 5, pinky knuckle is landmark 17
+      const indexKnuckle = handData.landmarks[5];
+      const pinkyKnuckle = handData.landmarks[17];
+      
+      if (indexKnuckle && pinkyKnuckle) {
+        // Calculate the Euclidean distance between knuckles in normalized space (0-1)
+        const normalizedDistance = Math.sqrt(
+          Math.pow(indexKnuckle.x - pinkyKnuckle.x, 2) + 
+          Math.pow(indexKnuckle.y - pinkyKnuckle.y, 2)
+        );
+        
+        // Calculate the actual measurement in pixels
+        const pixelDistance = normalizedDistance * width;
+        
+        // Dispatch an event with the real-time measurement
+        dispatch(EventType.SETTINGS_VALUE_CHANGE, {
+          section: 'calibration',
+          setting: 'knuckleRulerRealtime',
+          value: {
+            normalizedDistance,
+            pixelDistance
+          }
+        });
+        
+        // Only draw the visualization if showMeasurement is true
+        if (knuckleRulerSettings.showMeasurement) {
+        // Draw a line connecting the knuckles
+        ctx.beginPath();
+        ctx.moveTo(indexKnuckle.x * canvas.width, indexKnuckle.y * canvas.height);
+        ctx.lineTo(pinkyKnuckle.x * canvas.width, pinkyKnuckle.y * canvas.height);
+        ctx.setLineDash([5, 3]); // Dashed line
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.setLineDash([]); // Reset to solid line
+        
+        // Calculate the midpoint for the text
+        const midX = (indexKnuckle.x + pinkyKnuckle.x) / 2 * canvas.width;
+        const midY = (indexKnuckle.y + pinkyKnuckle.y) / 2 * canvas.height;
+        
+        // Display the measurement
+        const measurementText = `${knuckleRulerSettings.knuckleDistanceCm.toFixed(1)} cm`;
+        
+        // Create a background for the text
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        const textWidth = ctx.measureText(measurementText).width;
+        const padding = 4;
+        ctx.fillRect(
+          midX - textWidth / 2 - padding, 
+          midY - 10, 
+          textWidth + padding * 2, 
+          20
+        );
+        
+        // Draw the text
+        ctx.fillStyle = 'white';
+        ctx.font = '12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(measurementText, midX, midY);
+        
+        // Reset text alignment
+        ctx.textAlign = 'start';
+        ctx.textBaseline = 'alphabetic';
+        }
+      }
+    }
+    
+  }, [handData, videoElement, width, height, knuckleRulerSettings]);
   
   return (
     <>

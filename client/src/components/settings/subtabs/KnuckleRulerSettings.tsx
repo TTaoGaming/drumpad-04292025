@@ -18,6 +18,7 @@ const KnuckleRulerSettings: React.FC = () => {
   const DEFAULT_KNUCKLE_DISTANCE = 8.0;
   
   const [isEnabled, setIsEnabled] = useState(true);
+  const [showMeasurement, setShowMeasurement] = useState(true);
   const [knuckleDistance, setKnuckleDistance] = useState(DEFAULT_KNUCKLE_DISTANCE);
   
   // Update the app when settings change
@@ -27,10 +28,11 @@ const KnuckleRulerSettings: React.FC = () => {
       setting: 'knuckleRuler',
       value: {
         enabled: isEnabled,
+        showMeasurement: showMeasurement,
         knuckleDistanceCm: knuckleDistance
       }
     });
-  }, [isEnabled, knuckleDistance]);
+  }, [isEnabled, showMeasurement, knuckleDistance]);
   
   // Handle slider or input changes
   const handleDistanceChange = (value: number) => {
@@ -101,13 +103,38 @@ const KnuckleRulerSettings: React.FC = () => {
           </div>
         </div>
         
-        <div className="pt-2 border-t border-white/10">
+        <div className="pt-2 border-t border-white/10 space-y-3">
           <div className="flex justify-between items-center">
             <p className="text-xs text-white/70">Measured distance in realtime</p>
             <span className="text-xs font-semibold bg-black/30 px-2 py-1 rounded">
               {/* This would be populated from hand tracking data */}
               --.-- cm
             </span>
+          </div>
+          
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="showMeasurement" className="text-xs">
+                Show measurement on knuckles
+              </Label>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info size={12} className="text-white/60 hover:text-white/80 cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-[220px]">
+                    <p className="text-xs">
+                      Displays the distance measurement directly on your hand in the camera view
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+            <Switch 
+              id="showMeasurement"
+              checked={showMeasurement}
+              onCheckedChange={setShowMeasurement}
+            />
           </div>
         </div>
         
