@@ -50,6 +50,16 @@ function App() {
     opencvWorkerRef.current = opencvWorker;
     mediaPipelineWorkerRef.current = mediaPipelineWorker;
 
+    // Initialize database service
+    initializeDatabaseService()
+      .then(() => {
+        addLog('Database service initialized', 'success');
+      })
+      .catch(error => {
+        console.error('Failed to initialize database service:', error);
+        addLog('Failed to initialize database service', 'error');
+      });
+
     // Set up event listeners for worker messages
     opencvWorker.onmessage = (e) => {
       if (e.data.type === 'log') {
@@ -81,6 +91,14 @@ function App() {
         if (e.data.handData) {
           console.log('Setting hand data:', e.data.handData);
           setHandData(e.data.handData);
+          
+          // Save hand tracking data to database
+          if (e.data.handData && e.data.performance) {
+            saveHandLandmarkData(e.data.handData, e.data.performance)
+              .catch(error => {
+                console.error('Error saving hand landmark data:', error);
+              });
+          }
         }
         
         // Update performance metrics
@@ -108,10 +126,31 @@ function App() {
       if (data.isRunning) {
         addLog('Camera started at 480p resolution');
         
+        // Start tracking session when camera starts
+        startTrackingSession(`Session ${new Date().toLocaleString()}`)
+          .then(sessionId => {
+            if (sessionId) {
+              addLog(`Started tracking session with ID: ${sessionId}`, 'success');
+            }
+          })
+          .catch(error => {
+            console.error('Error starting tracking session:', error);
+            addLog('Failed to start tracking session', 'error');
+          });
+        
         // Start frame processing when camera is running
         startFrameProcessing();
       } else {
         addLog('Camera stopped');
+        
+        // End tracking session when camera stops
+        endTrackingSession()
+          .then(() => {
+            addLog('Ended tracking session', 'info');
+          })
+          .catch(error => {
+            console.error('Error ending tracking session:', error);
+          });
         
         // Stop frame processing when camera is stopped
         stopFrameProcessing();
@@ -141,6 +180,9 @@ function App() {
     // Cleanup event listeners on unmount
     return () => {
       stopFrameProcessing();
+      
+      // End tracking session on unmount if needed
+      endTrackingSession().catch(console.error);
       
       if (opencvWorkerRef.current) {
         opencvWorkerRef.current.terminate();
