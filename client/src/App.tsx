@@ -6,6 +6,7 @@ import Notifications from "@/components/Notifications";
 import ConsoleOutput from "@/components/ConsoleOutput";
 import HandVisualization from "@/components/HandVisualization";
 import PerformanceDisplay from "@/components/PerformanceDisplay";
+import SimpleHandVisualizer from "@/components/SimpleHandVisualizer";
 import { EventType, addListener, dispatch } from "@/lib/eventBus";
 import { Notification, HandData, PerformanceMetrics } from "@/lib/types";
 import { getVideoFrame } from "@/lib/cameraManager";
@@ -245,8 +246,13 @@ function App() {
         videoRef={videoRef}
       />
       
-      {/* Hand visualization overlay */}
-      {isCameraRunning && handData && (
+      {/* SimpleHandVisualizer - direct visualization with no worker dependency */}
+      {isCameraRunning && (
+        <SimpleHandVisualizer videoRef={videoRef} />
+      )}
+      
+      {/* Advanced hand visualization overlay (currently not working) */}
+      {false && isCameraRunning && handData && (
         <HandVisualization
           handData={handData}
           videoElement={videoRef.current}
