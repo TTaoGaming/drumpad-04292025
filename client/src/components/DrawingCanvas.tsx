@@ -34,6 +34,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
   const [isDrawing, setIsDrawing] = useState(false);
   const [paths, setPaths] = useState<DrawingPath[]>(initialPaths);
   const [currentPath, setCurrentPath] = useState<DrawingPath | null>(null);
+  const [canvasSize, setCanvasSize] = useState({ width, height });
   const [settings, setSettings] = useState<DrawingSettings>({
     enabled: enabled,
     mode: 'roi',
@@ -107,8 +108,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
-    // Clear the canvas
-    ctx.clearRect(0, 0, width, height);
+    // Clear the canvas - using canvasSize state
+    ctx.clearRect(0, 0, canvasSize.width, canvasSize.height);
     
     // Set drawing styles
     ctx.lineWidth = settings.strokeWidth;
@@ -125,7 +126,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
     
     // Draw feature points if enabled
     if (settings.showFeatures) {
-      orbFeatureDetector.drawFeatures(ctx, width, height);
+      orbFeatureDetector.drawFeatures(ctx, canvasSize.width, canvasSize.height);
     }
     
     // Publish the current ROIs to the event bus
@@ -137,7 +138,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
         value: rois
       });
     }
-  }, [paths, currentPath, width, height, settings]);
+  }, [paths, currentPath, canvasSize, settings]);
   
   // Process video frames for feature detection
   useEffect(() => {
@@ -369,6 +370,26 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
       });
     }
   }, [initialPaths]);
+  
+  // Update canvas size when width/height props change
+  useEffect(() => {
+    if (width !== canvasSize.width || height !== canvasSize.height) {
+      console.log(`Canvas size updated: ${width}x${height}`);
+      setCanvasSize({ width, height });
+      
+      // Resize canvas element
+      if (canvasRef.current) {
+        canvasRef.current.width = width;
+        canvasRef.current.height = height;
+      }
+      
+      // Log for debugging
+      dispatch(EventType.LOG, {
+        message: `Drawing canvas resized to ${width}x${height}`,
+        type: 'info'
+      });
+    }
+  }, [width, height]);
   
   // Create the canvas style - absolute positioning on top of video
   const canvasStyle: React.CSSProperties = {

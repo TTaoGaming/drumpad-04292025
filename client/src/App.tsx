@@ -33,6 +33,7 @@ function App() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const frameProcessingRef = useRef<boolean>(false);
   const animationFrameRef = useRef<number | null>(null);
+  const resolutionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     // Initialize workers when component mounts
@@ -191,6 +192,69 @@ function App() {
       });
     }
   }, [isOpenCVReady, isMediaPipelineReady, isCameraRunning]);
+  
+  // Handle video size changes and update drawing canvas dimensions
+  useEffect(() => {
+    if (!videoRef.current || !isCameraRunning) return;
+    
+    // Clear any existing timeout
+    if (resolutionTimeoutRef.current) {
+      clearTimeout(resolutionTimeoutRef.current);
+    }
+    
+    const updateVideoResolution = () => {
+      if (!videoRef.current) return;
+      
+      const videoElement = videoRef.current;
+      const { videoWidth, videoHeight } = videoElement;
+      
+      // Only update resolution if there's actual video data
+      if (videoWidth && videoHeight) {
+        console.log(`Video resolution updated: ${videoWidth}x${videoHeight}`);
+        setResolution({ width: videoWidth, height: videoHeight });
+        
+        // Dispatch event for other components
+        dispatch(EventType.CAMERA_STATUS_CHANGE, { 
+          isRunning: true,
+          resolution: { width: videoWidth, height: videoHeight }
+        });
+      }
+    };
+    
+    // Set up an event listener for loadedmetadata
+    const handleMetadataLoaded = () => {
+      updateVideoResolution();
+    };
+    
+    // Set up an event listener for resize
+    const handleResize = () => {
+      // Use a timeout to debounce rapid resize events
+      if (resolutionTimeoutRef.current) {
+        clearTimeout(resolutionTimeoutRef.current);
+      }
+      
+      resolutionTimeoutRef.current = setTimeout(() => {
+        updateVideoResolution();
+      }, 300);
+    };
+    
+    videoRef.current.addEventListener('loadedmetadata', handleMetadataLoaded);
+    videoRef.current.addEventListener('resize', handleResize);
+    
+    // Also try to update immediately in case video is already loaded
+    updateVideoResolution();
+    
+    return () => {
+      if (videoRef.current) {
+        videoRef.current.removeEventListener('loadedmetadata', handleMetadataLoaded);
+        videoRef.current.removeEventListener('resize', handleResize);
+      }
+      
+      if (resolutionTimeoutRef.current) {
+        clearTimeout(resolutionTimeoutRef.current);
+      }
+    };
+  }, [isCameraRunning, videoRef.current]);
 
   // Frame processing functions
   const startFrameProcessing = () => {
