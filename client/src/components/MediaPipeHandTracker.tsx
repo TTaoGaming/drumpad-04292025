@@ -389,6 +389,14 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
     // This prevents flickering when near the threshold
     let newPinchState = memory.isPinching;
     
+    // Debug pinch settings
+    console.log('Current pinch settings:', {
+      threshold: pinchGestureSettings.threshold,
+      releaseThreshold: pinchGestureSettings.releaseThreshold,
+      currentDistance: distance,
+      isPinching: memory.isPinching
+    });
+    
     if (memory.isPinching) {
       // Currently pinching - only release if distance exceeds release threshold
       if (distance > pinchGestureSettings.releaseThreshold) {
@@ -538,6 +546,20 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
         
         // Listen for pinch gesture setting changes
         if (data.section === 'gestures' && data.setting === 'pinchGesture') {
+          console.log('Updating pinch gesture settings:', data.value);
+          
+          // Check if thresholds have changed to reset the pinch state memory
+          if (pinchGestureSettings.threshold !== data.value.threshold || 
+              pinchGestureSettings.releaseThreshold !== data.value.releaseThreshold) {
+            console.log('Threshold changed, resetting pinch state memory');
+            pinchStateMemoryRef.current = {
+              isPinching: false,
+              lastDistance: null,
+              stableCount: 0
+            };
+          }
+          
+          // Update the settings
           setPinchGestureSettings(data.value);
         }
       }
@@ -975,8 +997,12 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                   
                   // Display threshold info
                   ctx.fillStyle = 'white';
-                  const thresholdText = `Threshold: ${pinchGestureSettings.threshold.toFixed(2)}`;
+                  const thresholdText = `Threshold: ${pinchGestureSettings.threshold.toFixed(3)}`;
                   ctx.fillText(thresholdText, stateDisplayX + 100, stateDisplayY + 45);
+                  
+                  // Display release threshold
+                  const releaseText = `Release: ${pinchGestureSettings.releaseThreshold.toFixed(3)}`;
+                  ctx.fillText(releaseText, stateDisplayX + 100, stateDisplayY + 65);
                   
                   // Display stability counter if state is changing
                   if (memory.stableCount > 0) {

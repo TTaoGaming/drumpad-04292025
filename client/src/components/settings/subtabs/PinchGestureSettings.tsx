@@ -50,6 +50,8 @@ const PinchGestureSettings = () => {
   
   // Update settings in the tracker when changed
   useEffect(() => {
+    console.log('PinchGestureSettings: settings changed', settings);
+    
     // Dispatch event to update settings in the tracker
     dispatch(EventType.SETTINGS_VALUE_CHANGE, {
       section: 'gestures',
@@ -77,9 +79,12 @@ const PinchGestureSettings = () => {
   // Handle threshold change
   const handleThresholdChange = (value: number[]) => {
     const newThreshold = value[0];
+    console.log('Threshold changed to:', newThreshold);
+    
     setSettings(prev => {
       // Ensure release threshold is at least equal to the pinch threshold
       const newReleaseThreshold = Math.max(prev.releaseThreshold, newThreshold + 0.02);
+      console.log('New settings will be:', {threshold: newThreshold, releaseThreshold: newReleaseThreshold});
       return {
         ...prev,
         threshold: newThreshold,
