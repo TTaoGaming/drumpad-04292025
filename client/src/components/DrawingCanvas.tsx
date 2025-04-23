@@ -607,6 +607,17 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
     }
   }, [initialPaths]);
   
+  // Clear previous paths when creating a new ROI
+  useEffect(() => {
+    if (isDrawing && currentPath && currentPath.isROI) {
+      // If we're drawing a new ROI, clear previous paths
+      setPaths([]);
+      
+      // Also clear the orbFeatureDetector ROIs
+      orbFeatureDetector.clearROIs();
+    }
+  }, [isDrawing, currentPath]);
+  
   // Update canvas size when width/height props change or when viewport size changes
   useEffect(() => {
     // Function to update canvas size based on video display dimensions

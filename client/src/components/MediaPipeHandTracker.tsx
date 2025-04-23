@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { EventType, dispatch, addListener } from '@/lib/eventBus';
-import { HandData, HandLandmark, HandConnection } from '@/lib/types';
+import { HandData, HandLandmark } from '@/lib/types';
 import { OneEuroFilterArray, DEFAULT_FILTER_OPTIONS } from '@/lib/oneEuroFilter';
 import { HandTrackingOptimizer, OptimizationSettings, DEFAULT_OPTIMIZATION_SETTINGS } from '@/lib/handTrackingOptimizer';
 import { debounce, throttle } from '@/lib/utils';
