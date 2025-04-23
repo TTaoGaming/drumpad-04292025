@@ -63,7 +63,7 @@ const OneEuroFilterSettings: React.FC = () => {
   useEffect(() => {
     dispatch(EventType.SETTINGS_VALUE_CHANGE, {
       section: 'filters',
-      setting: 'oneEuro',
+      setting: 'oneEuroFilter',
       value: {
         enabled: isEnabled,
         preset: activePreset,

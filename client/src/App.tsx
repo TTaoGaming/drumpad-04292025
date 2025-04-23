@@ -5,9 +5,11 @@ import ControlsOverlay from "@/components/ControlsOverlay";
 import Notifications from "@/components/Notifications";
 import ConsoleOutput from "@/components/ConsoleOutput";
 import HandVisualization from "@/components/HandVisualization";
+import PerformanceDisplay from "@/components/PerformanceDisplay";
+import PerformanceMonitor from "@/components/PerformanceMonitor";
+import FpsStats from "@/components/PerformanceMetrics";
 import MediaPipeHandTracker from "@/components/MediaPipeHandTracker";
 import SettingsPanel from "@/components/settings/SettingsPanel";
-import FpsCounter from "@/components/FpsCounter";
 import { EventType, addListener, dispatch } from "@/lib/eventBus";
 import { Notification, HandData, PerformanceMetrics } from "@/lib/types";
 import { getVideoFrame } from "@/lib/cameraManager";
@@ -45,9 +47,6 @@ function App() {
     // Store workers in refs
     opencvWorkerRef.current = opencvWorker;
     mediaPipelineWorkerRef.current = mediaPipelineWorker;
-    
-    // Make the worker globally accessible
-    (window as any).mediaPipelineWorker = mediaPipelineWorker;
 
     // Set up event listeners for worker messages
     opencvWorker.onmessage = (e) => {
@@ -82,13 +81,19 @@ function App() {
           setHandData(e.data.handData);
         }
         
-        // Update performance metrics (kept for internal tracking)
+        // Update performance metrics
         if (e.data.performance) {
           console.log('Setting performance metrics:', e.data.performance);
           setPerformanceMetrics(prev => ({
             ...(prev || {}),
             ...e.data.performance
           }));
+          
+          // Dispatch event for PerformanceMonitor
+          dispatch(EventType.FRAME_PROCESSED, {
+            performance: e.data.performance,
+            timestamp: Date.now()
+          });
         }
         
         // Continue processing frames
@@ -187,14 +192,13 @@ function App() {
   };
 
   const processVideoFrame = () => {
-    // Only process if needed for non-MediaPipe processing (OpenCV, etc.)
-    // The MediaPipeHandTracker component now handles sending frames to the media pipeline worker
+    // Only process if workers are ready and camera is running
     if (
       isOpenCVReady && 
+      isMediaPipelineReady && 
       isCameraRunning && 
       videoRef.current && 
-      !frameProcessingRef.current &&
-      opencvWorkerRef.current // Only send to OpenCV worker now
+      !frameProcessingRef.current
     ) {
       frameProcessingRef.current = true;
       
@@ -202,18 +206,23 @@ function App() {
         // Capture frame from video
         const frameData = getVideoFrame(videoRef.current);
         
-        // We now only send the frame to the OpenCV worker for additional processing
-        // The MediaPipe processing is handled directly in the MediaPipeHandTracker component
-        if (frameData && opencvWorkerRef.current) {
-          opencvWorkerRef.current.postMessage({
+        if (frameData && mediaPipelineWorkerRef.current) {
+          console.log('Sending frame to worker', frameData ? 'Frame available' : 'No frame');
+          
+          // Send frame to Media Pipeline worker for hand detection
+          mediaPipelineWorkerRef.current.postMessage({
             command: 'process-frame',
             data: frameData
           });
+          
+          // We could also send to OpenCV worker in parallel for other processing
+          if (opencvWorkerRef.current) {
+            opencvWorkerRef.current.postMessage({
+              command: 'process-frame',
+              data: frameData
+            });
+          }
         }
-        
-        // We're no longer waiting for the media pipeline worker to respond
-        // since that's handled by the MediaPipeHandTracker component
-        frameProcessingRef.current = false;
       } catch (error) {
         console.error('Error processing video frame:', error);
         frameProcessingRef.current = false;
@@ -272,6 +281,14 @@ function App() {
         isFullscreen={isFullscreen}
       />
       
+      {/* Performance metrics display */}
+      {performanceMetrics && (
+        <PerformanceDisplay
+          performance={performanceMetrics}
+          className="absolute top-16 right-4 z-10"
+        />
+      )}
+      
       <Notifications 
         notifications={notifications}
       />
@@ -283,8 +300,11 @@ function App() {
       {/* Settings Panel */}
       <SettingsPanel />
       
-      {/* FPS Counter */}
-      {isCameraRunning && <FpsCounter />}
+      {/* Performance Monitor */}
+      <PerformanceMonitor />
+      
+      {/* FPS Statistics with averages */}
+      {isCameraRunning && <FpsStats />}
     </div>
   );
 }

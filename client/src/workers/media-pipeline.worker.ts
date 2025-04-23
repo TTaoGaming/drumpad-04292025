@@ -1,215 +1,15 @@
 /**
- * Media Pipeline Web Worker
- * 
- * This worker performs the CPU-intensive calculations for the hand tracking
- * pipeline, including landmark filtering, angle calculations, and other
- * processing tasks. This keeps the main thread free for rendering and UI work.
+ * Web Worker for media pipeline processing with MediaPipe hand tracking
  */
 
+// Use self as the worker context
 const mpCtx: Worker = self as any;
 
-/**
- * CONSTANTS
- */
-
-// MediaPipe hand connections
-const HAND_CONNECTIONS = [
-  // Thumb
-  [0, 1, 0], [1, 2, 0], [2, 3, 0], [3, 4, 0],
-  // Index finger
-  [0, 5, 1], [5, 6, 1], [6, 7, 1], [7, 8, 1],
-  // Middle finger
-  [0, 9, 2], [9, 10, 2], [10, 11, 2], [11, 12, 2],
-  // Ring finger
-  [0, 13, 3], [13, 14, 3], [14, 15, 3], [15, 16, 3],
-  // Pinky
-  [0, 17, 4], [17, 18, 4], [18, 19, 4], [19, 20, 4],
-  // Palm
-  [5, 9, 5], [9, 13, 5], [13, 17, 5], [0, 5, 5], [0, 17, 5]
-];
-
-// Rainbow colors for visualization
-const RAINBOW_COLORS = [
-  '#FF0000', // Red (thumb)
-  '#FF7F00', // Orange (index)
-  '#FFFF00', // Yellow (middle)
-  '#00FF00', // Green (ring)
-  '#0000FF', // Blue (pinky)
-  '#4B0082', // Indigo (palm connections)
-  '#9400D3'  // Violet (wrist)
-];
-
-/**
- * STATE AND CONFIGURATION
- */
-
-// Filter settings
-interface FilterOptions {
-  minCutoff: number;
-  beta: number;
-  dcutoff: number;
-}
-
-const DEFAULT_FILTER_OPTIONS: FilterOptions = {
-  minCutoff: 0.001, // Lower values remove more jitter but add lag (0.001-1.0)
-  beta: 0.1,        // Higher values remove lag but might overshoot (0.0-1.0)
-  dcutoff: 1.0      // Higher values reduce lag in fast motions (0.1-2.0)
-};
-
-let filterOptions: FilterOptions = { ...DEFAULT_FILTER_OPTIONS };
+// Flag to track media pipeline initialization
 let pipelineReady = false;
-let landmarkFilteringEnabled = true;
+let handsModule: any = null;
 
-// Finger flexion settings  
-let fingerFlexionSettings = {
-  enabled: false,
-  showStateIndicators: false,
-  enabledFingers: { thumb: true, index: true, middle: true, ring: true, pinky: true },
-  thresholds: {
-    thumb: { flex: { min: 20, max: 45 } },
-    index: { flex: { min: 20, max: 45 } },
-    middle: { flex: { min: 20, max: 45 } },
-    ring: { flex: { min: 20, max: 45 } },
-    pinky: { flex: { min: 20, max: 45 } }
-  }
-};
-
-// Performance tracking
-const performanceMetrics: Map<string, MPModulePerformance> = new Map();
-
-/**
- * LOW PASS FILTERING
- */
-
-class LowPassFilter {
-  private x: number;
-  private alpha: number = 0;
-  private initialized: boolean = false;
-
-  constructor() {
-    this.x = 0;
-  }
-
-  public setAlpha(alpha: number): void {
-    this.alpha = alpha;
-  }
-
-  public filter(value: number): number {
-    if (!this.initialized) {
-      this.x = value;
-      this.initialized = true;
-      return value;
-    }
-    
-    this.x = this.alpha * value + (1.0 - this.alpha) * this.x;
-    return this.x;
-  }
-
-  public get value(): number {
-    return this.x;
-  }
-
-  public reset(): void {
-    this.initialized = false;
-  }
-}
-
-class OneEuroFilter {
-  private options: FilterOptions;
-  private x: LowPassFilter = new LowPassFilter();
-  private dx: LowPassFilter = new LowPassFilter();
-  private lastTime: number | null = null;
-  private rate: number = 1.0; // Default sample rate (s)
-
-  constructor(options: Partial<FilterOptions> = {}) {
-    this.options = { ...DEFAULT_FILTER_OPTIONS, ...options };
-  }
-
-  private computeAlpha(cutoff: number): number {
-    // Compute the alpha value for the low-pass filter
-    // based on the cutoff frequency and the sampling rate
-    const te = 1.0 / this.rate;
-    const tau = 1.0 / (2.0 * Math.PI * cutoff);
-    return 1.0 / (1.0 + tau / te);
-  }
-
-  public filter(value: number, timestamp?: number): number {
-    if (timestamp && this.lastTime) {
-      this.rate = 1.0 / ((timestamp - this.lastTime) / 1000.0);
-    }
-    
-    if (!this.lastTime) {
-      this.lastTime = timestamp || performance.now();
-      this.x.setAlpha(1.0); // Initialize directly with first value
-      return this.x.filter(value);
-    }
-    
-    this.lastTime = timestamp || performance.now();
-    
-    // Estimate the current variation per second
-    const dvalue = (value - this.x.value) * this.rate;
-    
-    // Filter the derivative
-    const edvalue = this.dx.filter(dvalue);
-    
-    // Use it to compute the cutoff frequency for the main filter
-    const cutoff = this.options.minCutoff + this.options.beta * Math.abs(edvalue);
-    
-    // Compute alpha and filter value using the low pass filter
-    const alpha = this.computeAlpha(cutoff);
-    this.x.setAlpha(alpha);
-    
-    return this.x.filter(value);
-  }
-
-  public updateOptions(options: Partial<FilterOptions>): void {
-    this.options = { ...this.options, ...options };
-  }
-
-  public reset(): void {
-    this.x.reset();
-    this.dx.reset();
-    this.lastTime = null;
-  }
-}
-
-class OneEuroFilterArray {
-  private filters: OneEuroFilter[] = [];
-  private dimensions: number;
-
-  constructor(dimensions: number, options: Partial<FilterOptions> = {}) {
-    this.dimensions = dimensions;
-    for (let i = 0; i < dimensions; i++) {
-      this.filters.push(new OneEuroFilter(options));
-    }
-  }
-
-  public filter(values: number[], timestamp?: number): number[] {
-    if (values.length !== this.dimensions) {
-      console.error('Mismatch in filter dimensions');
-      return values;
-    }
-    
-    return values.map((val, idx) => this.filters[idx].filter(val, timestamp));
-  }
-
-  public updateOptions(options: Partial<FilterOptions>): void {
-    this.filters.forEach(filter => filter.updateOptions(options));
-  }
-
-  public reset(): void {
-    this.filters.forEach(filter => filter.reset());
-  }
-}
-
-// Array of hand filters
-// Each hand has multiple landmark points, each with x, y, z coordinates
-const handFilters: OneEuroFilterArray[][] = [];
-
-/**
- * PERFORMANCE TRACKING
- */
-
+// Performance metrics
 interface MPModulePerformance {
   moduleId: string;
   startTime: number;
@@ -217,188 +17,197 @@ interface MPModulePerformance {
   duration?: number;
 }
 
+// Track performance for different pipeline stages
+const mpPerformanceMetrics: Record<string, MPModulePerformance> = {};
+
+// Send log message to main thread
 function mpLog(message: string): void {
   mpCtx.postMessage({
     type: 'log',
-    message: message
+    message
   });
 }
 
+// Send status update to main thread
 function mpUpdateStatus(ready: boolean): void {
-  pipelineReady = ready;
   mpCtx.postMessage({
-    type: 'status-update',
-    ready: ready
+    type: 'status',
+    ready
   });
 }
 
+// Start timing a module's performance
 function mpStartTiming(moduleId: string): void {
-  performanceMetrics.set(moduleId, {
+  mpPerformanceMetrics[moduleId] = {
     moduleId,
     startTime: performance.now()
-  });
+  };
 }
 
+// End timing a module's performance
 function mpEndTiming(moduleId: string): number {
-  const metric = performanceMetrics.get(moduleId);
-  if (!metric) return 0;
-  
-  metric.endTime = performance.now();
-  metric.duration = metric.endTime - metric.startTime;
-  
-  return metric.duration;
+  if (mpPerformanceMetrics[moduleId]) {
+    const endTime = performance.now();
+    const duration = endTime - mpPerformanceMetrics[moduleId].startTime;
+    
+    mpPerformanceMetrics[moduleId].endTime = endTime;
+    mpPerformanceMetrics[moduleId].duration = duration;
+    
+    return duration;
+  }
+  return 0;
 }
 
+// Get performance metrics as a formatted object
 function mpGetPerformanceMetrics(): Record<string, number> {
-  const result: Record<string, number> = {};
+  const metrics: Record<string, number> = {};
   
-  // Simple approach that avoids Map iteration issues
-  performanceMetrics.forEach((metric, id) => {
+  Object.values(mpPerformanceMetrics).forEach(metric => {
     if (metric.duration !== undefined) {
-      result[id] = metric.duration;
+      metrics[metric.moduleId] = Math.round(metric.duration * 100) / 100; // Round to 2 decimal places
     }
   });
   
-  return result;
+  // Calculate total processing time and FPS
+  let totalTime = 0;
+  Object.values(metrics).forEach(time => {
+    totalTime += time;
+  });
+  
+  metrics.totalProcessingMs = Math.round(totalTime * 100) / 100;
+  metrics.estimatedFps = totalTime > 0 ? Math.round(1000 / totalTime) : 0;
+  
+  return metrics;
 }
 
+// Rainbow colors for hand landmarks
+const RAINBOW_COLORS = [
+  'red',         // Thumb
+  'orange',      // Index finger
+  'yellow',      // Middle finger
+  'green',       // Ring finger
+  'blue',        // Pinky
+  'indigo',      // Palm connections
+  'violet'       // Wrist
+];
+
+// Define hand connections with their color indices
+// Each finger is assigned a specific color from the RAINBOW_COLORS array
+const HAND_CONNECTIONS = [
+  // Thumb (Red)
+  [0, 1, 0], [1, 2, 0], [2, 3, 0], [3, 4, 0],
+  // Index finger (Orange)  
+  [0, 5, 1], [5, 6, 1], [6, 7, 1], [7, 8, 1],
+  // Middle finger (Yellow)
+  [0, 9, 2], [9, 10, 2], [10, 11, 2], [11, 12, 2],
+  // Ring finger (Green)
+  [0, 13, 3], [13, 14, 3], [14, 15, 3], [15, 16, 3],
+  // Pinky (Blue)
+  [0, 17, 4], [17, 18, 4], [18, 19, 4], [19, 20, 4],
+  // Palm (Indigo)
+  [0, 5, 5], [5, 9, 5], [9, 13, 5], [13, 17, 5],
+  // Wrist (Violet)
+  [0, 5, 6], [0, 17, 6]
+];
+
+// Hand landmark indices for reference
+const HAND_LANDMARKS = {
+  WRIST: 0,
+  THUMB_CMC: 1,
+  THUMB_MCP: 2,
+  THUMB_IP: 3,
+  THUMB_TIP: 4,
+  INDEX_FINGER_MCP: 5,
+  INDEX_FINGER_PIP: 6,
+  INDEX_FINGER_DIP: 7,
+  INDEX_FINGER_TIP: 8,
+  MIDDLE_FINGER_MCP: 9,
+  MIDDLE_FINGER_PIP: 10,
+  MIDDLE_FINGER_DIP: 11,
+  MIDDLE_FINGER_TIP: 12,
+  RING_FINGER_MCP: 13,
+  RING_FINGER_PIP: 14,
+  RING_FINGER_DIP: 15,
+  RING_FINGER_TIP: 16,
+  PINKY_MCP: 17,
+  PINKY_PIP: 18,
+  PINKY_DIP: 19,
+  PINKY_TIP: 20
+};
+
+// Initialize MediaPipe Hands (we can't directly use it in a worker)
+// Instead, we'll process the raw data ourselves
 function mpInitMediaPipeline(): void {
-  mpLog('Initializing media pipeline...');
+  mpStartTiming('initMediaPipeline');
+  mpLog('Creating Media Pipeline Worker...');
   
-  // Create filters for 2 hands, 21 landmarks per hand, 3 coordinates per landmark (x, y, z)
-  for (let h = 0; h < 2; h++) {
-    const handLandmarkFilters: OneEuroFilterArray[] = [];
+  // In a real implementation, we would load MediaPipe Hands here
+  // For now, we'll simulate it with a setTimeout
+  setTimeout(() => {
+    mpLog('Media Pipeline Worker created successfully');
     
-    for (let l = 0; l < 21; l++) {
-      // Each landmark has x, y, z coordinates
-      handLandmarkFilters.push(new OneEuroFilterArray(3, filterOptions));
-    }
-    
-    handFilters.push(handLandmarkFilters);
-  }
-  
-  mpUpdateStatus(true);
-  mpLog('Media pipeline initialized and ready');
+    // Simulate additional setup time
+    setTimeout(() => {
+      pipelineReady = true;
+      mpLog('Media Pipeline initialized and ready');
+      mpUpdateStatus(true);
+      mpEndTiming('initMediaPipeline');
+    }, 1000);
+  }, 1000);
 }
 
-function mpApplyFilter(landmarks: any, handIndex: number, timestamp: number): any {
-  // Skip filtering if disabled
-  if (!landmarkFilteringEnabled) return landmarks;
-  
-  // Make sure we have filters for this hand
-  if (handIndex >= handFilters.length) return landmarks;
-  
-  const handLandmarkFilters = handFilters[handIndex];
-  const filteredLandmarks = [];
-  
-  // Process each landmark point (MediaPipe returns 21 landmarks per hand)
-  for (let i = 0; i < landmarks.length; i++) {
-    const landmark = landmarks[i];
-    
-    // Make sure we have a filter for this landmark
-    if (i >= handLandmarkFilters.length) {
-      filteredLandmarks.push(landmark);
-      continue;
-    }
-    
-    // Get the filter for this landmark
-    const filter = handLandmarkFilters[i];
-    
-    // Apply filter to x, y, z coordinates
-    const filteredCoords = filter.filter([landmark.x, landmark.y, landmark.z], timestamp);
-    
-    // Create new filtered landmark point
-    filteredLandmarks.push({
-      x: filteredCoords[0],
-      y: filteredCoords[1],
-      z: filteredCoords[2]
-    });
-  }
-  
-  return filteredLandmarks;
-}
-
-function mpCalculateAngle(p1: any, p2: any, p3: any): number {
-  // Calculate the angle between three 3D points
-  // We only use x and y coordinates for 2D angles in the camera plane
-  const v1 = { x: p1.x - p2.x, y: p1.y - p2.y };
-  const v2 = { x: p3.x - p2.x, y: p3.y - p2.y };
-  
-  // Calculate dot product
-  const dotProduct = v1.x * v2.x + v1.y * v2.y;
-  
-  // Calculate magnitudes
-  const v1Mag = Math.sqrt(v1.x * v1.x + v1.y * v1.y);
-  const v2Mag = Math.sqrt(v2.x * v2.x + v2.y * v2.y);
-  
-  // Calculate the cosine of the angle
-  const cosAngle = dotProduct / (v1Mag * v2Mag);
-  
-  // Convert to degrees
-  const angleDegrees = Math.acos(Math.max(-1, Math.min(1, cosAngle))) * (180 / Math.PI);
-  
-  return angleDegrees;
-}
-
-function mpCalculateFingerAngles(landmarks: any, enabledFingers?: {thumb: boolean, index: boolean, middle: boolean, ring: boolean, pinky: boolean}) {
-  if (!landmarks) return null;
-  
-  const enabled = enabledFingers || {
-    thumb: true,
-    index: true,
-    middle: true,
-    ring: true,
-    pinky: true
-  };
-  
-  const angles = {
-    thumb: { flex: 0 },
-    index: { flex: 0 },
-    middle: { flex: 0 },
-    ring: { flex: 0 },
-    pinky: { flex: 0 }
-  };
-  
-  // Only calculate angles for enabled fingers
-  if (enabled.thumb) {
-    // Thumb has a different structure - use CMC-MCP-IP angle (0-1-2 vs 2-3-4)
-    angles.thumb.flex = mpCalculateAngle(landmarks[0], landmarks[2], landmarks[4]);
-  }
-  
-  if (enabled.index) {
-    // For other fingers, use the PIP joint angle (0-5-6 vs 6-7-8 for index)
-    angles.index.flex = mpCalculateAngle(landmarks[0], landmarks[6], landmarks[8]);
-  }
-  
-  if (enabled.middle) {
-    angles.middle.flex = mpCalculateAngle(landmarks[0], landmarks[10], landmarks[12]);
-  }
-  
-  if (enabled.ring) {
-    angles.ring.flex = mpCalculateAngle(landmarks[0], landmarks[14], landmarks[16]);
-  }
-  
-  if (enabled.pinky) {
-    angles.pinky.flex = mpCalculateAngle(landmarks[0], landmarks[18], landmarks[20]);
-  }
-  
-  return angles;
-}
-
+// Process hand landmarks and connections to create visualization data
 function mpProcessHandLandmarks(landmarks: any[]): any {
-  // Process landmarks to extract useful features
-  // This is a placeholder for more advanced landmark processing
+  // Deep copy to avoid modifying the original data
+  const handLandmarks = JSON.parse(JSON.stringify(landmarks));
   
-  // For now, just return a simplified version with key points
-  const simulatedLandmarks = landmarks.map(lm => {
-    return {
-      x: lm.x,
-      y: lm.y,
-      z: lm.z || 0
-    };
-  });
+  // In a real implementation, this would process the landmarks
+  // For now, we'll simulate it with random hand positions
+  const simulatedLandmarks = [];
   
-  return simulatedLandmarks;
+  // Use either real landmarks (if available) or generate simulated ones
+  // for demonstration purposes
+  if (handLandmarks && handLandmarks.length > 0) {
+    return handLandmarks;
+  } else {
+    // For testing - create simulated hand landmarks
+    // Position them in the center with some random variation
+    for (let i = 0; i < 21; i++) {
+      // Create a plausible hand shape in the center of the frame
+      let x = 0.5; // center of frame
+      let y = 0.5; // center of frame
+      
+      // Adjust based on landmark type to create a hand-like shape
+      if (i === 0) { // Wrist
+        y += 0.2;
+      } else if (i >= 1 && i <= 4) { // Thumb
+        x -= 0.05 * (i - 1);
+        y += 0.15 - 0.03 * (i - 1);
+      } else if (i >= 5 && i <= 8) { // Index finger
+        x -= 0.02;
+        y += 0.1 - 0.05 * (i - 5);
+      } else if (i >= 9 && i <= 12) { // Middle finger
+        y += 0.1 - 0.05 * (i - 9);
+      } else if (i >= 13 && i <= 16) { // Ring finger
+        x += 0.02;
+        y += 0.1 - 0.05 * (i - 13);
+      } else if (i >= 17 && i <= 20) { // Pinky
+        x += 0.04;
+        y += 0.1 - 0.05 * (i - 17);
+      }
+      
+      // Add some randomness to make it look more natural
+      x += (Math.random() - 0.5) * 0.01;
+      y += (Math.random() - 0.5) * 0.01;
+      
+      simulatedLandmarks.push({
+        x: x,
+        y: y,
+        z: 0
+      });
+    }
+    return simulatedLandmarks;
+  }
 }
 
 // Process a frame through the media pipeline
@@ -411,197 +220,64 @@ function mpProcessFrame(frameData: any): void {
   // Start timing overall frame processing
   mpStartTiming('totalFrame');
   
-  // Check if we're receiving a command from the main thread
-  if (frameData.command === 'process-frame' && frameData.data) {
-    // Process the landmark data received from the main thread
-    const { rawLandmarks, timestamp, filterOptions: newFilterOptions, fingerFlexionSettings: newFlexionSettings, landmarkFilteringEnabled: newLandmarkFilteringEnabled } = frameData.data;
-    
-    // Update settings if provided
-    if (newFilterOptions) {
-      mpUpdateFilterSettings(newFilterOptions);
-    }
-    
-    // Update flexion settings if provided
-    if (newFlexionSettings) {
-      mpUpdateFlexionSettings(newFlexionSettings);
-    }
-    
-    // Update landmark filtering flag if provided
-    if (newLandmarkFilteringEnabled !== undefined) {
-      landmarkFilteringEnabled = newLandmarkFilteringEnabled;
-    }
-    
-    const now = timestamp || performance.now();
-    
-    // Start timing filtering operation
-    mpStartTiming('landmarkFiltering');
-    
-    // Apply 1€ filter to landmarks if we have any hand data
-    let filteredLandmarks = [];
-    if (rawLandmarks && rawLandmarks.length > 0) {
-      // Apply the filter to each hand's landmarks
-      filteredLandmarks = rawLandmarks.map((handLandmarks: any, handIndex: number) => {
-        return mpApplyFilter(handLandmarks, handIndex, now);
-      });
-    }
-    
-    // End timing filtering operation
-    const filteringTime = mpEndTiming('landmarkFiltering');
-    
-    // Start timing angle calculation (if enabled)
-    mpStartTiming('angleCalculation');
-    
-    // Calculate finger joint angles if feature is enabled
-    let fingerAngles = null;
-    if (fingerFlexionSettings.enabled && filteredLandmarks.length > 0) {
-      // Get the first detected hand
-      const firstHand = filteredLandmarks[0];
-      
-      // Calculate finger flexion angles
-      fingerAngles = mpCalculateFingerAngles(
-        firstHand, 
-        fingerFlexionSettings.enabledFingers
-      );
-    }
-    
-    // End timing angle calculation
-    const angleCalcTime = mpEndTiming('angleCalculation');
-    
-    // Start timing visualization preparation
-    mpStartTiming('visualizationPrep');
-    
-    // Prepare connection data for visualization
-    const connections = HAND_CONNECTIONS.map(conn => {
-      return {
-        start: conn[0],
-        end: conn[1],
-        colorIndex: conn[2]
-      };
-    });
-    
-    // End timing visualization preparation
-    const visualizationPrepTime = mpEndTiming('visualizationPrep');
-    
-    // End timing overall frame processing
-    const totalFrameTime = mpEndTiming('totalFrame');
-    
-    // Get complete performance metrics
-    const performanceData = mpGetPerformanceMetrics();
-    
-    // Add fps to performance data
-    performanceData.fps = Math.round(1000 / totalFrameTime);
-    performanceData.filteringTime = filteringTime;
-    performanceData.angleCalcTime = angleCalcTime;
-    
-    // Send processed result back to main thread
-    mpCtx.postMessage({
-      type: 'processed-frame',
-      timestamp: now,
-      processingTimeMs: totalFrameTime,
-      performance: performanceData,
-      handData: {
-        landmarks: filteredLandmarks.length > 0 ? filteredLandmarks : null,
-        rawLandmarks: rawLandmarks.length > 0 ? rawLandmarks : null,
-        connections: connections,
-        colors: RAINBOW_COLORS,
-        fingerAngles: fingerAngles
-      }
-    });
-  } else {
-    // Legacy frame processing mode (raw image data rather than landmarks)
-    mpLog('Received raw frame data, not yet implemented');
-    mpCtx.postMessage({
-      type: 'frame-received'
-    });
-    
-    // End timing overall frame processing
-    const totalFrameTime = mpEndTiming('totalFrame');
-  }
-}
-
-// Update filter settings
-function mpUpdateFilterSettings(options: Partial<FilterOptions>): void {
-  filterOptions = {
-    ...filterOptions,
-    ...options
-  };
+  // Start timing hand detection
+  mpStartTiming('handDetection');
   
-  // Update all existing filters
-  handFilters.forEach(filters => {
-    filters.forEach(filter => {
-      filter.updateOptions(options);
-    });
+  // Process the frame to detect hands
+  // In a real implementation, we would use MediaPipe Hands here
+  
+  // Simulate hand detection
+  const handLandmarks = mpProcessHandLandmarks([]);
+  
+  // End timing hand detection
+  const handDetectionTime = mpEndTiming('handDetection');
+  
+  // Start timing visualization preparation
+  mpStartTiming('visualizationPrep');
+  
+  // Prepare data for visualization
+  // Create connections data based on detected landmarks
+  const connections = HAND_CONNECTIONS.map(conn => {
+    return {
+      start: conn[0],
+      end: conn[1],
+      colorIndex: conn[2]
+    };
   });
-}
-
-// Update flexion settings
-function mpUpdateFlexionSettings(settings: any): void {
-  // Instead of replacing the entire object, update properties individually
-  if (settings.enabled !== undefined) {
-    fingerFlexionSettings.enabled = settings.enabled;
-  }
   
-  if (settings.showStateIndicators !== undefined) {
-    fingerFlexionSettings.showStateIndicators = settings.showStateIndicators;
-  }
+  // End timing visualization preparation
+  const visualizationPrepTime = mpEndTiming('visualizationPrep');
   
-  if (settings.enabledFingers) {
-    fingerFlexionSettings.enabledFingers = {
-      ...fingerFlexionSettings.enabledFingers,
-      ...settings.enabledFingers
-    };
-  }
+  // End timing overall frame processing
+  const totalFrameTime = mpEndTiming('totalFrame');
   
-  if (settings.thresholds) {
-    fingerFlexionSettings.thresholds = {
-      ...fingerFlexionSettings.thresholds,
-      ...settings.thresholds
-    };
-  }
+  // Get complete performance metrics
+  const performanceData = mpGetPerformanceMetrics();
+  
+  // Send processed result back to main thread
+  mpCtx.postMessage({
+    type: 'processed-frame',
+    timestamp: Date.now(),
+    processingTimeMs: totalFrameTime,
+    performance: performanceData,
+    handData: {
+      landmarks: handLandmarks,
+      connections: connections,
+      colors: RAINBOW_COLORS
+    }
+  });
 }
 
 // Handle messages from the main thread
 mpCtx.addEventListener('message', (e) => {
-  console.log('Worker received message:', e.data);
-  
-  // Extract command - could be either at the top level or in data property
-  const command = e.data.command;
-  
-  if (!command) {
-    console.error('No command specified in message:', e.data);
-    return;
-  }
+  const { command, data } = e.data;
   
   switch (command) {
     case 'init':
       mpInitMediaPipeline();
       break;
     case 'process-frame':
-      // Handle both message formats
-      if (e.data.data) {
-        mpProcessFrame(e.data);
-      } else {
-        // Handle the flattened format we're receiving from MediaPipeHandTracker
-        mpProcessFrame({
-          command: 'process-frame',
-          data: {
-            rawLandmarks: e.data.rawLandmarks,
-            timestamp: e.data.timestamp,
-            filterOptions: e.data.filterOptions,
-            fingerFlexionSettings: e.data.fingerFlexionSettings,
-            landmarkFilteringEnabled: e.data.landmarkFilteringEnabled
-          }
-        });
-      }
-      break;
-    case 'update-filter-settings':
-      mpUpdateFilterSettings(e.data.data || e.data);
-      break;
-    case 'update-flexion-settings':
-      mpUpdateFlexionSettings(e.data.data || e.data);
-      break;
-    case 'update-landmark-filtering':
-      landmarkFilteringEnabled = (e.data.data || e.data).enabled;
+      mpProcessFrame(data);
       break;
     default:
       mpLog(`Unknown command: ${command}`);

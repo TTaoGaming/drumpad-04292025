@@ -15,7 +15,7 @@ const HandLandmarksSettings: React.FC = () => {
   // Update app state when settings change
   useEffect(() => {
     dispatch(EventType.SETTINGS_VALUE_CHANGE, {
-      section: 'landmarks',
+      section: 'handLandmarks',
       value: {
         showLandmarks,
         showConnections,
