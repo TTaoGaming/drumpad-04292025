@@ -1,6 +1,21 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { EventType, dispatch, addListener } from '@/lib/eventBus';
 import { HandData, HandLandmark, HandConnection } from '@/lib/types';
+
+// Define MediaPipe interfaces for local usage
+interface MediaPipeHands {
+  Hands: any;
+  HAND_CONNECTIONS: [number, number][];
+}
+
+interface MediaPipeCamera {
+  Camera: any;
+}
+
+interface MediaPipeDrawing {
+  drawLandmarks: (ctx: CanvasRenderingContext2D, landmarks: any, options?: any) => void;
+  drawConnectors: (ctx: CanvasRenderingContext2D, landmarks: any, connections: any, options?: any) => void;
+}
 import { OneEuroFilterArray, DEFAULT_FILTER_OPTIONS } from '@/lib/oneEuroFilter';
 import { HandTrackingOptimizer, OptimizationSettings, DEFAULT_OPTIMIZATION_SETTINGS } from '@/lib/handTrackingOptimizer';
 import { debounce, throttle } from '@/lib/utils';
@@ -395,6 +410,33 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
 
   // Initialize MediaPipe when the component mounts
   useEffect(() => {
+    // Add a canvas for hand visualization
+    const setupCanvas = () => {
+      if (!canvasRef.current) {
+        const video = videoRef.current;
+        if (!video || !video.parentElement) return;
+        
+        // Create a new canvas element for hand tracking visualization
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth || 640;
+        canvas.height = video.videoHeight || 480;
+        canvas.style.position = 'absolute';
+        canvas.style.top = '0';
+        canvas.style.left = '0';
+        canvas.style.width = '100%';
+        canvas.style.height = '100%';
+        canvas.style.zIndex = '10';
+        canvas.style.pointerEvents = 'none'; // Allow click-through
+        
+        // Add to video container
+        video.parentElement.appendChild(canvas);
+        canvasRef.current = canvas;
+      }
+    };
+    
+    // First set up the canvas
+    setupCanvas();
+    
     // Dynamic imports to avoid bundling these heavy libraries
     const loadDependencies = async () => {
       try {
@@ -403,11 +445,38 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
           type: 'info'
         });
         
+        // Check if global MediaPipe libraries are available
+        if (!(window as any).Hands || !(window as any).drawLandmarks || !(window as any).drawConnectors) {
+          dispatch(EventType.LOG, {
+            message: 'MediaPipe libraries not found in window object. Make sure the scripts are loaded properly in index.html.',
+            type: 'error'
+          });
+          console.error('MediaPipe libraries not available in window object:',
+                        'Hands:', (window as any).Hands,
+                        'drawLandmarks:', (window as any).drawLandmarks,
+                        'drawConnectors:', (window as any).drawConnectors);
+          return;
+        }
+        
         // Use local MediaPipe libraries instead of dynamic imports
-        // This loads our saved local versions
-        const mpHands = { Hands: (window as any).Hands };
-        const mpCamera = { Camera: (window as any).Camera };
-        const mpDrawing = {
+        // This loads our saved local versions and casts to our interfaces
+        const mpHands: MediaPipeHands = { 
+          Hands: (window as any).Hands,
+          // Define HAND_CONNECTIONS if not available in our local version
+          HAND_CONNECTIONS: (window as any).HAND_CONNECTIONS || [
+            [0, 1], [1, 2], [2, 3], [3, 4], // thumb
+            [0, 5], [5, 6], [6, 7], [7, 8], // index finger
+            [0, 9], [9, 10], [10, 11], [11, 12], // middle finger
+            [0, 13], [13, 14], [14, 15], [15, 16], // ring finger
+            [0, 17], [17, 18], [18, 19], [19, 20], // pinky
+            [5, 9], [9, 13], [13, 17], // palm connections
+            [1, 5] // Connect thumb to palm
+          ]
+        };
+        const mpCamera: MediaPipeCamera = { 
+          Camera: (window as any).Camera 
+        };
+        const mpDrawing: MediaPipeDrawing = {
           drawLandmarks: (window as any).drawLandmarks,
           drawConnectors: (window as any).drawConnectors
         };
