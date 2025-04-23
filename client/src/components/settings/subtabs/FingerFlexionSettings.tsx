@@ -183,7 +183,7 @@ const FingerFlexionSettings: React.FC = () => {
               </TooltipTrigger>
               <TooltipContent className="max-w-[280px]">
                 <p className="text-xs">
-                  Measures the combined flexion angle of finger joints and detects when fingers 
+                  Measures the PIP joint angle (middle joint, like a trigger pull) to detect when fingers 
                   are straight or bent. Enable only the specific fingers you need to save performance.
                 </p>
               </TooltipContent>
@@ -247,7 +247,7 @@ const FingerFlexionSettings: React.FC = () => {
                   <div>
                     <p className="text-xs font-medium">Finger Flexion</p>
                     <p className="text-[10px] text-white/60 mt-0.5">
-                      Combined measurement of finger bending
+                      PIP joint angle (main trigger joint)
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -294,7 +294,7 @@ const FingerFlexionSettings: React.FC = () => {
         </Tabs>
         
         <div className="pt-2 text-[10px] italic opacity-60">
-          Simplified flexion measurement improves performance while still detecting finger movement.
+          PIP joint measurement focuses on the middle joint most people use when pressing buttons or triggers.
           For best results, enable only the fingers you need to track.
         </div>
       </div>

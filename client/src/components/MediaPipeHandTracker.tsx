@@ -123,12 +123,13 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
   };
 
   /**
-   * Calculate a simplified combined finger flexion angle from hand landmarks
-   * Provides a single value per finger by averaging the two main joint angles
+   * Calculate finger flexion angles using only the PIP joint (main trigger joint)
+   * This simulates a trigger-pull motion, focusing on the middle joint that most people use
+   * when pressing buttons or pulling triggers
    * 
    * @param landmarks Array of hand landmarks from MediaPipe
    * @param enabledFingers Object indicating which fingers to calculate for
-   * @returns Object with simplified flexion measurements for each finger
+   * @returns Object with PIP joint flexion measurements for each finger
    */
   const calculateFingerAngles = useCallback((landmarks: any, enabledFingers?: {thumb: boolean, index: boolean, middle: boolean, ring: boolean, pinky: boolean}) => {
     // Ensure we have landmarks
@@ -159,70 +160,42 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
     
     // Index finger - only if enabled
     if (!enabledFingers || enabledFingers.index) {
-      // Combine PIP and DIP angles for index finger
-      const pipAngle = calculateAngle(
+      // Use ONLY the PIP joint angle for index finger (main trigger joint)
+      angles.index.flex = calculateAngle(
         landmarks[5], // MCP
         landmarks[6], // PIP
         landmarks[7]  // DIP
       );
-      const dipAngle = calculateAngle(
-        landmarks[6], // PIP
-        landmarks[7], // DIP
-        landmarks[8]  // TIP
-      );
-      // Use weighted average (PIP is more important for flexion)
-      angles.index.flex = (pipAngle * 0.6) + (dipAngle * 0.4);
     }
     
     // Middle finger - only if enabled
     if (!enabledFingers || enabledFingers.middle) {
-      // Combine PIP and DIP angles for middle finger
-      const pipAngle = calculateAngle(
+      // Use ONLY the PIP joint angle for middle finger
+      angles.middle.flex = calculateAngle(
         landmarks[9],  // MCP
         landmarks[10], // PIP
         landmarks[11]  // DIP
       );
-      const dipAngle = calculateAngle(
-        landmarks[10], // PIP
-        landmarks[11], // DIP
-        landmarks[12]  // TIP
-      );
-      // Use weighted average
-      angles.middle.flex = (pipAngle * 0.6) + (dipAngle * 0.4);
     }
     
     // Ring finger - only if enabled
     if (!enabledFingers || enabledFingers.ring) {
-      // Combine PIP and DIP angles for ring finger
-      const pipAngle = calculateAngle(
+      // Use ONLY the PIP joint angle for ring finger
+      angles.ring.flex = calculateAngle(
         landmarks[13], // MCP
         landmarks[14], // PIP
         landmarks[15]  // DIP
       );
-      const dipAngle = calculateAngle(
-        landmarks[14], // PIP
-        landmarks[15], // DIP
-        landmarks[16]  // TIP
-      );
-      // Use weighted average
-      angles.ring.flex = (pipAngle * 0.6) + (dipAngle * 0.4);
     }
     
     // Pinky finger - only if enabled
     if (!enabledFingers || enabledFingers.pinky) {
-      // Combine PIP and DIP angles for pinky finger
-      const pipAngle = calculateAngle(
+      // Use ONLY the PIP joint angle for pinky finger
+      angles.pinky.flex = calculateAngle(
         landmarks[17], // MCP
         landmarks[18], // PIP
         landmarks[19]  // DIP
       );
-      const dipAngle = calculateAngle(
-        landmarks[18], // PIP
-        landmarks[19], // DIP
-        landmarks[20]  // TIP
-      );
-      // Use weighted average
-      angles.pinky.flex = (pipAngle * 0.6) + (dipAngle * 0.4);
     }
     
     return angles;
