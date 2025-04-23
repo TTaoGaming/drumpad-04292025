@@ -35,9 +35,6 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
   const lastFrameTimeRef = useRef<number | null>(null);
   const handFiltersRef = useRef<Map<number, OneEuroFilterArray[]>>(new Map());
   
-  // Loading state to handle initialization
-  const [modelLoading, setModelLoading] = useState(true);
-  
   // Filter settings state
   const [filterOptions, setFilterOptions] = useState({
     minCutoff: DEFAULT_FILTER_OPTIONS.minCutoff,
@@ -398,34 +395,25 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
     // Dynamic imports to avoid bundling these heavy libraries
     const loadDependencies = async () => {
       try {
-        console.log("MediaPipeHandTracker - Starting to load MediaPipe dependencies");
-        
         dispatch(EventType.LOG, {
           message: 'Loading MediaPipe Hands dependencies...',
           type: 'info'
         });
         
         // Import MediaPipe libraries
-        console.log("MediaPipeHandTracker - Importing MediaPipe modules");
         const mpHands = await import('@mediapipe/hands');
         const mpCamera = await import('@mediapipe/camera_utils');
         const mpDrawing = await import('@mediapipe/drawing_utils');
-        console.log("MediaPipeHandTracker - MediaPipe modules imported successfully");
         
         // Initialize MediaPipe Hands with CDN - using version we know works
-        console.log("MediaPipeHandTracker - Creating Hands instance");
         // @ts-ignore - TypeScript doesn't like the locateFile, but it's required
         const hands = new mpHands.Hands({
           locateFile: (file: string) => {
-            const cdnUrl = `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`;
-            console.log(`MediaPipeHandTracker - Loading file from CDN: ${file} (${cdnUrl})`);
-            return cdnUrl;
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`;
           }
         });
-        console.log("MediaPipeHandTracker - Hands instance created successfully");
         
         // Configure Hands
-        console.log("MediaPipeHandTracker - Configuring Hands options");
         hands.setOptions({
           selfieMode: false, // Disabled mirror effect for desktop surface scenarios
           maxNumHands: 2,
@@ -433,27 +421,14 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
           minDetectionConfidence: 0.5,
           minTrackingConfidence: 0.5
         });
-        console.log("MediaPipeHandTracker - Hands options configured");
         
         // Setup result handler
-        console.log("MediaPipeHandTracker - Setting up onResults handler");
         hands.onResults((results: any) => {
-          // Log when we get results with hands
-          if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-            console.log(`MediaPipeHandTracker - Got results with ${results.multiHandLandmarks.length} hands`);
-          }
-          
           const canvas = canvasRef.current;
-          if (!canvas) {
-            console.warn("MediaPipeHandTracker - Canvas ref is null");
-            return;
-          }
+          if (!canvas) return;
           
           const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            console.warn("MediaPipeHandTracker - Failed to get canvas context");
-            return;
-          }
+          if (!ctx) return;
           
           // Calculate FPS
           const now = performance.now();
@@ -823,9 +798,6 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
             type: 'success'
           });
           
-          // Mark loading as complete when initialization is done
-          setModelLoading(false);
-          
           // Cleanup function to stop camera and hands when component unmounts
           return () => {
             camera.stop();
@@ -838,9 +810,6 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
           message: `MediaPipe initialization failed: ${error}`,
           type: 'error'
         });
-        
-        // Set loading to false even on error to allow interaction
-        setModelLoading(false);
       }
     };
     
@@ -916,19 +885,9 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
   
   return (
     <>
-      {modelLoading ? (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/80">
-          <div className="text-center p-4">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto mb-2"></div>
-            <p className="text-white text-sm">Initializing MediaPipe model...</p>
-            <p className="text-white/60 text-xs mt-1">This may take a moment</p>
-          </div>
-        </div>
-      ) : null}
       <canvas
         ref={canvasRef}
         className="absolute inset-0 z-10 pointer-events-none"
-        style={{ opacity: modelLoading ? 0 : 1 }}
       />
     </>
   );

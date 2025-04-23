@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import CameraView from "@/components/CameraView";
 import StatusIndicators from "@/components/StatusIndicators";
 import ControlsOverlay from "@/components/ControlsOverlay";
@@ -9,25 +9,21 @@ import PerformanceDisplay from "@/components/PerformanceDisplay";
 import PerformanceMonitor from "@/components/PerformanceMonitor";
 import FpsStats from "@/components/PerformanceMetrics";
 import MediaPipeHandTracker from "@/components/MediaPipeHandTracker";
-import WorkerHandTracker from "@/components/WorkerHandTracker";
 import SettingsPanel from "@/components/settings/SettingsPanel";
-import { EventType, dispatch } from "@/lib/eventBus";
+import { EventType, addListener, dispatch } from "@/lib/eventBus";
+import { Notification, HandData, PerformanceMetrics } from "@/lib/types";
 import { getVideoFrame } from "@/lib/cameraManager";
-import { useAppState, AppStateActions } from "@/contexts";
 
 function App() {
-  // Use the centralized app state instead of local state
-  const {
-    isCameraRunning,
-    isFullscreen,
-    isOpenCVReady,
-    isMediaPipelineReady,
-    handData,
-    performanceMetrics,
-    resolution,
-    logs,
-    notifications
-  } = useAppState();
+  const [isOpenCVReady, setIsOpenCVReady] = useState(false);
+  const [isMediaPipelineReady, setIsMediaPipelineReady] = useState(false);
+  const [isCameraRunning, setIsCameraRunning] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [logs, setLogs] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [handData, setHandData] = useState<HandData | undefined>(undefined);
+  const [performanceMetrics, setPerformanceMetrics] = useState<PerformanceMetrics | undefined>(undefined);
+  const [resolution, setResolution] = useState({ width: 640, height: 480 });
 
   // References to workers
   const opencvWorkerRef = useRef<Worker | null>(null);
@@ -55,37 +51,45 @@ function App() {
     // Set up event listeners for worker messages
     opencvWorker.onmessage = (e) => {
       if (e.data.type === 'log') {
-        AppStateActions.addLog(e.data.message);
+        addLog(e.data.message);
       } else if (e.data.type === 'status') {
-        AppStateActions.updateOpenCVStatus(e.data.ready);
+        setIsOpenCVReady(e.data.ready);
       } else if (e.data.type === 'processed-frame') {
+        // Handle OpenCV processed frame here
         // For now we'll just update any performance metrics
         if (e.data.performance) {
-          dispatch(EventType.FRAME_PROCESSED, {
-            performance: e.data.performance
-          });
+          setPerformanceMetrics(prev => ({
+            ...(prev || {}),
+            ...e.data.performance
+          }));
         }
       }
     };
 
     mediaPipelineWorker.onmessage = (e) => {
       if (e.data.type === 'log') {
-        AppStateActions.addLog(e.data.message);
+        addLog(e.data.message);
       } else if (e.data.type === 'status') {
-        AppStateActions.updatePipelineStatus(e.data.ready);
+        setIsMediaPipelineReady(e.data.ready);
       } else if (e.data.type === 'processed-frame') {
         // Debug message
         console.log('Received from media worker:', e.data);
         
-        // Frame processed events are handled by AppState through event bus
+        // Handle MediaPipe processed frame 
         if (e.data.handData) {
-          dispatch(EventType.FRAME_PROCESSED, {
-            handData: e.data.handData
-          });
+          console.log('Setting hand data:', e.data.handData);
+          setHandData(e.data.handData);
         }
         
         // Update performance metrics
         if (e.data.performance) {
+          console.log('Setting performance metrics:', e.data.performance);
+          setPerformanceMetrics(prev => ({
+            ...(prev || {}),
+            ...e.data.performance
+          }));
+          
+          // Dispatch event for PerformanceMonitor
           dispatch(EventType.FRAME_PROCESSED, {
             performance: e.data.performance,
             timestamp: Date.now()
@@ -101,8 +105,42 @@ function App() {
     opencvWorker.postMessage({ command: 'init' });
     mediaPipelineWorker.postMessage({ command: 'init' });
 
+    // Set up event listeners
+    const cameraListener = addListener(EventType.CAMERA_STATUS_CHANGE, (data) => {
+      setIsCameraRunning(data.isRunning);
+      
+      if (data.isRunning) {
+        addLog('Camera started at 480p resolution');
+        
+        // Start frame processing when camera is running
+        startFrameProcessing();
+      } else {
+        addLog('Camera stopped');
+        
+        // Stop frame processing when camera is stopped
+        stopFrameProcessing();
+      }
+      
+      // Update resolution if provided
+      if (data.resolution) {
+        setResolution(data.resolution);
+      }
+    });
+
+    const fullscreenListener = addListener(EventType.FULLSCREEN_CHANGE, (data) => {
+      setIsFullscreen(data.isFullscreen);
+    });
+
+    const logListener = addListener(EventType.LOG, (data) => {
+      addLog(data.message, data.type);
+    });
+
+    const notificationListener = addListener(EventType.NOTIFICATION, (data) => {
+      addNotification(data.message, data.type);
+    });
+
     // Initial log
-    AppStateActions.addLog('Application initialized. Click "Start Camera" to begin.');
+    addLog('Application initialized. Click "Start Camera" to begin.');
 
     // Cleanup event listeners on unmount
     return () => {
@@ -115,31 +153,27 @@ function App() {
       if (mediaPipelineWorkerRef.current) {
         mediaPipelineWorkerRef.current.terminate();
       }
+      
+      cameraListener.remove();
+      fullscreenListener.remove();
+      logListener.remove();
+      notificationListener.remove();
     };
   }, []);
 
   // Check if all components are ready
   useEffect(() => {
     if (isOpenCVReady && isMediaPipelineReady && isCameraRunning) {
-      AppStateActions.addNotification('All systems initialized and ready', 'success');
-      AppStateActions.addLog('All systems initialized and ready for frame processing', 'success');
+      dispatch(EventType.NOTIFICATION, {
+        message: 'All systems initialized and ready',
+        type: 'success'
+      });
+      dispatch(EventType.LOG, {
+        message: 'All systems initialized and ready for frame processing',
+        type: 'success'
+      });
     }
   }, [isOpenCVReady, isMediaPipelineReady, isCameraRunning]);
-
-  // Handle camera state changes
-  useEffect(() => {
-    if (isCameraRunning) {
-      AppStateActions.addLog('Camera started at 480p resolution');
-      
-      // Start frame processing when camera is running
-      startFrameProcessing();
-    } else if (animationFrameRef.current) {
-      AppStateActions.addLog('Camera stopped');
-      
-      // Stop frame processing when camera is stopped
-      stopFrameProcessing();
-    }
-  }, [isCameraRunning]);
 
   // Frame processing functions
   const startFrameProcessing = () => {
@@ -199,6 +233,21 @@ function App() {
     animationFrameRef.current = requestAnimationFrame(processVideoFrame);
   };
 
+  const addLog = (message: string, type: 'info' | 'error' | 'success' | 'warning' = 'info') => {
+    setLogs(prev => [...prev, { message, type, timestamp: new Date() }]);
+    console.log(`[${type.toUpperCase()}]: ${message}`);
+  };
+
+  const addNotification = (message: string, type: 'info' | 'error' | 'success' | 'warning' = 'info') => {
+    const id = Date.now().toString();
+    setNotifications(prev => [...prev, { id, message, type }]);
+    
+    // Auto-remove notification after 5 seconds
+    setTimeout(() => {
+      setNotifications(prev => prev.filter(notification => notification.id !== id));
+    }, 5000);
+  };
+
   return (
     <div id="camera-container" className="relative w-screen h-screen bg-background">
       <CameraView 
@@ -206,15 +255,9 @@ function App() {
         videoRef={videoRef}
       />
       
-      {/* MediaPipe Hand Tracking Options */}
+      {/* MediaPipe Hand Tracking - tracks your actual hands via webcam */}
       {isCameraRunning && (
-        <>
-          {/* Original MediaPipe Hand Tracking (Main thread) */}
-          <MediaPipeHandTracker videoRef={videoRef} />
-          
-          {/* Worker-based MediaPipe Hand Tracking (Disabled - having CDN loading issues) */}
-          {false && <WorkerHandTracker videoRef={videoRef} />}
-        </>
+        <MediaPipeHandTracker videoRef={videoRef} />
       )}
       
       {/* Legacy hand visualization components (not used) */}
