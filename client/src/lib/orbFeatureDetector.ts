@@ -497,7 +497,7 @@ export class ORBFeatureDetector {
       const gray = new cv.Mat();
       cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
       
-      // Calculate the bounding box of the ROI - we'll use a simple rectangle approach
+      // Calculate the bounding box of the ROI
       let minX = Number.MAX_VALUE;
       let minY = Number.MAX_VALUE;
       let maxX = Number.MIN_VALUE;
@@ -510,75 +510,157 @@ export class ORBFeatureDetector {
         maxY = Math.max(maxY, point.y);
       });
       
-      // Create a rectangle containing the ROI
-      const rectX = Math.max(0, Math.floor(minX));
-      const rectY = Math.max(0, Math.floor(minY));
-      const rectWidth = Math.min(width - rectX, Math.ceil(maxX - minX));
-      const rectHeight = Math.min(height - rectY, Math.ceil(maxY - minY));
+      // Create a rectangle containing the ROI with a small margin
+      const margin = 10; // Small margin in pixels
+      const rectX = Math.max(0, Math.floor(minX) - margin);
+      const rectY = Math.max(0, Math.floor(minY) - margin);
+      const rectWidth = Math.min(width - rectX, Math.ceil(maxX - minX) + margin * 2);
+      const rectHeight = Math.min(height - rectY, Math.ceil(maxY - minY) + margin * 2);
       
       // Create a region of interest
       const roiMat = gray.roi(new cv.Rect(rectX, rectY, rectWidth, rectHeight));
       
-      // Detect good features to track (corners) which are more robust than ORB features
-      // and require fewer parameters
-      const corners = new cv.Mat();
-      const maxCorners = 100;
-      const qualityLevel = 0.01;
-      const minDistance = 5;
+      // ----- CONTOUR DETECTION METHOD -----
       
-      // Use the Harris corner detector
-      cv.goodFeaturesToTrack(
-        roiMat,            // Input image 
-        corners,           // Output corners
-        maxCorners,        // Max number of corners
-        qualityLevel,      // Quality level
-        minDistance,       // Min distance between corners
-        new cv.Mat(),      // Mask (none)
-        3,                 // Block size
-        true,              // Use Harris detector
-        0.04               // Harris parameter
-      );
+      // Apply threshold for high contrast markers (black on white)
+      const thresholdMat = new cv.Mat();
+      cv.threshold(roiMat, thresholdMat, 128, 255, cv.THRESH_BINARY_INV);
       
-      console.log(`Detected ${corners.rows} corner features in ROI ${roi.id}`);
+      // Find contours
+      const contours = new cv.MatVector();
+      const hierarchy = new cv.Mat();
+      cv.findContours(thresholdMat, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+      
+      console.log(`Detected ${contours.size()} contours in ROI ${roi.id}`);
       
       // Clear previous features
       roi.features = [];
       
-      // Convert corners to our Feature format
-      for (let i = 0; i < corners.rows; i++) {
-        const x = corners.data32F[i * 2] + rectX; // Add ROI offset to get global coordinates
-        const y = corners.data32F[i * 2 + 1] + rectY;
+      // Process each contour to extract feature points
+      for (let i = 0; i < contours.size(); i++) {
+        const contour = contours.get(i);
         
-        // Create a simple but deterministic descriptor from local image data
-        // This isn't a proper feature descriptor, but will be consistent for the same image region
-        const descriptor = new Uint8Array(32);
+        // Skip tiny contours (noise)
+        const area = cv.contourArea(contour);
+        if (area < 10) continue; 
         
-        // Use the x,y position to create a deterministic but unique descriptor
-        // This is oversimplified but avoids random values
-        const hashBase = x * 1000 + y;
+        // Get contour perimeter
+        const perimeter = cv.arcLength(contour, true);
+        
+        // Simplify contour to reduce number of points
+        const approxCurve = new cv.Mat();
+        cv.approxPolyDP(contour, approxCurve, 0.02 * perimeter, true);
+        
+        // Get contour center (centroid)
+        const moments = cv.moments(contour);
+        const centerX = moments.m10 / moments.m00 + rectX; // Add ROI offset
+        const centerY = moments.m01 / moments.m00 + rectY;
+        
+        // Add center point as a feature
+        const centerDescriptor = new Uint8Array(32);
+        const centerHashBase = centerX * 1000 + centerY;
         for (let j = 0; j < 32; j++) {
-          // Use a simple hash function to generate descriptor bytes
-          descriptor[j] = (hashBase + j * 31) % 256;
+          centerDescriptor[j] = (centerHashBase + j * 31) % 256;
         }
         
         roi.features.push({
-          x: x,
-          y: y,
-          size: 5,                   // Fixed size for simplicity
-          angle: 0,                  // No orientation for now
-          response: 1.0,             // Full response
-          octave: 0,                 // Single scale
-          descriptor,                // Simple descriptor
+          x: centerX,
+          y: centerY,
+          size: Math.sqrt(area) / 4, // Size proportional to contour area
+          angle: 0,
+          response: 1.0,
+          octave: 0,
+          descriptor: centerDescriptor,
           id: this.nextFeatureId++,
-          isExactROI: true           // All features are inside the ROI
+          isExactROI: true
         });
+        
+        // Add contour points as features
+        for (let j = 0; j < approxCurve.rows; j++) {
+          const x = approxCurve.data32S[j * 2] + rectX; // Add ROI offset
+          const y = approxCurve.data32S[j * 2 + 1] + rectY;
+          
+          // Create a deterministic descriptor
+          const descriptor = new Uint8Array(32);
+          const hashBase = x * 1000 + y;
+          for (let k = 0; k < 32; k++) {
+            descriptor[k] = (hashBase + k * 31) % 256;
+          }
+          
+          roi.features.push({
+            x: x,
+            y: y,
+            size: 5,
+            angle: 0,
+            response: 1.0,
+            octave: 0,
+            descriptor,
+            id: this.nextFeatureId++,
+            isExactROI: true
+          });
+        }
+        
+        approxCurve.delete();
+      }
+      
+      // If no contours found, try Harris corner detection as fallback
+      if (roi.features.length === 0) {
+        console.log("No contours found, trying corner detection as fallback");
+        
+        const corners = new cv.Mat();
+        const maxCorners = 100;
+        const qualityLevel = 0.01;
+        const minDistance = 5;
+        
+        cv.goodFeaturesToTrack(
+          roiMat,            // Input image 
+          corners,           // Output corners
+          maxCorners,        // Max number of corners
+          qualityLevel,      // Quality level
+          minDistance,       // Min distance between corners
+          new cv.Mat(),      // Mask (none)
+          3,                 // Block size
+          true,              // Use Harris detector
+          0.04               // Harris parameter
+        );
+        
+        console.log(`Fallback: Detected ${corners.rows} corner features in ROI ${roi.id}`);
+        
+        // Convert corners to our Feature format
+        for (let i = 0; i < corners.rows; i++) {
+          const x = corners.data32F[i * 2] + rectX;
+          const y = corners.data32F[i * 2 + 1] + rectY;
+          
+          // Create a deterministic descriptor
+          const descriptor = new Uint8Array(32);
+          const hashBase = x * 1000 + y;
+          for (let j = 0; j < 32; j++) {
+            descriptor[j] = (hashBase + j * 31) % 256;
+          }
+          
+          roi.features.push({
+            x: x,
+            y: y,
+            size: 5,
+            angle: 0,
+            response: 1.0,
+            octave: 0,
+            descriptor,
+            id: this.nextFeatureId++,
+            isExactROI: true
+          });
+        }
+        
+        corners.delete();
       }
       
       // Clean up OpenCV objects
       src.delete();
       gray.delete();
       roiMat.delete();
-      corners.delete();
+      thresholdMat.delete();
+      contours.delete();
+      hierarchy.delete();
       
     } catch (error) {
       console.error('Error in feature detection:', error);

@@ -9,7 +9,7 @@ import { EventType, dispatch } from '@/lib/eventBus';
 const MarkerTrackingSettings: React.FC = () => {
   const [activeTab, setActiveTab] = useState('general');
   const [enableMarkerTracking, setEnableMarkerTracking] = useState(true);
-  const [markerAlgorithm, setMarkerAlgorithm] = useState('orb');
+  const [markerAlgorithm, setMarkerAlgorithm] = useState('contour');
   const [markerThreshold, setMarkerThreshold] = useState(50);
   const [markerMaxFeatures, setMarkerMaxFeatures] = useState(500);
   
@@ -61,13 +61,13 @@ const MarkerTrackingSettings: React.FC = () => {
                 <SelectValue placeholder="Select algorithm" />
               </SelectTrigger>
               <SelectContent className="bg-black/90 border-white/20">
-                <SelectItem value="orb" className="text-xs">ORB (Oriented FAST and Rotated BRIEF)</SelectItem>
-                <SelectItem value="akaze" className="text-xs">AKAZE</SelectItem>
-                <SelectItem value="sift" className="text-xs">SIFT (Scale-Invariant Feature Transform)</SelectItem>
+                <SelectItem value="contour" className="text-xs">Contour Detection (Black on White)</SelectItem>
+                <SelectItem value="orb" className="text-xs">ORB Features (Textured Surfaces)</SelectItem>
+                <SelectItem value="harris" className="text-xs">Harris Corner Detection (Mixed)</SelectItem>
               </SelectContent>
             </Select>
             <p className="text-[10px] opacity-70">
-              ORB is fast but less robust. SIFT is slower but more accurate.
+              Contour is best for high-contrast markers (black on white). ORB works better for textured surfaces.
             </p>
           </div>
           
