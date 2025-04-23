@@ -562,23 +562,46 @@ function mpUpdateFlexionSettings(settings: any): void {
 
 // Handle messages from the main thread
 mpCtx.addEventListener('message', (e) => {
-  const { command, data } = e.data;
+  console.log('Worker received message:', e.data);
+  
+  // Extract command - could be either at the top level or in data property
+  const command = e.data.command;
+  
+  if (!command) {
+    console.error('No command specified in message:', e.data);
+    return;
+  }
   
   switch (command) {
     case 'init':
       mpInitMediaPipeline();
       break;
     case 'process-frame':
-      mpProcessFrame(data);
+      // Handle both message formats
+      if (e.data.data) {
+        mpProcessFrame(e.data);
+      } else {
+        // Handle the flattened format we're receiving from MediaPipeHandTracker
+        mpProcessFrame({
+          command: 'process-frame',
+          data: {
+            rawLandmarks: e.data.rawLandmarks,
+            timestamp: e.data.timestamp,
+            filterOptions: e.data.filterOptions,
+            fingerFlexionSettings: e.data.fingerFlexionSettings,
+            landmarkFilteringEnabled: e.data.landmarkFilteringEnabled
+          }
+        });
+      }
       break;
     case 'update-filter-settings':
-      mpUpdateFilterSettings(data);
+      mpUpdateFilterSettings(e.data.data || e.data);
       break;
     case 'update-flexion-settings':
-      mpUpdateFlexionSettings(data);
+      mpUpdateFlexionSettings(e.data.data || e.data);
       break;
     case 'update-landmark-filtering':
-      landmarkFilteringEnabled = data.enabled;
+      landmarkFilteringEnabled = (e.data.data || e.data).enabled;
       break;
     default:
       mpLog(`Unknown command: ${command}`);

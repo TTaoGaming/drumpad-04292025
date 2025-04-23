@@ -127,6 +127,13 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
         // Access the globally available media pipeline worker
         const mediaPipelineWorker = (window as any).mediaPipelineWorker;
         
+        // Log if worker is available
+        if (mediaPipelineWorker) {
+          console.log("Media pipeline worker found and available");
+        } else {
+          console.warn("Media pipeline worker not available");
+        }
+        
         // Setup result handler
         hands.onResults((results: any) => {
           const canvas = canvasRef.current;
@@ -148,16 +155,20 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
           if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
             // If the mediaPipelineWorker is available, use it for processing
             if (mediaPipelineWorker) {
+              // Log that we're sending data to the worker
+              console.log("Sending landmarks to worker for processing", {
+                landmarkCount: results.multiHandLandmarks.length,
+                timestamp: now
+              });
+              
               // Send raw landmarks to the worker for processing
               mediaPipelineWorker.postMessage({
                 command: 'process-frame',
-                data: {
-                  rawLandmarks: results.multiHandLandmarks,
-                  timestamp: now,
-                  filterOptions: filterOptions,
-                  fingerFlexionSettings: fingerFlexionSettings,
-                  landmarkFilteringEnabled: performanceSettings.landmarkFiltering.enabled
-                }
+                rawLandmarks: results.multiHandLandmarks,
+                timestamp: now,
+                filterOptions: filterOptions,
+                fingerFlexionSettings: fingerFlexionSettings,
+                landmarkFilteringEnabled: performanceSettings.landmarkFiltering.enabled
               });
               
               // Simple drawing without worker response for now
