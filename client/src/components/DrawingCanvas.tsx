@@ -235,13 +235,32 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
   
   // Draw a path to the canvas
   const drawPath = (ctx: CanvasRenderingContext2D, path: DrawingPath) => {
-    if (path.points.length < 2) return;
+    if (path.points.length < 1) return;
     
     const points = path.points;
     
     // Start a new path
     ctx.beginPath();
-    ctx.strokeStyle = settings.strokeColor;
+    
+    // Set different stroke styles based on whether the path is active or completed
+    if (!path.isComplete) {
+      // Actively drawing - use a thicker, more vibrant line
+      ctx.strokeStyle = settings.strokeColor;
+      ctx.lineWidth = settings.strokeWidth + 2; // Slightly thicker for active drawing
+    } else {
+      // Completed path - use the normal stroke style
+      ctx.strokeStyle = settings.strokeColor;
+      ctx.lineWidth = settings.strokeWidth;
+    }
+    
+    // For single point (just starting), draw a circle
+    if (points.length === 1) {
+      ctx.beginPath();
+      ctx.arc(points[0].x, points[0].y, 5, 0, Math.PI * 2);
+      ctx.fillStyle = settings.strokeColor;
+      ctx.fill();
+      return;
+    }
     
     // Move to the first point
     ctx.moveTo(points[0].x, points[0].y);
@@ -259,13 +278,41 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
       }
     }
     
-    // If this is an ROI and is complete or we're using auto-close, close the path
-    if (path.isROI && (path.isComplete || settings.autoClose)) {
-      ctx.closePath();
+    // If this is an ROI
+    if (path.isROI) {
+      // Draw line between last point and first point
+      if (path.isComplete || settings.autoClose) {
+        if (points.length > 2) {
+          ctx.closePath();
+        }
+      }
       
-      // Fill the ROI with transparent color
-      ctx.fillStyle = `${settings.fillColor}${Math.round(settings.fillOpacity * 255).toString(16).padStart(2, '0')}`;
-      ctx.fill();
+      // Draw vertices as small circles (only for completed paths)
+      if (path.isComplete) {
+        const originalStrokeStyle = ctx.strokeStyle;
+        const originalLineWidth = ctx.lineWidth;
+        
+        // Fill the ROI with transparent color
+        ctx.fillStyle = `${settings.fillColor}${Math.round(settings.fillOpacity * 255).toString(16).padStart(2, '0')}`;
+        ctx.fill();
+        
+        // Draw points at each vertex
+        points.forEach((point, index) => {
+          ctx.beginPath();
+          ctx.arc(point.x, point.y, 4, 0, Math.PI * 2);
+          ctx.fillStyle = settings.strokeColor;
+          ctx.fill();
+          
+          // Draw point number for debugging (uncomment if needed)
+          // ctx.fillStyle = 'white';
+          // ctx.font = '10px sans-serif';
+          // ctx.fillText(index.toString(), point.x + 5, point.y - 5);
+        });
+        
+        // Restore original styles
+        ctx.strokeStyle = originalStrokeStyle;
+        ctx.lineWidth = originalLineWidth;
+      }
     }
     
     // Stroke the path
@@ -329,13 +376,163 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
     });
   };
   
+  // Calculate the center of a set of points
+  const calculateCenter = (points: { x: number, y: number }[]): { x: number, y: number } => {
+    if (points.length === 0) return { x: 0, y: 0 };
+    
+    const sum = points.reduce((acc, point) => {
+      return { x: acc.x + point.x, y: acc.y + point.y };
+    }, { x: 0, y: 0 });
+    
+    return { x: sum.x / points.length, y: sum.y / points.length };
+  };
+  
+  // Calculate the average distance from center for all points
+  const calculateAverageRadius = (points: { x: number, y: number }[], center: { x: number, y: number }): number => {
+    if (points.length === 0) return 0;
+    
+    const distances = points.map(point => 
+      Math.sqrt(Math.pow(point.x - center.x, 2) + Math.pow(point.y - center.y, 2))
+    );
+    
+    return distances.reduce((sum, distance) => sum + distance, 0) / distances.length;
+  };
+  
+  // Convert an irregular shape to a circle
+  const convertToCircle = (points: { x: number, y: number }[]): { x: number, y: number }[] => {
+    if (points.length < 3) return points;
+    
+    // Calculate the center of the points
+    const center = calculateCenter(points);
+    
+    // Calculate the average radius
+    const radius = calculateAverageRadius(points, center);
+    
+    // Generate a circle with 16 points
+    const circlePoints: { x: number, y: number }[] = [];
+    for (let i = 0; i < 16; i++) {
+      const angle = (i / 16) * Math.PI * 2;
+      circlePoints.push({
+        x: center.x + radius * Math.cos(angle),
+        y: center.y + radius * Math.sin(angle)
+      });
+    }
+    
+    return circlePoints;
+  };
+  
+  // Find the bounding box of a set of points
+  const getBoundingBox = (points: { x: number, y: number }[]): {
+    minX: number, minY: number, maxX: number, maxY: number
+  } => {
+    if (points.length === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+    
+    let minX = points[0].x;
+    let minY = points[0].y;
+    let maxX = points[0].x;
+    let maxY = points[0].y;
+    
+    points.forEach(point => {
+      minX = Math.min(minX, point.x);
+      minY = Math.min(minY, point.y);
+      maxX = Math.max(maxX, point.x);
+      maxY = Math.max(maxY, point.y);
+    });
+    
+    return { minX, minY, maxX, maxY };
+  };
+  
+  // Convert an irregular shape to a rectangle
+  const convertToRectangle = (points: { x: number, y: number }[]): { x: number, y: number }[] => {
+    if (points.length < 3) return points;
+    
+    // Calculate the bounding box
+    const { minX, minY, maxX, maxY } = getBoundingBox(points);
+    
+    // Create rectangle from bounding box
+    return [
+      { x: minX, y: minY }, // Top-left
+      { x: maxX, y: minY }, // Top-right
+      { x: maxX, y: maxY }, // Bottom-right
+      { x: minX, y: maxY }  // Bottom-left
+    ];
+  };
+  
+  // Simplify a path by removing redundant points 
+  const simplifyPath = (points: { x: number, y: number }[], tolerance: number = 10): { x: number, y: number }[] => {
+    if (points.length <= 2) return points;
+    
+    const result: { x: number, y: number }[] = [points[0]];
+    
+    for (let i = 1; i < points.length - 1; i++) {
+      const prev = points[i - 1];
+      const current = points[i];
+      const next = points[i + 1];
+      
+      // Calculate distances
+      const d1 = Math.sqrt(Math.pow(current.x - prev.x, 2) + Math.pow(current.y - prev.y, 2));
+      const d2 = Math.sqrt(Math.pow(next.x - current.x, 2) + Math.pow(next.y - current.y, 2));
+      
+      // Calculate angle
+      const vector1 = { x: current.x - prev.x, y: current.y - prev.y };
+      const vector2 = { x: next.x - current.x, y: next.y - current.y };
+      
+      const dot = vector1.x * vector2.x + vector1.y * vector2.y;
+      const mag1 = Math.sqrt(vector1.x * vector1.x + vector1.y * vector1.y);
+      const mag2 = Math.sqrt(vector2.x * vector2.x + vector2.y * vector2.y);
+      
+      const angle = Math.acos(dot / (mag1 * mag2)) * (180 / Math.PI);
+      
+      // Keep point if distance is large or angle is significant
+      if (d1 > tolerance || d2 > tolerance || angle > 20) {
+        result.push(current);
+      }
+    }
+    
+    // Always add the last point
+    result.push(points[points.length - 1]);
+    
+    return result;
+  };
+  
   // Complete the current drawing path
   const stopDrawing = () => {
     if (!currentPath) return;
     
-    // Add the completed path to our paths list
+    let finalPoints = [...currentPath.points];
+    let finalPathDescription = 'custom shape';
+    
+    // Simplify or convert the shape if it's an ROI
+    if (currentPath.isROI && currentPath.points.length >= 3) {
+      // First simplify the path to remove redundant points
+      const simplifiedPoints = simplifyPath(currentPath.points);
+      
+      // Determine if shape is more circular or rectangular
+      const center = calculateCenter(simplifiedPoints);
+      const radius = calculateAverageRadius(simplifiedPoints, center);
+      const { minX, minY, maxX, maxY } = getBoundingBox(simplifiedPoints);
+      
+      // Calculate circularity vs. rectangularity
+      const area = (maxX - minX) * (maxY - minY);
+      const circleArea = Math.PI * radius * radius;
+      const circularity = circleArea / area;
+      
+      // If more circular, create a circle
+      if (circularity > 0.7) {
+        finalPoints = convertToCircle(simplifiedPoints);
+        finalPathDescription = 'circle';
+      } 
+      // Otherwise create a rectangle
+      else {
+        finalPoints = convertToRectangle(simplifiedPoints);
+        finalPathDescription = 'rectangle';
+      }
+    }
+    
+    // Add the completed path to our paths list with the new points
     const completedPath: DrawingPath = {
       ...currentPath,
+      points: finalPoints,
       isComplete: true
     };
     
@@ -347,9 +544,9 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
     if (completedPath.isROI && completedPath.points.length >= 3) {
       const roiId = orbFeatureDetector.addROI(completedPath);
       
-      // Log ROI creation with the number of vertices
+      // Log ROI creation with the number of vertices and shape
       dispatch(EventType.LOG, {
-        message: `Created ROI with ${completedPath.points.length} vertices (ID: ${roiId})`,
+        message: `Created ROI ${finalPathDescription} with ${completedPath.points.length} vertices (ID: ${roiId})`,
         type: 'success'
       });
     } else {
