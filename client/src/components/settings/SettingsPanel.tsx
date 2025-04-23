@@ -11,8 +11,9 @@ import HandTrackingSettings from './tabs/HandTrackingSettings';
 import MarkerTrackingSettings from './tabs/MarkerTrackingSettings';
 import DebuggingSettings from './tabs/DebuggingSettings';
 import GettingStartedSettings from './tabs/GettingStartedSettings';
+import DrawingSettings from './tabs/DrawingSettings';
 
-export type SettingsTab = 'getting-started' | 'marker-tracking' | 'hand-tracking' | 'debugging';
+export type SettingsTab = 'getting-started' | 'marker-tracking' | 'hand-tracking' | 'drawing' | 'debugging';
 
 // Fixed panel width - no resizing
 const PANEL_WIDTH = 380;
@@ -82,7 +83,7 @@ const SettingsPanel: React.FC = () => {
               onValueChange={handleTabChange}
               className="flex-1 flex flex-col overflow-hidden"
             >
-              <TabsList className="grid grid-cols-4 px-4 pt-2 bg-transparent border-b border-white/10">
+              <TabsList className="grid grid-cols-5 px-4 pt-2 bg-transparent border-b border-white/10">
                 <TabsTrigger 
                   value="getting-started"
                   className={cn(
@@ -114,6 +115,16 @@ const SettingsPanel: React.FC = () => {
                   Hands
                 </TabsTrigger>
                 <TabsTrigger 
+                  value="drawing"
+                  className={cn(
+                    "h-9 rounded-none border-b-2 data-[state=active]:border-white border-transparent",
+                    "bg-transparent data-[state=active]:bg-transparent hover:bg-gray-800/40",
+                    "text-white/60 data-[state=active]:text-white transition-colors font-medium"
+                  )}
+                >
+                  Drawing
+                </TabsTrigger>
+                <TabsTrigger 
                   value="debugging"
                   className={cn(
                     "h-9 rounded-none border-b-2 data-[state=active]:border-white border-transparent",
@@ -140,6 +151,10 @@ const SettingsPanel: React.FC = () => {
                     
                     <TabsContent value="hand-tracking" className="m-0 p-0">
                       <HandTrackingSettings />
+                    </TabsContent>
+                    
+                    <TabsContent value="drawing" className="m-0 p-0">
+                      <DrawingSettings />
                     </TabsContent>
                     
                     <TabsContent value="debugging" className="m-0 p-0">
