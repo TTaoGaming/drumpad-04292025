@@ -819,6 +819,25 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                 setIsPinching(isPinching);
                 setPinchDistance(distance);
                 
+                // Get the active fingertip position
+                let activeFingertip: HandLandmark;
+                switch (pinchGestureSettings.activeFinger) {
+                  case 'index':
+                    activeFingertip = landmarks[8]; // Index fingertip
+                    break;
+                  case 'middle':
+                    activeFingertip = landmarks[12]; // Middle fingertip
+                    break;
+                  case 'ring':
+                    activeFingertip = landmarks[16]; // Ring fingertip
+                    break;
+                  case 'pinky':
+                    activeFingertip = landmarks[20]; // Pinky fingertip
+                    break;
+                  default:
+                    activeFingertip = landmarks[8]; // Default to index
+                }
+                
                 // Dispatch event for other components
                 const dispatchFn = performanceSettings.throttling.enabled ? throttledDispatch : dispatch;
                 dispatchFn(EventType.SETTINGS_VALUE_CHANGE, {
@@ -826,38 +845,48 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                   setting: 'pinchState',
                   value: {
                     isPinching,
-                    distance
+                    distance,
+                    position: {
+                      x: activeFingertip.x,
+                      y: activeFingertip.y,
+                      z: activeFingertip.z
+                    }
+                  }
+                });
+                
+                // Also dispatch the index fingertip position separately for drawing
+                dispatchFn(EventType.SETTINGS_VALUE_CHANGE, {
+                  section: 'tracking',
+                  setting: 'indexFingertip',
+                  value: {
+                    x: activeFingertip.x,
+                    y: activeFingertip.y,
+                    z: activeFingertip.z
                   }
                 });
                 
                 // Visualize the pinch if enabled
                 if (pinchGestureSettings.showVisualizer) {
-                  // Get thumb and active finger tip landmarks
+                  // Get thumb tip landmark
                   const thumbTip = landmarks[4];
                   
-                  // Get the selected finger tip based on settings
-                  let activeFingertip: HandLandmark;
+                  // Reuse the active fingertip we already defined above
                   let fingerColorIndex = 1; // Default to index (orange)
                   
                   switch (pinchGestureSettings.activeFinger) {
                     case 'index':
-                      activeFingertip = landmarks[8]; // Index fingertip
                       fingerColorIndex = 1; // Orange
                       break;
                     case 'middle':
-                      activeFingertip = landmarks[12]; // Middle fingertip
                       fingerColorIndex = 2; // Yellow
                       break;
                     case 'ring':
-                      activeFingertip = landmarks[16]; // Ring fingertip
                       fingerColorIndex = 3; // Green
                       break;
                     case 'pinky':
-                      activeFingertip = landmarks[20]; // Pinky fingertip
                       fingerColorIndex = 4; // Blue
                       break;
                     default:
-                      activeFingertip = landmarks[8]; // Default to index
                       fingerColorIndex = 1; // Orange
                   }
                   

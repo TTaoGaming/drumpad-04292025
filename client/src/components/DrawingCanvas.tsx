@@ -6,12 +6,9 @@
  */
 import React, { useRef, useEffect, useState } from 'react';
 import { EventType, addListener, dispatch } from '@/lib/eventBus';
-
-export interface DrawingPath {
-  points: { x: number, y: number }[];
-  isComplete: boolean;
-  isROI: boolean;
-}
+import orbFeatureDetector from '@/lib/orbFeatureDetector';
+import { getVideoFrame } from '@/lib/cameraManager';
+import { DrawingPath } from '@/lib/types';
 
 interface DrawingCanvasProps {
   width: number;
@@ -28,6 +25,7 @@ export interface DrawingSettings {
   fillOpacity: number;
   autoClose: boolean;
   smoothing: boolean;
+  showFeatures: boolean;
 }
 
 const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled }) => {
@@ -43,7 +41,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled })
     strokeWidth: 3,
     fillOpacity: 0.2,
     autoClose: true,
-    smoothing: true
+    smoothing: true,
+    showFeatures: true
   });
 
   // Listen for pinch events from MediaPipeHandTracker
@@ -117,6 +116,11 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled })
       drawPath(ctx, currentPath);
     }
     
+    // Draw feature points if enabled
+    if (settings.showFeatures) {
+      orbFeatureDetector.drawFeatures(ctx, width, height);
+    }
+    
     // Publish the current ROIs to the event bus
     const rois = paths.filter(path => path.isROI && path.isComplete);
     if (rois.length > 0) {
@@ -127,6 +131,46 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled })
       });
     }
   }, [paths, currentPath, width, height, settings]);
+  
+  // Process video frames for feature detection
+  useEffect(() => {
+    // Only run feature detection when there are completed ROIs
+    const completedROIs = paths.filter(path => path.isROI && path.isComplete);
+    if (completedROIs.length === 0) return;
+    
+    // Set up animation frame for feature detection
+    let animationFrameId: number;
+    let videoElement: HTMLVideoElement | null = null;
+    
+    // Find the first video element
+    const videos = document.getElementsByTagName('video');
+    if (videos.length > 0) {
+      videoElement = videos[0];
+    }
+    
+    // Process frames for feature detection
+    const processFrame = () => {
+      if (videoElement && videoElement.readyState >= 2) {
+        const frameData = getVideoFrame(videoElement);
+        if (frameData) {
+          orbFeatureDetector.processFrame(frameData);
+        }
+      }
+      
+      // Request next frame
+      animationFrameId = requestAnimationFrame(processFrame);
+    };
+    
+    // Start processing
+    animationFrameId = requestAnimationFrame(processFrame);
+    
+    // Clean up on component unmount
+    return () => {
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
+    };
+  }, [paths]);
   
   // Draw a path to the canvas
   const drawPath = (ctx: CanvasRenderingContext2D, path: DrawingPath) => {
