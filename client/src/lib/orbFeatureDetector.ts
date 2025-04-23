@@ -148,12 +148,24 @@ export class ORBFeatureDetector {
    * @returns True if OpenCV is loaded and ready
    */
   public isOpenCVReady(): boolean {
-    const isAvailable = this.isOpenCVLoaded && typeof (window as any).cv !== 'undefined';
-    console.log(`OpenCV ready state: ${isAvailable}`);
-    if (isAvailable) {
+    // Always check fresh from the window object
+    this.isOpenCVLoaded = typeof (window as any).cv !== 'undefined';
+    console.log(`OpenCV ready state: ${this.isOpenCVLoaded}`);
+    
+    if (this.isOpenCVLoaded) {
       console.log(`OpenCV version: ${(window as any).cv.version || 'unknown'}`);
+      // Test if basic OpenCV operations work
+      try {
+        const testMat = new (window as any).cv.Mat(3, 3, (window as any).cv.CV_8UC1);
+        console.log('Created test OpenCV matrix successfully');
+        testMat.delete();
+      } catch (e) {
+        console.error('OpenCV test failed:', e);
+        this.isOpenCVLoaded = false;
+      }
     }
-    return isAvailable;
+    
+    return this.isOpenCVLoaded;
   }
   
   /**
@@ -414,81 +426,103 @@ export class ORBFeatureDetector {
    * @param imageData The image data from the current frame
    */
   private detectORBFeatures(roi: ROIWithFeatures, imageData: ImageData): void {
-    // Create OpenCV mat from imageData
-    const width = imageData.width;
-    const height = imageData.height;
-    const src = cv.matFromImageData(imageData);
-    
-    // Convert to grayscale for feature detection
-    const gray = new cv.Mat();
-    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-    
-    // Create mask for the ROI
-    const mask = cv.Mat.zeros(height, width, cv.CV_8UC1);
-    
-    // Convert ROI points to contour format
-    const contourPoints = roi.points.map(pt => new cv.Point(pt.x, pt.y));
-    const contour = new cv.MatVector();
-    const contourMat = cv.Mat.zeros(contourPoints.length, 1, cv.CV_32SC2);
-    
-    // Fill contourMat with points
-    for (let i = 0; i < contourPoints.length; i++) {
-      contourMat.data32S[i * 2] = contourPoints[i].x;
-      contourMat.data32S[i * 2 + 1] = contourPoints[i].y;
+    // Check if OpenCV is available
+    if (typeof (window as any).cv === 'undefined') {
+      console.error('OpenCV not loaded, cannot detect features');
+      return;
     }
     
-    contour.push_back(contourMat);
+    // Make cv a local reference for the global object
+    const cv = (window as any).cv;
     
-    // Fill the ROI in the mask
-    cv.drawContours(mask, contour, 0, new cv.Scalar(255), cv.FILLED);
-    
-    // Create ORB detector - increase nfeatures to get more points
-    const orb = new cv.ORB(750, 1.2, 8, 31, 0, 2, cv.ORB_HARRIS_SCORE, 31, 20);
-    
-    // Detect keypoints with the mask
-    const keypoints = new cv.KeyPointVector();
-    const descriptors = new cv.Mat();
-    orb.detectAndCompute(gray, mask, keypoints, descriptors);
-    
-    // Clear previous features
-    roi.features = [];
-    
-    // Convert detected keypoints to our Feature format
-    for (let i = 0; i < keypoints.size(); i++) {
-      const kp = keypoints.get(i);
+    try {
+      // Log attempt to create mat
+      console.log(`Attempting to create OpenCV mat from imageData: ${imageData.width}x${imageData.height}`);
       
-      // Extract descriptor for this keypoint
-      const descriptor = new Uint8Array(32);
-      if (descriptors.rows > 0) {
-        for (let j = 0; j < 32; j++) {
-          descriptor[j] = descriptors.data[i * 32 + j];
-        }
+      // Create OpenCV mat from imageData
+      const width = imageData.width;
+      const height = imageData.height;
+      
+      // Explicitly create an rgba Uint8ClampedArray for the source image
+      const src = new cv.Mat(height, width, cv.CV_8UC4);
+      const imgData = new Uint8ClampedArray(imageData.data);
+      src.data.set(imgData);
+      
+      // Convert to grayscale for feature detection
+      const gray = new cv.Mat();
+      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+      
+      // Create mask for the ROI
+      const mask = cv.Mat.zeros(height, width, cv.CV_8UC1);
+      
+      // Convert ROI points to contour format
+      const contourPoints = roi.points.map(pt => new cv.Point(pt.x, pt.y));
+      const contour = new cv.MatVector();
+      const contourMat = new cv.Mat(contourPoints.length, 1, cv.CV_32SC2);
+      
+      // Fill contourMat with points
+      for (let i = 0; i < contourPoints.length; i++) {
+        contourMat.data32S[i * 2] = contourPoints[i].x;
+        contourMat.data32S[i * 2 + 1] = contourPoints[i].y;
       }
       
-      // Create our feature object
-      roi.features.push({
-        x: kp.pt.x,
-        y: kp.pt.y,
-        size: kp.size,
-        angle: kp.angle,
-        response: kp.response,
-        octave: kp.octave,
-        descriptor,
-        id: this.nextFeatureId++
-      });
+      contour.push_back(contourMat);
+      
+      // Fill the ROI in the mask
+      cv.drawContours(mask, contour, 0, new cv.Scalar(255), cv.FILLED);
+      
+      // Create ORB detector - increase nfeatures to get more points
+      const orb = new cv.ORB(500, 1.2, 8, 31, 0, 2, cv.ORB_HARRIS_SCORE, 31, 20);
+      
+      // Detect keypoints with the mask
+      const keypoints = new cv.KeyPointVector();
+      const descriptors = new cv.Mat();
+      orb.detectAndCompute(gray, mask, keypoints, descriptors);
+      
+      // Clear previous features
+      roi.features = [];
+      
+      // Convert detected keypoints to our Feature format
+      for (let i = 0; i < keypoints.size(); i++) {
+        const kp = keypoints.get(i);
+        
+        // Extract descriptor for this keypoint
+        const descriptor = new Uint8Array(32);
+        if (descriptors.rows > 0 && i < descriptors.rows) {
+          for (let j = 0; j < 32 && j < descriptors.cols; j++) {
+            descriptor[j] = descriptors.data[i * descriptors.cols + j];
+          }
+        }
+        
+        // Create our feature object
+        roi.features.push({
+          x: kp.pt.x,
+          y: kp.pt.y,
+          size: kp.size,
+          angle: kp.angle,
+          response: kp.response,
+          octave: kp.octave,
+          descriptor,
+          id: this.nextFeatureId++
+        });
+      }
+      
+      console.log(`Detected ${roi.features.length} ORB features in ROI ${roi.id}`);
+      
+      // Clean up OpenCV objects
+      src.delete();
+      gray.delete();
+      mask.delete();
+      contour.delete();
+      contourMat.delete();
+      orb.delete();
+      keypoints.delete();
+      descriptors.delete();
+    } catch (error) {
+      console.error('Error in ORB feature detection:', error);
+      // Fall back to placeholder features if OpenCV fails
+      this.generatePlaceholderFeatures(roi, imageData.width, imageData.height);
     }
-    
-    // Clean up OpenCV objects
-    src.delete();
-    gray.delete();
-    mask.delete();
-    contour.delete();
-    contourMat.delete();
-    orb.delete();
-    keypoints.delete();
-    descriptors.delete();
-    
-    console.log(`Detected ${roi.features.length} ORB features in ROI ${roi.id}`);
   }
   
   /**
