@@ -158,83 +158,60 @@ const DebugView: React.FC<DebugViewProps> = ({
                 console.log(`DEBUG: Successfully drew entire video frame to canvas`);
                 
                 // APPROACH 2: Try to calculate a more accurate ROI and crop
-                // Create a temporary canvas for cropping the video frame
-                const tempCanvas = document.createElement('canvas');
-                const tempCtx = tempCanvas.getContext('2d');
+                // For now, let's focus on showing the whole video with the ROI outline
+                // This way we can see the ROI in context of the entire image
+                console.log(`DEBUG: Drawing ROI on entire video frame, skipping cropping`);
                 
-                if (tempCtx) {
-                  // Extract the ROI area from the video frame with a margin
-                  const margin = 20; // Larger margin around the ROI for testing
-                  
-                  // Get center of ROI
-                  let roiCenterX = 0, roiCenterY = 0;
-                  roi.points.forEach(point => {
-                    roiCenterX += point.x;
-                    roiCenterY += point.y;
-                  });
-                  roiCenterX /= roi.points.length;
-                  roiCenterY /= roi.points.length;
-                  
-                  // Use the ROI center and a fixed size for simplicity
-                  const fixedSize = 100; // Fixed size crop area
-                  const cropX = Math.max(0, Math.round(roiCenterX - fixedSize/2));
-                  const cropY = Math.max(0, Math.round(roiCenterY - fixedSize/2));
-                  const cropWidth = Math.min(videoElement.videoWidth - cropX, fixedSize);
-                  const cropHeight = Math.min(videoElement.videoHeight - cropY, fixedSize);
-                  
-                  console.log(`DEBUG: ROI center: (${roiCenterX}, ${roiCenterY})`);
-                  console.log(`DEBUG: Fixed crop rect: x=${cropX}, y=${cropY}, width=${cropWidth}, height=${cropHeight}`);
-                  
-                  if (cropWidth <= 0 || cropHeight <= 0) {
-                    console.error('Invalid crop dimensions:', cropWidth, cropHeight);
-                  } else {
-                    // Set temp canvas size 
-                    tempCanvas.width = cropWidth;
-                    tempCanvas.height = cropHeight;
-                    
-                    // Add a background color to the temp canvas for debugging
-                    tempCtx.fillStyle = 'rgba(255, 0, 0, 0.2)';
-                    tempCtx.fillRect(0, 0, cropWidth, cropHeight);
-                    
-                    try {
-                      // Draw the cropped portion from the video
-                      tempCtx.drawImage(
-                        videoElement,
-                        cropX, cropY, cropWidth, cropHeight,  // Source rectangle
-                        0, 0, cropWidth, cropHeight           // Destination rectangle
-                      );
-                      console.log(`DEBUG: Drew video to temp canvas`);
-                      
-                      // Position the ROI capture in the center of our debug canvas
-                      const destX = (canvas.width - cropWidth) / 2;
-                      const destY = (canvas.height - cropHeight) / 2;
-                      
-                      ctx.drawImage(
-                        tempCanvas,
-                        0, 0, cropWidth, cropHeight,         // Source rectangle
-                        destX, destY, cropWidth, cropHeight  // Destination rectangle
-                      );
-                      console.log(`DEBUG: Drew temp canvas to main canvas`);
-                    } catch (drawError) {
-                      console.error('Error in ROI drawing process:', drawError);
-                    }
-                  }
+                // Get ROI center for informational display
+                let roiCenterX = 0, roiCenterY = 0;
+                roi.points.forEach(point => {
+                  roiCenterX += point.x;
+                  roiCenterY += point.y;
+                });
+                roiCenterX /= roi.points.length;
+                roiCenterY /= roi.points.length;
+                
+                console.log(`DEBUG: ROI center at: (${roiCenterX}, ${roiCenterY})`);
+                
+                // No need for additional temp canvas if we're just showing the whole video
+                
+                // Draw ROI outline directly over the video image
+                // We need to map the ROI points to the current canvas coordinates
+                
+                // Determine the scale factors between the drawing canvas (where ROI was created)
+                // and our current debug canvas (where we're showing the video)
+                const videoDisplay = document.getElementById('camera-feed') as HTMLVideoElement;
+                let drawingCanvasWidth = canvas.width;
+                let drawingCanvasHeight = canvas.height;
+                
+                if (videoDisplay) {
+                  // Get the actual dimensions of the video display
+                  const rect = videoDisplay.getBoundingClientRect();
+                  drawingCanvasWidth = rect.width;
+                  drawingCanvasHeight = rect.height;
                 }
                 
-                // Draw ROI outline with glow effect
+                // Calculate scale between the drawing canvas and our debug canvas
+                const scaleX = canvas.width / drawingCanvasWidth;
+                const scaleY = canvas.height / drawingCanvasHeight;
+                
+                // Apply scale factor to map ROI points to our debug canvas
+                const scaledPoints = roi.points.map(point => ({
+                  x: point.x * scaleX,
+                  y: point.y * scaleY
+                }));
+                
+                // Draw the ROI outline
                 ctx.shadowColor = 'rgba(255, 0, 0, 0.7)';
                 ctx.shadowBlur = 10;
                 ctx.beginPath();
-                ctx.moveTo(
-                  roi.points[0].x * scale + centerX,
-                  roi.points[0].y * scale + centerY
-                );
                 
-                for (let i = 1; i < roi.points.length; i++) {
-                  ctx.lineTo(
-                    roi.points[i].x * scale + centerX,
-                    roi.points[i].y * scale + centerY
-                  );
+                // Start with the first point
+                ctx.moveTo(scaledPoints[0].x, scaledPoints[0].y);
+                
+                // Draw the rest of the points
+                for (let i = 1; i < scaledPoints.length; i++) {
+                  ctx.lineTo(scaledPoints[i].x, scaledPoints[i].y);
                 }
                 
                 ctx.closePath();
