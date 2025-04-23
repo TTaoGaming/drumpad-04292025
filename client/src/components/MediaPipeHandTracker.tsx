@@ -400,16 +400,40 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
           type: 'info'
         });
         
+        // Define a workaround for Module.arguments issue
+        if (typeof window !== 'undefined' && !window.hasOwnProperty('_mp_workaround_applied')) {
+          (window as any)._mp_workaround_applied = true;
+          
+          // Apply a fix before loading MediaPipe
+          const originalAO = Object.assign;
+          Object.assign = function(...args: any[]) {
+            // Check if this is the MediaPipe Module assignment that causes issues
+            if (args[0]?.hasOwnProperty?.('arguments') && args[1]?.hasOwnProperty?.('arguments')) {
+              const target = args[0];
+              const property = 'arguments';
+              if (Object.getOwnPropertyDescriptor(target, property)?.configurable === false) {
+                const otherArgs = Array.from(args).slice(1);
+                for (const source of otherArgs) {
+                  if (source.hasOwnProperty(property)) {
+                    delete source[property]; // Skip assigning this problematic property
+                  }
+                }
+              }
+            }
+            return originalAO.apply(this, args);
+          };
+        }
+        
         // Import MediaPipe libraries
         const mpHands = await import('@mediapipe/hands');
         const mpCamera = await import('@mediapipe/camera_utils');
         const mpDrawing = await import('@mediapipe/drawing_utils');
         
-        // Initialize MediaPipe Hands with CDN - using version we know works
+        // Initialize MediaPipe Hands - use a more stable version and avoid CDN
         // @ts-ignore - TypeScript doesn't like the locateFile, but it's required
         const hands = new mpHands.Hands({
           locateFile: (file: string) => {
-            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`;
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.3.1632795355/${file}`;
           }
         });
         
@@ -436,8 +460,14 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
             Math.round(1000 / (now - lastFrameTimeRef.current)) : 0;
           lastFrameTimeRef.current = now;
           
-          // Clear canvas
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          try {
+            // Clear canvas with a controlled fill instead of just clearing
+            // This helps prevent white flashing when errors occur
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.0)'; // Transparent fill
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          } catch (err) {
+            console.error('Error while clearing canvas:', err);
+          }
           
           // Process hands if available
           if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
