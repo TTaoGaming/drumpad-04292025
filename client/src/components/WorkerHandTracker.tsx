@@ -97,11 +97,24 @@ const WorkerHandTracker: React.FC<WorkerHandTrackerProps> = ({ videoRef }) => {
   
   // Handle MediaPipe results from worker
   const handleMediaPipeResults = useCallback((results: any, processingTime: number) => {
+    // Debug log
+    console.log('WorkerHandTracker - Got results', {
+      hasMultiHandLandmarks: !!results.multiHandLandmarks,
+      handCount: results.multiHandLandmarks?.length || 0,
+      processingTime
+    });
+    
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) {
+      console.warn('WorkerHandTracker - Canvas ref not available');
+      return;
+    }
     
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) {
+      console.warn('WorkerHandTracker - Canvas context not available');
+      return;
+    }
     
     // Calculate FPS
     const now = performance.now();
@@ -316,8 +329,11 @@ const WorkerHandTracker: React.FC<WorkerHandTrackerProps> = ({ videoRef }) => {
         type: 'info'
       });
       
+      console.log('WorkerHandTracker - Starting MediaPipe initialization');
+      
       try {
-        // Initialize the worker
+        // Initialize the worker with our settings
+        console.log('WorkerHandTracker - Calling mediaPipeWorkerService.init()');
         const success = await mediaPipeWorkerService.init(
           handleMediaPipeResults,
           {
@@ -328,20 +344,33 @@ const WorkerHandTracker: React.FC<WorkerHandTrackerProps> = ({ videoRef }) => {
           }
         );
         
+        console.log('WorkerHandTracker - MediaPipe init result:', success);
+        
         if (success && mounted) {
           dispatch(EventType.LOG, {
             message: 'MediaPipe worker initialized successfully',
             type: 'success'
           });
           
-          // Only if still mounted
+          // Start processing if the video is already playing
           if (mounted && videoRef.current && videoRef.current.readyState >= 2) {
-            mediaPipeWorkerService.startProcessing(
-              videoRef.current,
-              performanceSettings.frameProcessing.processEveryNth
-            );
+            console.log('WorkerHandTracker - Video ready, starting processing');
+            
+            // Add a small delay to ensure worker is fully ready
+            setTimeout(() => {
+              if (mounted && videoRef.current) {
+                mediaPipeWorkerService.startProcessing(
+                  videoRef.current,
+                  performanceSettings.frameProcessing.processEveryNth
+                );
+                console.log('WorkerHandTracker - Started frame processing');
+              }
+            }, 500);
+          } else {
+            console.log('WorkerHandTracker - Video not ready, waiting for playing event');
           }
         } else if (mounted) {
+          console.error('WorkerHandTracker - MediaPipe initialization failed');
           throw new Error('Failed to initialize MediaPipe worker');
         }
       } catch (error: any) {
@@ -354,7 +383,13 @@ const WorkerHandTracker: React.FC<WorkerHandTrackerProps> = ({ videoRef }) => {
         });
       } finally {
         if (mounted) {
-          setModelLoading(false);
+          // Give some time for initialization to complete in background
+          setTimeout(() => {
+            if (mounted) {
+              setModelLoading(false);
+              console.log('WorkerHandTracker - Model loading complete');
+            }
+          }, 1000);
         }
       }
     };

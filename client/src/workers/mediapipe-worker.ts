@@ -5,6 +5,35 @@
  * Handles initialization, processing frames, and sending results back to the main thread.
  */
 
+// Debug logging for the worker
+function workerDebugLog(message: string, level: 'log' | 'info' | 'warn' | 'error' = 'log'): void {
+  // Use console for debugging in the worker context
+  switch (level) {
+    case 'info':
+      console.info(`[Worker][INFO] ${message}`);
+      break;
+    case 'warn':
+      console.warn(`[Worker][WARN] ${message}`);
+      break;
+    case 'error':
+      console.error(`[Worker][ERROR] ${message}`);
+      break;
+    default:
+      console.log(`[Worker][DEBUG] ${message}`);
+  }
+  
+  // Also post the message to the main thread for debugging
+  try {
+    self.postMessage({
+      type: 'debug',
+      level,
+      message: `[Worker] ${message}`
+    });
+  } catch (e) {
+    // Ignore - just for debug
+  }
+}
+
 // Define types for messages from the main thread
 interface InitMessage {
   type: 'init';
@@ -52,7 +81,13 @@ interface ErrorMessage {
   error: string;
 }
 
-type WorkerOutMessage = InitResultMessage | ProcessResultMessage | ErrorMessage;
+interface DebugMessage {
+  type: 'debug';
+  level: 'log' | 'info' | 'warn' | 'error';
+  message: string;
+}
+
+type WorkerOutMessage = InitResultMessage | ProcessResultMessage | ErrorMessage | DebugMessage;
 
 // Make TypeScript happy with the worker context
 const ctx: Worker = self as any;
@@ -107,42 +142,75 @@ ctx.addEventListener('message', async (event: MessageEvent<WorkerInMessage>) => 
  */
 async function initializeMediaPipe(config: InitMessage['config']): Promise<void> {
   if (initialized) {
-    console.log('[Worker] MediaPipe already initialized, skipping');
+    workerDebugLog('MediaPipe already initialized, skipping', 'info');
     return;
   }
 
   if (loadingPromise) {
-    console.log('[Worker] MediaPipe initialization in progress, waiting');
+    workerDebugLog('MediaPipe initialization in progress, waiting', 'info');
     try {
       await loadingPromise;
-      console.log('[Worker] Existing initialization completed');
+      workerDebugLog('Existing initialization completed', 'info');
       return;
     } catch (error) {
-      console.error('[Worker] Existing initialization failed, retrying', error);
+      workerDebugLog(`Existing initialization failed, retrying: ${error}`, 'error');
       loadingPromise = null;
     }
   }
   
-  console.log('[Worker] Starting MediaPipe initialization');
+  workerDebugLog('Starting MediaPipe initialization', 'info');
 
   loadingPromise = (async () => {
     try {
       try {
-        // Import MediaPipe libraries
-        const mpHands = await import('@mediapipe/hands');
+        // We'll use importScripts to load MediaPipe directly from CDN
+        // This is more reliable in a worker context than using ES modules
+        workerDebugLog('Loading MediaPipe Hands from CDN', 'info');
         
-        console.log('[Worker] MediaPipe Hands imported successfully');
+        // Load from CDN with a specific version we know works
+        const cdnBase = 'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915';
         
-        // Initialize MediaPipe Hands with CDN - using version we know works
-        hands = new mpHands.Hands({
+        // Dynamic import doesn't work in module worker, so we'll directly create the Hands class
+        // First load the MediaPipe script from CDN
+        workerDebugLog('Fetching MediaPipe script', 'info');
+        const response = await fetch(`${cdnBase}/hands.js`);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch MediaPipe script: ${response.status} ${response.statusText}`);
+        }
+        
+        const scriptText = await response.text();
+        workerDebugLog('MediaPipe script fetched successfully', 'info');
+        
+        // Create a blob URL from the script
+        const blob = new Blob([scriptText], {type: 'application/javascript'});
+        const scriptUrl = URL.createObjectURL(blob);
+        
+        // Load the script using importScripts (supported in Web Workers)
+        workerDebugLog('Loading MediaPipe script using importScripts', 'info');
+        try {
+          // @ts-ignore - importScripts is available in worker scope
+          importScripts(scriptUrl);
+          workerDebugLog('MediaPipe script loaded successfully', 'info');
+        } catch (err) {
+          workerDebugLog(`Error loading script: ${err}`, 'error');
+          throw err;
+        }
+        
+        // Now we can create the Hands instance
+        workerDebugLog('Creating MediaPipe Hands instance', 'info');
+        
+        // @ts-ignore - Hands will be available globally after importScripts
+        hands = new Hands({
           locateFile: (file: string) => {
-            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`;
+            workerDebugLog(`Requesting file from CDN: ${file}`, 'info');
+            return `${cdnBase}/${file}`;
           }
         });
         
-        console.log('[Worker] MediaPipe Hands instance created');
+        workerDebugLog('MediaPipe Hands instance created successfully', 'info');
       } catch (error) {
-        console.error('[Worker] Error importing MediaPipe Hands:', error);
+        workerDebugLog(`Error loading MediaPipe Hands: ${error}`, 'error');
+        console.error('[Worker] Error loading MediaPipe Hands:', error);
         throw error;
       }
       

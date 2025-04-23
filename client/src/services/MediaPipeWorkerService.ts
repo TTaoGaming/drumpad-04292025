@@ -6,8 +6,9 @@
  * for the main thread.
  */
 
-// Import worker as a module
-import MediaPipeWorker from '@/workers/mediapipe-worker.ts?worker';
+// Import worker
+// Use regular worker instead of module worker to avoid issues with importScripts
+const MediaPipeWorkerUrl = new URL('@/workers/mediapipe-worker.ts', import.meta.url).href;
 import { EventType, dispatch } from '@/lib/eventBus';
 
 export interface HandLandmarks {
@@ -87,8 +88,8 @@ class MediaPipeWorkerService {
     this.ctx = this.canvas.getContext('2d');
     
     try {
-      // Create the worker
-      this.worker = new MediaPipeWorker();
+      // Create the worker as a classic worker (non-module)
+      this.worker = new Worker(MediaPipeWorkerUrl, { type: 'classic' });
       
       // Setup message handlers
       this.worker.onmessage = this.handleWorkerMessage.bind(this);
@@ -267,13 +268,26 @@ class MediaPipeWorkerService {
     switch (message.type) {
       case 'init-result':
         // Initialization result is handled by the init method
+        console.log('Got init result:', message.success);
         break;
         
       case 'process-result':
+        console.log('Got process result with landmarks:', 
+          message.results?.multiHandLandmarks?.length || 0);
+          
         if (this.resultCallback) {
           // Call the callback with the results
           this.resultCallback(message.results, message.processingTime);
         }
+        break;
+        
+      case 'debug':
+        // Forward debug messages to console with appropriate level
+        const method = message.level === 'error' ? console.error :
+                      message.level === 'warn' ? console.warn :
+                      message.level === 'info' ? console.info : console.log;
+        
+        method('[Worker Debug]', message.message);
         break;
         
       case 'error':
@@ -283,6 +297,9 @@ class MediaPipeWorkerService {
           type: 'error'
         });
         break;
+        
+      default:
+        console.log('Unknown message from worker:', message);
     }
   }
   
