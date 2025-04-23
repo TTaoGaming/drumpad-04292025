@@ -42,29 +42,29 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
     pinky: { state: 'straight', stableCount: 0, stable: false }
   });
 
-  // Settings (simplified for this example)
-  const landmarksSettings = {
+  // Settings with state hooks for reactivity
+  const [landmarksSettings, setLandmarksSettings] = useState({
     showLandmarks: true,
     showConnections: true,
     colorScheme: 'rainbow',
     landmarkSize: 4,
     connectionWidth: 2
-  };
+  });
   
-  const knuckleRulerSettings = {
+  const [knuckleRulerSettings, setKnuckleRulerSettings] = useState({
     enabled: false,
     showMeasurement: false,
     knuckleDistanceCm: 8.0
-  };
+  });
   
-  const performanceSettings = {
+  const [performanceSettings, setPerformanceSettings] = useState({
     landmarkFiltering: { enabled: true },
     roiOptimization: { enabled: false },
     throttling: { enabled: true },
     frameProcessing: { processEveryNth: 1 }
-  };
+  });
   
-  const fingerFlexionSettings = {
+  const [fingerFlexionSettings, setFingerFlexionSettings] = useState({
     enabled: false,
     showStateIndicators: false,
     enabledFingers: { thumb: true, index: true, middle: true, ring: true, pinky: true },
@@ -75,13 +75,51 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
       ring: { flex: { min: 20, max: 45 } },
       pinky: { flex: { min: 20, max: 45 } }
     }
-  };
+  });
   
-  const filterOptions = {
+  const [filterOptions, setFilterOptions] = useState({
     minCutoff: 0.001,
     beta: 0.1,
     dcutoff: 1.0
-  };
+  });
+
+  // Listen for settings changes from settings panel
+  useEffect(() => {
+    // Add listeners for various settings changes
+    const settingsListener = addListener(EventType.SETTINGS_VALUE_CHANGE, (data) => {
+      console.log("Settings changed:", data);
+      
+      // Handle changes to landmark visualization
+      if (data.section === 'landmarks') {
+        setLandmarksSettings(prev => ({ ...prev, ...data.value }));
+      }
+      
+      // Handle changes to knuckle ruler settings
+      if (data.section === 'ruler') {
+        setKnuckleRulerSettings(prev => ({ ...prev, ...data.value }));
+      }
+      
+      // Handle performance setting changes
+      if (data.section === 'performance') {
+        setPerformanceSettings(prev => ({ ...prev, ...data.value }));
+      }
+      
+      // Handle filter setting changes
+      if (data.section === 'filters' && data.setting === 'oneEuro') {
+        setFilterOptions(prev => ({ ...prev, ...data.value }));
+      }
+      
+      // Handle finger flexion settings
+      if (data.section === 'gestures' && data.setting === 'fingerFlexion') {
+        setFingerFlexionSettings(prev => ({ ...prev, ...data.value }));
+      }
+    });
+    
+    // Return cleanup function
+    return () => {
+      settingsListener.remove();
+    };
+  }, []);
 
   useEffect(() => {
     // Initialize canvas
