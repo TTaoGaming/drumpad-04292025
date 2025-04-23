@@ -226,13 +226,13 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
       interval: 200, // ms
     },
     frameProcessing: {
-      processEveryNth: 3, // Process every 3rd frame
+      processEveryNth: 1, // Process every frame
     },
     landmarkFiltering: {
       enabled: true,
     },
     roiOptimization: {
-      enabled: true,
+      enabled: false,
       minROISize: DEFAULT_OPTIMIZATION_SETTINGS.minROISize,
       maxROISize: DEFAULT_OPTIMIZATION_SETTINGS.maxROISize,
       velocityMultiplier: DEFAULT_OPTIMIZATION_SETTINGS.velocityMultiplier,
