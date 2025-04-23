@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { EventType, dispatch, addListener } from '@/lib/eventBus';
 import { HandData, HandLandmark, HandConnection } from '@/lib/types';
 import { OneEuroFilterArray, DEFAULT_FILTER_OPTIONS } from '@/lib/oneEuroFilter';
+import { HandTrackingOptimizer, OptimizationSettings, DEFAULT_OPTIMIZATION_SETTINGS } from '@/lib/handTrackingOptimizer';
 import { debounce, throttle } from '@/lib/utils';
 
 interface MediaPipeHandTrackerProps {
@@ -229,8 +230,21 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
     },
     landmarkFiltering: {
       enabled: true,
+    },
+    roiOptimization: {
+      enabled: true,
+      minROISize: DEFAULT_OPTIMIZATION_SETTINGS.minROISize,
+      maxROISize: DEFAULT_OPTIMIZATION_SETTINGS.maxROISize,
+      velocityMultiplier: DEFAULT_OPTIMIZATION_SETTINGS.velocityMultiplier,
+      movementThreshold: DEFAULT_OPTIMIZATION_SETTINGS.movementThreshold,
+      maxTimeBetweenFullFrames: DEFAULT_OPTIMIZATION_SETTINGS.maxTimeBetweenFullFrames,
     }
   });
+  
+  // Create hand tracking optimizer ref
+  const handOptimizerRef = useRef<HandTrackingOptimizer>(
+    new HandTrackingOptimizer(performanceSettings.roiOptimization)
+  );
   
   // Create throttled dispatch function for UI updates
   const throttledDispatch = useCallback((type: EventType, data: any) => {
@@ -279,6 +293,49 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
   // Frame counter for frame skipping
   const frameCountRef = useRef(0);
   
+  // Debug setting to show/hide the ROI visualization
+  const [showROI, setShowROI] = useState(true);
+  
+  /**
+   * Draw the Region of Interest (ROI) for debugging
+   * @param ctx Canvas context 
+   * @param roi ROI object with normalized coordinates
+   * @param width Canvas width
+   * @param height Canvas height
+   */
+  const drawROI = useCallback((
+    ctx: CanvasRenderingContext2D, 
+    roi: {x: number, y: number, width: number, height: number},
+    width: number,
+    height: number
+  ) => {
+    if (!showROI) return;
+    
+    // Convert normalized coordinates to canvas pixels
+    const x = roi.x * width;
+    const y = roi.y * height;
+    const w = roi.width * width;
+    const h = roi.height * height;
+    
+    // Draw the ROI with a semi-transparent fill and dashed border
+    ctx.fillStyle = 'rgba(0, 255, 255, 0.1)'; // Cyan with low opacity
+    ctx.fillRect(x, y, w, h);
+    
+    ctx.strokeStyle = 'rgba(0, 255, 255, 0.7)'; // Cyan with higher opacity
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]); // Dashed border
+    ctx.strokeRect(x, y, w, h);
+    ctx.setLineDash([]); // Reset to solid line
+    
+    // Show ROI info
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; // Dark background
+    ctx.fillRect(x, y - 20, 140, 20); // Background for text
+    
+    ctx.fillStyle = 'rgba(0, 255, 255, 1)'; // Cyan text
+    ctx.font = '12px sans-serif';
+    ctx.fillText(`ROI: ${w.toFixed(0)}×${h.toFixed(0)}px`, x + 5, y - 7);
+  }, [showROI]);
+  
   // State memory for hysteresis to prevent flickering
   const fingerStateMemoryRef = useRef<{
     [finger: string]: {
@@ -316,6 +373,13 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
               ...prev,
               landmarkFiltering: data.value
             }));
+          } else if (data.setting === 'roiOptimization') {
+            setPerformanceSettings(prev => ({
+              ...prev,
+              roiOptimization: data.value
+            }));
+            // Update the optimizer with new settings
+            handOptimizerRef.current.updateSettings(data.value);
           }
         }
       }
