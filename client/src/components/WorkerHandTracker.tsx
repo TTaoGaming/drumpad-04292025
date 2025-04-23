@@ -2,8 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { EventType, dispatch, addListener } from '@/lib/eventBus';
 import { HandData } from '@/lib/types';
 import mediaPipeWorkerService from '@/services/MediaPipeWorkerService';
-import { DEFAULT_FILTER_OPTIONS } from '@/lib/oneEuroFilter';
-import { OneEuroFilterArray } from '@/lib/oneEuroFilter';
+import { DEFAULT_FILTER_OPTIONS, OneEuroFilterArray } from '@/lib/oneEuroFilter';
 
 interface WorkerHandTrackerProps {
   videoRef: React.RefObject<HTMLVideoElement>;
