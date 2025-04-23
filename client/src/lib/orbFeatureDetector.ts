@@ -131,21 +131,223 @@ export class ORBFeatureDetector {
    * Update feature detection for all ROIs using the current frame
    * @param imageData The current frame
    */
+  // Track ROI movement between frames using feature matching
+  private previousFrame: ImageData | null = null;
+  private initialROIFeatures: Map<string, Feature[]> = new Map();
+  
+  /**
+   * Process each frame to update feature detection and tracking
+   * @param imageData Current frame image data
+   */
   public processFrame(imageData: ImageData): void {
-    // In a real implementation, we would pass the frame to OpenCV
-    // for feature detection within each ROI
+    try {
+      // Process each active ROI
+      this.activeROIs.forEach(roi => {
+        // For new ROIs (first detection)
+        if (!this.initialROIFeatures.has(roi.id)) {
+          // Detect features using OpenCV's ORB
+          this.detectORBFeatures(roi, imageData);
+          
+          // Store initial features for tracking
+          this.initialROIFeatures.set(roi.id, [...roi.features]);
+          
+          // Update baseline for occlusion detection
+          this.updateBaselineFeatures(roi);
+        } 
+        // For existing ROIs, track and update position
+        else {
+          // Track ROI position based on feature matching
+          this.trackROI(roi, imageData);
+          
+          // Update baseline counts
+          this.updateBaselineFeatures(roi);
+        }
+      });
+      
+      // Store current frame for next iteration
+      this.previousFrame = imageData;
+      
+    } catch (error) {
+      console.error('Error in frame processing:', error);
+      
+      // Fallback if ORB detection fails
+      this.activeROIs.forEach(roi => {
+        roi.features = [];
+        this.generatePlaceholderFeatures(roi, imageData.width, imageData.height);
+        this.updateBaselineFeatures(roi);
+      });
+    }
+  }
+  
+  /**
+   * Track an existing ROI across frames using feature matching
+   * @param roi The ROI to track
+   * @param currentFrame Current frame image data
+   */
+  private trackROI(roi: ROIWithFeatures, currentFrame: ImageData): void {
+    // If we don't have a previous frame, just detect features
+    if (!this.previousFrame) {
+      this.detectORBFeatures(roi, currentFrame);
+      return;
+    }
     
-    // For now, add some random features within each ROI as a placeholder
-    this.activeROIs.forEach(roi => {
-      // Clear previous features to simulate frame-by-frame detection
-      roi.features = [];
+    try {
+      // Get original features for this ROI
+      const originalFeatures = this.initialROIFeatures.get(roi.id) || [];
+      if (originalFeatures.length === 0) {
+        this.detectORBFeatures(roi, currentFrame);
+        return;
+      }
       
-      // Generate new features for this frame
-      this.generatePlaceholderFeatures(roi, imageData.width, imageData.height);
+      // 1. Detect new features in current frame
+      const currentRoi = { ...roi, features: [] };
+      this.detectORBFeatures(currentRoi, currentFrame);
       
-      // Update baseline feature counts for occlusion detection
-      this.updateBaselineFeatures(roi);
+      // If no features detected in current frame, keep the previous ROI
+      if (currentRoi.features.length === 0) {
+        return;
+      }
+      
+      // 2. Match features between original and current to find transformation
+      const matchedPairs = this.matchFeatures(originalFeatures, currentRoi.features);
+      
+      // Need at least 3 pairs to calculate transformation
+      if (matchedPairs.length >= 3) {
+        // 3. Calculate transformation (translation, rotation, scale)
+        const transform = this.estimateTransform(matchedPairs);
+        
+        // 4. Apply transformation to update ROI position
+        this.updateROIPosition(roi, transform);
+        
+        // 5. Update features
+        roi.features = currentRoi.features;
+      }
+      
+    } catch (error) {
+      console.error('Error tracking ROI:', error);
+    }
+  }
+  
+  /**
+   * Match features between two feature sets using descriptor distance
+   * @param featuresA First set of features
+   * @param featuresB Second set of features
+   * @returns Array of matched feature pairs [featureA, featureB]
+   */
+  private matchFeatures(featuresA: Feature[], featuresB: Feature[]): Array<[Feature, Feature]> {
+    const matches: Array<[Feature, Feature]> = [];
+    
+    // Brute force matching
+    featuresA.forEach(featureA => {
+      let bestMatch: Feature | null = null;
+      let minDistance = Number.MAX_VALUE;
+      
+      featuresB.forEach(featureB => {
+        // Calculate Hamming distance between binary descriptors
+        const distance = this.hammingDistance(featureA.descriptor, featureB.descriptor);
+        
+        if (distance < minDistance) {
+          minDistance = distance;
+          bestMatch = featureB;
+        }
+      });
+      
+      // Add match if distance is below threshold
+      if (bestMatch && minDistance < 80) {
+        matches.push([featureA, bestMatch]);
+      }
     });
+    
+    return matches;
+  }
+  
+  /**
+   * Calculate Hamming distance between binary descriptors
+   * @param a First binary descriptor
+   * @param b Second binary descriptor
+   * @returns Hamming distance (number of different bits)
+   */
+  private hammingDistance(a: Uint8Array, b: Uint8Array): number {
+    let distance = 0;
+    const len = Math.min(a.length, b.length);
+    
+    for (let i = 0; i < len; i++) {
+      const xor = a[i] ^ b[i];
+      
+      // Count set bits in XOR result
+      let setBits = 0;
+      for (let j = 0; j < 8; j++) {
+        if ((xor >> j) & 1) {
+          setBits++;
+        }
+      }
+      
+      distance += setBits;
+    }
+    
+    return distance;
+  }
+  
+  /**
+   * Estimate transformation between matched feature pairs
+   * @param matches Array of matched feature pairs
+   * @returns Transformation object with translation, rotation, scale
+   */
+  private estimateTransform(matches: Array<[Feature, Feature]>): {
+    dx: number;
+    dy: number;
+    angle: number;
+    scale: number;
+  } {
+    // Calculate centroids of point sets
+    let sumX1 = 0, sumY1 = 0, sumX2 = 0, sumY2 = 0;
+    
+    matches.forEach(([f1, f2]) => {
+      sumX1 += f1.x;
+      sumY1 += f1.y;
+      sumX2 += f2.x;
+      sumY2 += f2.y;
+    });
+    
+    const n = matches.length;
+    const centroidX1 = sumX1 / n;
+    const centroidY1 = sumY1 / n;
+    const centroidX2 = sumX2 / n;
+    const centroidY2 = sumY2 / n;
+    
+    // Calculate translation
+    const dx = centroidX2 - centroidX1;
+    const dy = centroidY2 - centroidY1;
+    
+    // For simplicity, assume no rotation/scale in this implementation
+    // In a full implementation, we'd use a more robust method like RANSAC
+    
+    return {
+      dx,
+      dy,
+      angle: 0,
+      scale: 1
+    };
+  }
+  
+  /**
+   * Update ROI position based on transformation
+   * @param roi ROI to update
+   * @param transform Transformation to apply
+   */
+  private updateROIPosition(roi: ROIWithFeatures, transform: {
+    dx: number;
+    dy: number;
+    angle: number;
+    scale: number;
+  }): void {
+    // Apply translation to all points in the ROI
+    roi.points = roi.points.map(point => ({
+      x: point.x + transform.dx,
+      y: point.y + transform.dy
+    }));
+    
+    // In a more complete implementation, we would also handle rotation and scaling
   }
   
   /**
@@ -186,7 +388,104 @@ export class ORBFeatureDetector {
   }
   
   /**
-   * Generate placeholder features for demonstration
+   * Detect ORB features within a Region of Interest using OpenCV
+   * @param roi The ROI to detect features in
+   * @param imageData The image data from the current frame
+   */
+  private detectORBFeatures(roi: ROIWithFeatures, imageData: ImageData): void {
+    try {
+      // Check if OpenCV is available in the global scope
+      if (typeof cv === 'undefined') {
+        throw new Error('OpenCV is not loaded or available');
+      }
+      
+      // Create OpenCV mat from imageData
+      const width = imageData.width;
+      const height = imageData.height;
+      const src = cv.matFromImageData(imageData);
+      
+      // Convert to grayscale for feature detection
+      const gray = new cv.Mat();
+      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+      
+      // Create mask for the ROI
+      const mask = cv.Mat.zeros(height, width, cv.CV_8UC1);
+      
+      // Convert ROI points to contour format
+      const contourPoints = roi.points.map(pt => new cv.Point(pt.x, pt.y));
+      const contour = new cv.MatVector();
+      const contourMat = cv.Mat.zeros(contourPoints.length, 1, cv.CV_32SC2);
+      
+      // Fill contourMat with points
+      for (let i = 0; i < contourPoints.length; i++) {
+        contourMat.data32S[i * 2] = contourPoints[i].x;
+        contourMat.data32S[i * 2 + 1] = contourPoints[i].y;
+      }
+      
+      contour.push_back(contourMat);
+      
+      // Fill the ROI in the mask
+      cv.drawContours(mask, contour, 0, new cv.Scalar(255), cv.FILLED);
+      
+      // Create ORB detector
+      const orb = new cv.ORB(500, 1.2, 8, 31, 0, 2, cv.ORB_HARRIS_SCORE, 31, 20);
+      
+      // Detect keypoints with the mask
+      const keypoints = new cv.KeyPointVector();
+      const descriptors = new cv.Mat();
+      orb.detectAndCompute(gray, mask, keypoints, descriptors);
+      
+      // Clear previous features
+      roi.features = [];
+      
+      // Convert detected keypoints to our Feature format
+      for (let i = 0; i < keypoints.size(); i++) {
+        const kp = keypoints.get(i);
+        
+        // Extract descriptor for this keypoint
+        const descriptor = new Uint8Array(32);
+        if (descriptors.rows > 0) {
+          for (let j = 0; j < 32; j++) {
+            descriptor[j] = descriptors.data[i * 32 + j];
+          }
+        }
+        
+        // Create our feature object
+        roi.features.push({
+          x: kp.pt.x,
+          y: kp.pt.y,
+          size: kp.size,
+          angle: kp.angle,
+          response: kp.response,
+          octave: kp.octave,
+          descriptor,
+          id: this.nextFeatureId++
+        });
+      }
+      
+      // Clean up OpenCV objects
+      src.delete();
+      gray.delete();
+      mask.delete();
+      contour.delete();
+      contourMat.delete();
+      orb.delete();
+      keypoints.delete();
+      descriptors.delete();
+      
+      console.log(`Detected ${roi.features.length} real ORB features in ROI ${roi.id}`);
+      
+    } catch (error) {
+      console.error('Error detecting ORB features:', error);
+      console.log('Using fallback feature detection');
+      
+      // Fallback to placeholder features if OpenCV fails
+      this.generatePlaceholderFeatures(roi, imageData.width, imageData.height);
+    }
+  }
+  
+  /**
+   * Generate placeholder features for demonstration or fallback
    * @param roi The ROI to generate features for
    * @param width Image width
    * @param height Image height
