@@ -32,6 +32,7 @@ export class ORBFeatureDetector {
   private static instance: ORBFeatureDetector;
   private nextFeatureId: number = 0;
   private activeROIs: ROIWithFeatures[] = [];
+  private isOpenCVLoaded: boolean = false;
   
   // Keep track of baseline feature counts for occlusion detection
   private baselineFeatureCounts: Map<string, number> = new Map();
@@ -40,7 +41,22 @@ export class ORBFeatureDetector {
   private maxBaselineSamples: number = 10;
   
   // Private constructor for singleton
-  private constructor() {}
+  private constructor() {
+    // Listen for OpenCV ready event
+    if (typeof window !== 'undefined') {
+      // Check if OpenCV is already available
+      if (typeof (window as any).cv !== 'undefined') {
+        this.isOpenCVLoaded = true;
+        console.log('OpenCV is already loaded');
+      } else {
+        // Wait for OpenCV to load
+        window.addEventListener('opencv-ready', () => {
+          this.isOpenCVLoaded = true;
+          console.log('OpenCV is now loaded and ready for use');
+        });
+      }
+    }
+  }
   
   // Get singleton instance
   public static getInstance(): ORBFeatureDetector {
@@ -140,43 +156,37 @@ export class ORBFeatureDetector {
    * @param imageData Current frame image data
    */
   public processFrame(imageData: ImageData): void {
-    try {
-      // Process each active ROI
-      this.activeROIs.forEach(roi => {
-        // For new ROIs (first detection)
-        if (!this.initialROIFeatures.has(roi.id)) {
-          // Detect features using OpenCV's ORB
-          this.detectORBFeatures(roi, imageData);
-          
-          // Store initial features for tracking
-          this.initialROIFeatures.set(roi.id, [...roi.features]);
-          
-          // Update baseline for occlusion detection
-          this.updateBaselineFeatures(roi);
-        } 
-        // For existing ROIs, track and update position
-        else {
-          // Track ROI position based on feature matching
-          this.trackROI(roi, imageData);
-          
-          // Update baseline counts
-          this.updateBaselineFeatures(roi);
-        }
-      });
-      
-      // Store current frame for next iteration
-      this.previousFrame = imageData;
-      
-    } catch (error) {
-      console.error('Error in frame processing:', error);
-      
-      // Fallback if ORB detection fails
-      this.activeROIs.forEach(roi => {
-        roi.features = [];
-        this.generatePlaceholderFeatures(roi, imageData.width, imageData.height);
-        this.updateBaselineFeatures(roi);
-      });
+    // Check if OpenCV is loaded
+    if (!this.isOpenCVLoaded || typeof (window as any).cv === 'undefined') {
+      console.warn('OpenCV not loaded yet, skipping feature detection');
+      return;
     }
+    
+    // Process each active ROI
+    this.activeROIs.forEach(roi => {
+      // For new ROIs (first detection)
+      if (!this.initialROIFeatures.has(roi.id)) {
+        // Detect features using OpenCV's ORB
+        this.detectORBFeatures(roi, imageData);
+        
+        // Store initial features for tracking
+        this.initialROIFeatures.set(roi.id, [...roi.features]);
+        
+        // Update baseline for occlusion detection
+        this.updateBaselineFeatures(roi);
+      } 
+      // For existing ROIs, track and update position
+      else {
+        // Track ROI position based on feature matching
+        this.trackROI(roi, imageData);
+        
+        // Update baseline counts
+        this.updateBaselineFeatures(roi);
+      }
+    });
+    
+    // Store current frame for next iteration
+    this.previousFrame = imageData;
   }
   
   /**
@@ -191,40 +201,38 @@ export class ORBFeatureDetector {
       return;
     }
     
-    try {
-      // Get original features for this ROI
-      const originalFeatures = this.initialROIFeatures.get(roi.id) || [];
-      if (originalFeatures.length === 0) {
-        this.detectORBFeatures(roi, currentFrame);
-        return;
-      }
+    // Get original features for this ROI
+    const originalFeatures = this.initialROIFeatures.get(roi.id) || [];
+    if (originalFeatures.length === 0) {
+      this.detectORBFeatures(roi, currentFrame);
+      return;
+    }
+    
+    // 1. Detect new features in current frame
+    const currentRoi = { ...roi, features: [] };
+    this.detectORBFeatures(currentRoi, currentFrame);
+    
+    // If no features detected in current frame, keep the previous ROI
+    if (currentRoi.features.length === 0) {
+      return;
+    }
+    
+    // 2. Match features between original and current to find transformation
+    const matchedPairs = this.matchFeatures(originalFeatures, currentRoi.features);
+    console.log(`Matched ${matchedPairs.length} feature pairs for ROI ${roi.id}`);
+    
+    // Need at least 3 pairs to calculate transformation
+    if (matchedPairs.length >= 3) {
+      // 3. Calculate transformation (translation, rotation, scale)
+      const transform = this.estimateTransform(matchedPairs);
       
-      // 1. Detect new features in current frame
-      const currentRoi = { ...roi, features: [] };
-      this.detectORBFeatures(currentRoi, currentFrame);
+      // 4. Apply transformation to update ROI position
+      this.updateROIPosition(roi, transform);
       
-      // If no features detected in current frame, keep the previous ROI
-      if (currentRoi.features.length === 0) {
-        return;
-      }
+      // 5. Update features
+      roi.features = currentRoi.features;
       
-      // 2. Match features between original and current to find transformation
-      const matchedPairs = this.matchFeatures(originalFeatures, currentRoi.features);
-      
-      // Need at least 3 pairs to calculate transformation
-      if (matchedPairs.length >= 3) {
-        // 3. Calculate transformation (translation, rotation, scale)
-        const transform = this.estimateTransform(matchedPairs);
-        
-        // 4. Apply transformation to update ROI position
-        this.updateROIPosition(roi, transform);
-        
-        // 5. Update features
-        roi.features = currentRoi.features;
-      }
-      
-    } catch (error) {
-      console.error('Error tracking ROI:', error);
+      console.log(`Updated ROI position with translation (${transform.dx.toFixed(1)}, ${transform.dy.toFixed(1)})`);
     }
   }
   
@@ -393,95 +401,81 @@ export class ORBFeatureDetector {
    * @param imageData The image data from the current frame
    */
   private detectORBFeatures(roi: ROIWithFeatures, imageData: ImageData): void {
-    try {
-      // Check if OpenCV is available in the global scope
-      if (typeof cv === 'undefined') {
-        throw new Error('OpenCV is not loaded or available');
-      }
-      
-      // Create OpenCV mat from imageData
-      const width = imageData.width;
-      const height = imageData.height;
-      const src = cv.matFromImageData(imageData);
-      
-      // Convert to grayscale for feature detection
-      const gray = new cv.Mat();
-      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-      
-      // Create mask for the ROI
-      const mask = cv.Mat.zeros(height, width, cv.CV_8UC1);
-      
-      // Convert ROI points to contour format
-      const contourPoints = roi.points.map(pt => new cv.Point(pt.x, pt.y));
-      const contour = new cv.MatVector();
-      const contourMat = cv.Mat.zeros(contourPoints.length, 1, cv.CV_32SC2);
-      
-      // Fill contourMat with points
-      for (let i = 0; i < contourPoints.length; i++) {
-        contourMat.data32S[i * 2] = contourPoints[i].x;
-        contourMat.data32S[i * 2 + 1] = contourPoints[i].y;
-      }
-      
-      contour.push_back(contourMat);
-      
-      // Fill the ROI in the mask
-      cv.drawContours(mask, contour, 0, new cv.Scalar(255), cv.FILLED);
-      
-      // Create ORB detector
-      const orb = new cv.ORB(500, 1.2, 8, 31, 0, 2, cv.ORB_HARRIS_SCORE, 31, 20);
-      
-      // Detect keypoints with the mask
-      const keypoints = new cv.KeyPointVector();
-      const descriptors = new cv.Mat();
-      orb.detectAndCompute(gray, mask, keypoints, descriptors);
-      
-      // Clear previous features
-      roi.features = [];
-      
-      // Convert detected keypoints to our Feature format
-      for (let i = 0; i < keypoints.size(); i++) {
-        const kp = keypoints.get(i);
-        
-        // Extract descriptor for this keypoint
-        const descriptor = new Uint8Array(32);
-        if (descriptors.rows > 0) {
-          for (let j = 0; j < 32; j++) {
-            descriptor[j] = descriptors.data[i * 32 + j];
-          }
-        }
-        
-        // Create our feature object
-        roi.features.push({
-          x: kp.pt.x,
-          y: kp.pt.y,
-          size: kp.size,
-          angle: kp.angle,
-          response: kp.response,
-          octave: kp.octave,
-          descriptor,
-          id: this.nextFeatureId++
-        });
-      }
-      
-      // Clean up OpenCV objects
-      src.delete();
-      gray.delete();
-      mask.delete();
-      contour.delete();
-      contourMat.delete();
-      orb.delete();
-      keypoints.delete();
-      descriptors.delete();
-      
-      console.log(`Detected ${roi.features.length} real ORB features in ROI ${roi.id}`);
-      
-    } catch (error) {
-      console.error('Error detecting ORB features:', error);
-      console.log('Using fallback feature detection');
-      
-      // Fallback to placeholder features if OpenCV fails
-      this.generatePlaceholderFeatures(roi, imageData.width, imageData.height);
+    // Create OpenCV mat from imageData
+    const width = imageData.width;
+    const height = imageData.height;
+    const src = cv.matFromImageData(imageData);
+    
+    // Convert to grayscale for feature detection
+    const gray = new cv.Mat();
+    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+    
+    // Create mask for the ROI
+    const mask = cv.Mat.zeros(height, width, cv.CV_8UC1);
+    
+    // Convert ROI points to contour format
+    const contourPoints = roi.points.map(pt => new cv.Point(pt.x, pt.y));
+    const contour = new cv.MatVector();
+    const contourMat = cv.Mat.zeros(contourPoints.length, 1, cv.CV_32SC2);
+    
+    // Fill contourMat with points
+    for (let i = 0; i < contourPoints.length; i++) {
+      contourMat.data32S[i * 2] = contourPoints[i].x;
+      contourMat.data32S[i * 2 + 1] = contourPoints[i].y;
     }
+    
+    contour.push_back(contourMat);
+    
+    // Fill the ROI in the mask
+    cv.drawContours(mask, contour, 0, new cv.Scalar(255), cv.FILLED);
+    
+    // Create ORB detector - increase nfeatures to get more points
+    const orb = new cv.ORB(750, 1.2, 8, 31, 0, 2, cv.ORB_HARRIS_SCORE, 31, 20);
+    
+    // Detect keypoints with the mask
+    const keypoints = new cv.KeyPointVector();
+    const descriptors = new cv.Mat();
+    orb.detectAndCompute(gray, mask, keypoints, descriptors);
+    
+    // Clear previous features
+    roi.features = [];
+    
+    // Convert detected keypoints to our Feature format
+    for (let i = 0; i < keypoints.size(); i++) {
+      const kp = keypoints.get(i);
+      
+      // Extract descriptor for this keypoint
+      const descriptor = new Uint8Array(32);
+      if (descriptors.rows > 0) {
+        for (let j = 0; j < 32; j++) {
+          descriptor[j] = descriptors.data[i * 32 + j];
+        }
+      }
+      
+      // Create our feature object
+      roi.features.push({
+        x: kp.pt.x,
+        y: kp.pt.y,
+        size: kp.size,
+        angle: kp.angle,
+        response: kp.response,
+        octave: kp.octave,
+        descriptor,
+        id: this.nextFeatureId++
+      });
+    }
+    
+    // Clean up OpenCV objects
+    src.delete();
+    gray.delete();
+    mask.delete();
+    contour.delete();
+    contourMat.delete();
+    orb.delete();
+    keypoints.delete();
+    descriptors.delete();
+    
+    console.log(`Detected ${roi.features.length} ORB features in ROI ${roi.id}`);
   }
   
   /**

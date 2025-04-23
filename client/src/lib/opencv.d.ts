@@ -69,3 +69,8 @@ declare namespace cv {
 
 // Declare global cv object
 declare const cv: typeof cv;
+
+// Declare OpenCV ready callback
+interface Window {
+  onOpenCVReady: () => void;
+}
