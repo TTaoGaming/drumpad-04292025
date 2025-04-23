@@ -17,6 +17,7 @@ export interface Feature {
   octave: number;
   descriptor: Uint8Array; // Binary descriptor (32 bytes for ORB)
   id: number; // Unique identifier
+  isExactROI?: boolean; // Whether the feature is within the exact ROI or in the search area
 }
 
 // Region of Interest with detected features
@@ -226,38 +227,45 @@ export class ORBFeatureDetector {
       return;
     }
     
-    // Get original features for this ROI
-    const originalFeatures = this.initialROIFeatures.get(roi.id) || [];
-    if (originalFeatures.length === 0) {
+    // Get original features for this ROI (use previous frame's features for continuous tracking)
+    const previousFeatures = [...roi.features]; // Use current features as the "previous" set
+    if (previousFeatures.length === 0) {
+      console.log("No previous features to track with, detecting new features");
       this.detectORBFeatures(roi, currentFrame);
       return;
     }
     
-    // 1. Detect new features in current frame
+    // 1. Create a temporary ROI to hold new features in the current frame
+    // Start from current position (not original position) to improve tracking
     const currentRoi = { ...roi, features: [] };
+    
+    // 2. Detect new features at current position
     this.detectORBFeatures(currentRoi, currentFrame);
     
     // If no features detected in current frame, keep the previous ROI
     if (currentRoi.features.length === 0) {
+      console.log("No features detected in current frame");
       return;
     }
     
-    // 2. Match features between original and current to find transformation
-    const matchedPairs = this.matchFeatures(originalFeatures, currentRoi.features);
+    // 3. Match features between previous frame and current frame
+    const matchedPairs = this.matchFeatures(previousFeatures, currentRoi.features);
     console.log(`Matched ${matchedPairs.length} feature pairs for ROI ${roi.id}`);
     
     // Need at least 3 pairs to calculate transformation
     if (matchedPairs.length >= 3) {
-      // 3. Calculate transformation (translation, rotation, scale)
+      // 4. Calculate transformation (translation, rotation, scale)
       const transform = this.estimateTransform(matchedPairs);
       
-      // 4. Apply transformation to update ROI position
+      // 5. Apply transformation to update ROI position
       this.updateROIPosition(roi, transform);
       
-      // 5. Update features
+      // 6. Update features for next tracking iteration
       roi.features = currentRoi.features;
       
       console.log(`Updated ROI position with translation (${transform.dx.toFixed(1)}, ${transform.dy.toFixed(1)})`);
+    } else {
+      console.log(`Not enough matching features (${matchedPairs.length}) to update position`);
     }
   }
   
@@ -270,27 +278,60 @@ export class ORBFeatureDetector {
   private matchFeatures(featuresA: Feature[], featuresB: Feature[]): Array<[Feature, Feature]> {
     const matches: Array<[Feature, Feature]> = [];
     
-    // Brute force matching
-    featuresA.forEach(featureA => {
-      let bestMatch: Feature | null = null;
-      let minDistance = Number.MAX_VALUE;
-      
-      featuresB.forEach(featureB => {
+    // Early exit for empty feature sets
+    if (featuresA.length === 0 || featuresB.length === 0) {
+      console.log("Empty feature set, cannot match");
+      return matches;
+    }
+    
+    console.log(`Matching ${featuresA.length} previous features with ${featuresB.length} current features`);
+    
+    // Calculate all distances between each pair
+    const distances: Array<{distA: number, idxA: number, idxB: number}> = [];
+    
+    // Brute force matching - calculate all distances
+    featuresA.forEach((featureA, idxA) => {
+      featuresB.forEach((featureB, idxB) => {
         // Calculate Hamming distance between binary descriptors
-        const distance = this.hammingDistance(featureA.descriptor, featureB.descriptor);
+        const dist = this.hammingDistance(featureA.descriptor, featureB.descriptor);
         
-        if (distance < minDistance) {
-          minDistance = distance;
-          bestMatch = featureB;
-        }
+        // Also consider spatial proximity (weighted less than descriptor)
+        const spatialDist = Math.sqrt(
+          Math.pow(featureA.x - featureB.x, 2) + 
+          Math.pow(featureA.y - featureB.y, 2)
+        ) * 0.1; // Weight spatial distance less
+        
+        // Combined distance (descriptor similarity + spatial proximity)
+        const combinedDist = dist + spatialDist;
+        
+        distances.push({
+          distA: combinedDist,
+          idxA,
+          idxB
+        });
       });
-      
-      // Add match if distance is below threshold
-      if (bestMatch && minDistance < 80) {
-        matches.push([featureA, bestMatch]);
-      }
     });
     
+    // Sort by distance (ascending)
+    distances.sort((a, b) => a.distA - b.distA);
+    
+    // Track which features have been matched
+    const usedA = new Set<number>();
+    const usedB = new Set<number>();
+    
+    // Take best matches first, ensuring we don't use a feature twice
+    for (const match of distances) {
+      if (usedA.has(match.idxA) || usedB.has(match.idxB)) continue;
+      
+      // Only add if distance is good enough (lower threshold for better matches)
+      if (match.distA < 100) {
+        matches.push([featuresA[match.idxA], featuresB[match.idxB]]);
+        usedA.add(match.idxA);
+        usedB.add(match.idxB);
+      }
+    }
+    
+    console.log(`Found ${matches.length} good matches between feature sets`);
     return matches;
   }
   
@@ -436,9 +477,6 @@ export class ORBFeatureDetector {
     const cv = (window as any).cv;
     
     try {
-      // Log attempt to create mat
-      console.log(`Attempting to create OpenCV mat from imageData: ${imageData.width}x${imageData.height}`);
-      
       // Create OpenCV mat from imageData
       const width = imageData.width;
       const height = imageData.height;
@@ -452,8 +490,48 @@ export class ORBFeatureDetector {
       const gray = new cv.Mat();
       cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
       
-      // Create mask for the ROI
-      const mask = cv.Mat.zeros(height, width, cv.CV_8UC1);
+      // For tracking, we want to search for features in a slightly larger area
+      // than the ROI to handle marker movement between frames
+      
+      // Calculate the bounding box of the ROI
+      let minX = Number.MAX_VALUE;
+      let minY = Number.MAX_VALUE;
+      let maxX = Number.MIN_VALUE;
+      let maxY = Number.MIN_VALUE;
+      
+      roi.points.forEach(point => {
+        minX = Math.min(minX, point.x);
+        minY = Math.min(minY, point.y);
+        maxX = Math.max(maxX, point.x);
+        maxY = Math.max(maxY, point.y);
+      });
+      
+      // Add margin to search area (larger margin for tracking)
+      const marginX = (maxX - minX) * 0.3; // 30% margin for tracking
+      const marginY = (maxY - minY) * 0.3;
+      
+      // Ensure margins are within image bounds
+      const expandedMinX = Math.max(0, minX - marginX);
+      const expandedMinY = Math.max(0, minY - marginY);
+      const expandedMaxX = Math.min(width, maxX + marginX);
+      const expandedMaxY = Math.min(height, maxY + marginY);
+      
+      // Create search area mask (expanded from ROI for robust tracking)
+      const searchMask = cv.Mat.zeros(height, width, cv.CV_8UC1);
+      
+      // Create a rectangle for the search area
+      const searchRect = new cv.Rect(
+        expandedMinX, 
+        expandedMinY, 
+        expandedMaxX - expandedMinX, 
+        expandedMaxY - expandedMinY
+      );
+      
+      // Fill search area in the mask
+      searchMask.roi(searchRect).setTo(new cv.Scalar(255));
+      
+      // Create exact ROI mask for feature filtering later
+      const exactMask = cv.Mat.zeros(height, width, cv.CV_8UC1);
       
       // Convert ROI points to contour format
       const contourPoints = roi.points.map(pt => new cv.Point(pt.x, pt.y));
@@ -468,16 +546,16 @@ export class ORBFeatureDetector {
       
       contour.push_back(contourMat);
       
-      // Fill the ROI in the mask
-      cv.drawContours(mask, contour, 0, new cv.Scalar(255), cv.FILLED);
+      // Fill the exact ROI in the mask
+      cv.drawContours(exactMask, contour, 0, new cv.Scalar(255), cv.FILLED);
       
-      // Create ORB detector - increase nfeatures to get more points
-      const orb = new cv.ORB(500, 1.2, 8, 31, 0, 2, cv.ORB_HARRIS_SCORE, 31, 20);
+      // Create ORB detector - increase nfeatures for better tracking
+      const orb = new cv.ORB(750, 1.2, 8, 31, 0, 2, cv.ORB_HARRIS_SCORE, 31, 20);
       
-      // Detect keypoints with the mask
+      // Detect keypoints with the search mask
       const keypoints = new cv.KeyPointVector();
       const descriptors = new cv.Mat();
-      orb.detectAndCompute(gray, mask, keypoints, descriptors);
+      orb.detectAndCompute(gray, searchMask, keypoints, descriptors);
       
       // Clear previous features
       roi.features = [];
@@ -485,6 +563,10 @@ export class ORBFeatureDetector {
       // Convert detected keypoints to our Feature format
       for (let i = 0; i < keypoints.size(); i++) {
         const kp = keypoints.get(i);
+        
+        // Check if keypoint is inside the exact ROI mask (for baseline statistics)
+        const pointValue = exactMask.ucharPtr(Math.round(kp.pt.y), Math.round(kp.pt.x))[0];
+        const isInsideExactROI = pointValue > 0;
         
         // Extract descriptor for this keypoint
         const descriptor = new Uint8Array(32);
@@ -503,16 +585,18 @@ export class ORBFeatureDetector {
           response: kp.response,
           octave: kp.octave,
           descriptor,
-          id: this.nextFeatureId++
+          id: this.nextFeatureId++,
+          isExactROI: isInsideExactROI // Track if it's in the exact ROI or expanded area
         });
       }
       
-      console.log(`Detected ${roi.features.length} ORB features in ROI ${roi.id}`);
+      console.log(`Detected ${roi.features.length} ORB features for ROI ${roi.id} (expanded search area)`);
       
       // Clean up OpenCV objects
       src.delete();
       gray.delete();
-      mask.delete();
+      searchMask.delete();
+      exactMask.delete();
       contour.delete();
       contourMat.delete();
       orb.delete();
@@ -582,7 +666,8 @@ export class ORBFeatureDetector {
           response: Math.random(),
           octave: Math.floor(Math.random() * 4),
           descriptor,
-          id: this.nextFeatureId++
+          id: this.nextFeatureId++,
+          isExactROI: true // All placeholder features are in the exact ROI
         });
       }
     }
