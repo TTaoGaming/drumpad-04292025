@@ -4,7 +4,10 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { EventType, dispatch } from '@/lib/eventBus';
+import PerformanceSettings from '../subtabs/PerformanceSettings';
+import DataFlowDiagram from '@/components/DataFlowDiagram';
 
 const DebuggingSettings: React.FC = () => {
   const [showPerformanceMetrics, setShowPerformanceMetrics] = useState(true);
@@ -41,36 +44,54 @@ const DebuggingSettings: React.FC = () => {
     <div className="px-1 py-2">
       <h3 className="text-lg font-semibold mb-4">Debugging</h3>
       
-      <div className="space-y-5">
-        <div>
-          <h4 className="text-sm font-medium mb-2">Performance Metrics</h4>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label className="text-xs">Show Performance Overlay</Label>
-              <Switch 
-                checked={showPerformanceMetrics}
-                onCheckedChange={(checked) => {
-                  setShowPerformanceMetrics(checked);
-                  handleSettingsChange();
-                }}
-              />
-            </div>
-            
-            <div className="flex items-center justify-between">
-              <Label className="text-xs">Show FPS Counter</Label>
-              <Switch 
-                checked={showFPS}
-                onCheckedChange={(checked) => {
-                  setShowFPS(checked);
-                  handleSettingsChange();
-                }}
-              />
+      <Tabs defaultValue="performance" className="w-full">
+        <TabsList className="grid grid-cols-3 mb-4">
+          <TabsTrigger value="performance">Performance</TabsTrigger>
+          <TabsTrigger value="logging">Logging</TabsTrigger>
+          <TabsTrigger value="developer">Developer</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="performance" className="space-y-5">
+          <div>
+            <h4 className="text-sm font-medium mb-2">Display Options</h4>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Show Performance Overlay</Label>
+                <Switch 
+                  checked={showPerformanceMetrics}
+                  onCheckedChange={(checked) => {
+                    setShowPerformanceMetrics(checked);
+                    handleSettingsChange();
+                  }}
+                />
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Show FPS Counter</Label>
+                <Switch 
+                  checked={showFPS}
+                  onCheckedChange={(checked) => {
+                    setShowFPS(checked);
+                    handleSettingsChange();
+                  }}
+                />
+              </div>
             </div>
           </div>
-        </div>
+          
+          <div className="space-y-4 pt-2 border-t border-white/10">
+            {/* Performance Settings Component */}
+            <PerformanceSettings />
+          </div>
+          
+          <div className="pt-2 border-t border-white/10">
+            <h4 className="text-sm font-medium mb-3">Application Data Flow</h4>
+            <DataFlowDiagram />
+          </div>
+        </TabsContent>
         
-        <div>
-          <h4 className="text-sm font-medium mb-2">Logging</h4>
+        <TabsContent value="logging" className="space-y-4">
+          <h4 className="text-sm font-medium mb-2">Logging Settings</h4>
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="logLevel" className="text-xs">Log Level</Label>
@@ -121,11 +142,11 @@ const DebuggingSettings: React.FC = () => {
               Clear Console
             </Button>
           </div>
-        </div>
+        </TabsContent>
         
-        <div>
+        <TabsContent value="developer" className="space-y-4">
           <h4 className="text-sm font-medium mb-2">Developer Options</h4>
-          <div className="space-y-2">
+          <div className="space-y-4">
             <div className="flex items-center justify-between">
               <Label className="text-xs">Show Debug Overlays</Label>
               <Switch />
@@ -138,8 +159,8 @@ const DebuggingSettings: React.FC = () => {
               </Button>
             </div>
           </div>
-        </div>
-      </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
