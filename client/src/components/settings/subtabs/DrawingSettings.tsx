@@ -7,6 +7,7 @@
  * - Fill color and opacity for ROIs
  * - Path smoothing
  * - Auto-close for ROI paths
+ * - Feature visualization options
  */
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -19,6 +20,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Separator } from '@/components/ui/separator';
 import { EventType, dispatch } from '@/lib/eventBus';
 import { DrawingSettings as IDrawingSettings } from '@/components/DrawingCanvas';
+import orbFeatureDetector from '@/lib/orbFeatureDetector';
 
 const DrawingSettings: React.FC = () => {
   const [settings, setSettings] = useState<IDrawingSettings>({
@@ -29,8 +31,11 @@ const DrawingSettings: React.FC = () => {
     strokeWidth: 3,
     fillOpacity: 0.2,
     autoClose: true,
-    smoothing: true
+    smoothing: true,
+    showFeatures: true
   });
+  
+  const [featureCount, setFeatureCount] = useState(0);
 
   // Update global state when settings change
   useEffect(() => {
@@ -40,6 +45,18 @@ const DrawingSettings: React.FC = () => {
       value: settings
     });
   }, [settings]);
+  
+  // Update feature count periodically
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      // Count total features across all ROIs
+      const rois = orbFeatureDetector.getROIs();
+      const totalFeatures = rois.reduce((sum, roi) => sum + roi.features.length, 0);
+      setFeatureCount(totalFeatures);
+    }, 1000);
+    
+    return () => clearInterval(intervalId);
+  }, []);
 
   // Handle changes to individual settings
   const handleSettingChange = (settingName: keyof IDrawingSettings, value: any) => {
@@ -51,11 +68,15 @@ const DrawingSettings: React.FC = () => {
 
   // Clear the canvas
   const handleClearCanvas = () => {
+    // Clear all paths
     dispatch(EventType.SETTINGS_VALUE_CHANGE, {
       section: 'drawing',
       setting: 'clearCanvas',
       value: true
     });
+    
+    // Also clear all ROIs in the feature detector
+    orbFeatureDetector.clearROIs();
     
     // Reset the clear command after a short delay
     setTimeout(() => {
@@ -195,6 +216,37 @@ const DrawingSettings: React.FC = () => {
                 onCheckedChange={(checked) => handleSettingChange('autoClose', checked)}
               />
             </div>
+          )}
+          
+          {/* Feature visualization settings - only shown in ROI mode */}
+          {settings.mode === 'roi' && (
+            <>
+              <Separator />
+              
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium">Feature Detection</h3>
+                
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="show-features">Show Feature Points</Label>
+                  <Switch 
+                    id="show-features"
+                    checked={settings.showFeatures}
+                    onCheckedChange={(checked) => handleSettingChange('showFeatures', checked)}
+                  />
+                </div>
+                
+                <div className="p-3 bg-black/20 rounded-md">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-white/70">Total detected features:</span>
+                    <span className="text-sm font-medium">{featureCount}</span>
+                  </div>
+                  
+                  <div className="mt-2 text-xs text-white/60">
+                    Features are detected within your ROI selections. Draw closed shapes to define regions of interest.
+                  </div>
+                </div>
+              </div>
+            </>
           )}
           
           <Separator />

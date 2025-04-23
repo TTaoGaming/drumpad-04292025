@@ -1,100 +1,81 @@
 /**
- * Common types used throughout the application
+ * Common type definitions for the hand tracking application
  */
 
-export interface Notification {
-  id: string;
-  message: string;
-  type: 'info' | 'error' | 'success' | 'warning';
-}
-
-/**
- * Drawing related types
- */
+// A 2D point with optional Z coordinate for 3D space
 export interface Point {
   x: number;
   y: number;
+  z?: number;
 }
 
+// Path created by drawing on the canvas
 export interface DrawingPath {
   points: Point[];
   isComplete: boolean;
   isROI: boolean;
 }
 
-export interface DrawingSettings {
-  enabled: boolean;
-  mode: 'free' | 'roi';
-  strokeColor: string;
-  fillColor: string;
-  strokeWidth: number;
-  fillOpacity: number;
-  autoClose: boolean;
-  smoothing: boolean;
-}
-
+// Region of Interest for feature detection
 export interface RegionOfInterest {
-  points: Point[];
   id: string;
+  points: Point[];
   timestamp: number;
 }
 
-export interface FrameData {
-  width: number;
-  height: number;
-  data: Uint8ClampedArray;
-  timestamp: number;
-}
-
+// MediaPipe hand landmark
 export interface HandLandmark {
-  x: number; // Normalized x coordinate (0-1)
-  y: number; // Normalized y coordinate (0-1)
-  z: number; // Normalized z coordinate (depth)
+  x: number;
+  y: number;
+  z: number;
 }
 
-export interface HandConnection {
-  start: number; // Index of first landmark
-  end: number;   // Index of second landmark
-  colorIndex: number; // Index in the colors array
-}
-
+// Detected hand data with landmarks and metadata
 export interface HandData {
   landmarks: HandLandmark[];
-  connections: HandConnection[];
-  colors: string[]; // Rainbow colors for visualization
-}
-
-export interface PerformanceMetrics {
-  [moduleId: string]: number; // Duration in milliseconds
-  totalProcessingMs: number;
-  estimatedFps: number;
-}
-
-export interface ProcessedFrameResult {
-  originalFrame: FrameData;
-  processedData: any;
+  handedness: 'Left' | 'Right';
   timestamp: number;
-  processingTimeMs: number;
-  performance?: PerformanceMetrics;
-  handData?: HandData;
 }
 
-export interface WorkerMessage<T = any> {
-  type: string;
-  data?: T;
-}
-
-export interface CameraStatus {
-  isRunning: boolean;
-  resolution?: {
-    width: number;
-    height: number;
+// Performance metrics for tracking runtime performance
+export interface PerformanceMetrics {
+  fps: number;
+  processingTime: number;
+  moduleTimings: {
+    [moduleId: string]: number;
   };
 }
 
-export type LogType = 'info' | 'error' | 'success' | 'warning';
+// Finger joint angles
+export interface FingerAngles {
+  mcp: number | null; // Metacarpophalangeal joint (base)
+  pip: number | null; // Proximal interphalangeal joint (middle)
+  dip: number | null; // Distal interphalangeal joint (third)
+  flex: number | null; // Overall finger flexion
+}
 
-export interface LogMessage {
+// All fingers joint angles
+export interface AllFingerAngles {
+  thumb: FingerAngles;
+  index: FingerAngles;
+  middle: FingerAngles;
+  ring: FingerAngles;
+  pinky: FingerAngles;
+}
+
+// Pinch gesture state
+export interface PinchState {
+  isPinching: boolean;
+  distance: number;
+  position?: Point;
+}
+
+// Notification for user feedback
+export interface Notification {
+  id: string;
   message: string;
-  type: LogType;
+  type: 'info' | 'success' | 'warning' | 'error';
+  timestamp: Date;
+  duration?: number;
+  dismissable?: boolean;
 }

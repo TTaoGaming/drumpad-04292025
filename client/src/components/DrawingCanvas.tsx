@@ -277,11 +277,22 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled })
     setCurrentPath(null);
     setIsDrawing(false);
     
-    // Notify that drawing has stopped
-    dispatch(EventType.LOG, {
-      message: `Completed ${settings.mode === 'roi' ? 'ROI selection' : 'free drawing'}`,
-      type: 'success'
-    });
+    // If this is an ROI, add it to the feature detector
+    if (completedPath.isROI && completedPath.points.length >= 3) {
+      const roiId = orbFeatureDetector.addROI(completedPath);
+      
+      // Log ROI creation with the number of vertices
+      dispatch(EventType.LOG, {
+        message: `Created ROI with ${completedPath.points.length} vertices (ID: ${roiId})`,
+        type: 'success'
+      });
+    } else {
+      // Notify that drawing has stopped
+      dispatch(EventType.LOG, {
+        message: `Completed ${settings.mode === 'roi' ? 'ROI selection' : 'free drawing'}`,
+        type: 'success'
+      });
+    }
     
     // Dispatch the new path as an event
     dispatch(EventType.SETTINGS_VALUE_CHANGE, {
