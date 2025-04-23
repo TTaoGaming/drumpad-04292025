@@ -40,6 +40,10 @@ export class ORBFeatureDetector {
   private activeROIs: ROIWithFeatures[] = [];
   private isOpenCVLoaded: boolean = false;
   
+  // Add debug canvas elements for visualization
+  private debugCanvas: HTMLCanvasElement | null = null;
+  private debugCtx: CanvasRenderingContext2D | null = null;
+  
   // Keep track of baseline feature counts for occlusion detection
   private baselineFeatureCounts: Map<string, number> = new Map();
   private baselineEstablished: Map<string, boolean> = new Map();
@@ -48,6 +52,10 @@ export class ORBFeatureDetector {
   
   // Private constructor for singleton
   private constructor() {
+    // Create debug canvas
+    this.debugCanvas = document.createElement('canvas');
+    this.debugCtx = this.debugCanvas.getContext('2d');
+    
     // Listen for OpenCV ready event
     if (typeof window !== 'undefined') {
       // Check if OpenCV is already available
@@ -62,6 +70,11 @@ export class ORBFeatureDetector {
         });
       }
     }
+    
+    // Create debug canvas for visualization
+    window.addEventListener('load', () => {
+      console.log('Debug canvas created for feature detection visualization');
+    });
   }
   
   // Get singleton instance
@@ -537,13 +550,24 @@ export class ORBFeatureDetector {
       const thresholdMat = new cv.Mat();
       
       // Try three different thresholding methods to handle different lighting conditions
-      // Method 1: Standard binary threshold
-      cv.threshold(roiMat, thresholdMat, 100, 255, cv.THRESH_BINARY_INV);
+      
+      // Apply histogram equalization to improve contrast first
+      const equalizedMat = new cv.Mat();
+      cv.equalizeHist(roiMat, equalizedMat);
+      
+      // Method 1: Standard binary threshold (more sensitive, especially for white background)
+      cv.threshold(equalizedMat, thresholdMat, 180, 255, cv.THRESH_BINARY); // Try regular THRESH_BINARY (not inverted)
+      
+      // Log threshold values to debug
+      console.log('Using threshold with value 180, not inverted (for dark markers on light background)');
       
       // Find contours
       const contours = new cv.MatVector();
       const hierarchy = new cv.Mat();
       cv.findContours(thresholdMat, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+      
+      // Clean up extra mat
+      equalizedMat.delete();
       
       console.log(`Detected ${contours.size()} contours with standard threshold in ROI ${roi.id}`);
       
@@ -701,12 +725,17 @@ export class ORBFeatureDetector {
       if (debugCanvas && debugCtx) {
         debugROI = { x: rectX, y: rectY, width: rectWidth, height: rectHeight };
         
-        // Original ROI - grayscale
+        // Original ROI - color version for better visibility
         debugCanvas.width = rectWidth;
         debugCanvas.height = rectHeight;
         
+        // The problem might be that we're not capturing the right part of the image
+        // Let's log details about the ROI coordinates
+        console.log(`Debug: ROI coordinates - x:${rectX}, y:${rectY}, w:${rectWidth}, h:${rectHeight}`);
+        console.log(`Debug: Original image size - w:${width}, h:${height}`);
+        console.log(`Debug: ROI points:`, roi.points);
+        
         // Create color version of source for better visibility
-        const origColor = new cv.Mat();
         const tempRoi = src.roi(new cv.Rect(rectX, rectY, rectWidth, rectHeight));
         debugCtx.clearRect(0, 0, rectWidth, rectHeight);
         cv.imshow(debugCanvas, tempRoi);
