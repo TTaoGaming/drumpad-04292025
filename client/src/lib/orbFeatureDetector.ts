@@ -129,23 +129,12 @@ export class ORBFeatureDetector {
     // In a real implementation, we would pass the frame to OpenCV
     // for feature detection within each ROI
     
-    // For now, generate consistent features within each ROI
+    // For now, add some random features within each ROI as a placeholder
     this.activeROIs.forEach(roi => {
-      // Update the ROI timestamp to indicate it was processed
-      roi.timestamp = Date.now();
-      
-      // For a more stable visualization, regenerate features each time 
-      // but maintain a consistent density based on ROI size
-      if (roi.features.length === 0 || roi.features.length < 20) {
-        // Clear existing features to avoid accumulation
-        roi.features = [];
-        
-        // Generate placeholder features
+      // Only generate features if we don't have enough
+      if (roi.features.length < 10) {
         this.generatePlaceholderFeatures(roi, imageData.width, imageData.height);
       }
-      
-      // Log the processing of this ROI
-      console.log(`Processed ROI ${roi.id} with ${roi.features.length} features at ${new Date(roi.timestamp).toLocaleTimeString()}`);
     });
   }
   
