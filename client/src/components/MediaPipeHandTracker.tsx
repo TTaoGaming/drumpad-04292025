@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, RefObject, useCallback } from 'react';
-import { Hands, Results, ResultsListener, HAND_CONNECTIONS, Camera } from '@mediapipe/hands';
-import { drawLandmarks, drawConnectors } from '@mediapipe/drawing_utils';
+// Import types only for type checking, we'll load the actual modules dynamically
+import type { Results, ResultsListener, HAND_CONNECTIONS } from '@mediapipe/hands';
 import { addListener, dispatch, EventType } from '../lib/eventBus';
 import { throttle } from '../lib/utils';
 
@@ -100,144 +100,150 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
       canvas.height = 480;
     }
     
-    // MediaPipe initialization
-    const mpHands = window.mpHands;
-    const mpDrawing = window.mpDrawing;
-    const mpCamera = window.mpCamera;
+    // Initialize MediaPipe with dynamic imports
+    const initializeMediaPipe = async () => {
+      try {
+        dispatch(EventType.LOG, { message: 'Loading MediaPipe Hands dependencies...', type: 'info' });
+        
+        // Dynamically import MediaPipe modules
+        const mpHands = await import('@mediapipe/hands');
+        const mpDrawing = await import('@mediapipe/drawing_utils');
+        const mpCamera = await import('@mediapipe/camera_utils');
+        
+        // Initialize MediaPipe Hands
+        const hands = new mpHands.Hands({
+          locateFile: (file: string) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`;
+          }
+        });
     
-    if (!mpHands || !mpDrawing || !mpCamera) {
-      console.error('MediaPipe libraries not loaded');
-      return;
-    }
-    
-    // Initialize MediaPipe Hands
-    dispatch(EventType.LOG, { message: 'Loading MediaPipe Hands dependencies...', type: 'info' });
-    
-    const hands = new mpHands.Hands({
-      locateFile: (file: string) => {
-        return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`;
-      }
-    });
-    
-    hands.setOptions({
-      maxNumHands: 2,
-      modelComplexity: 1,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5
-    });
-    
-    // Access the globally available media pipeline worker
-    const mediaPipelineWorker = (window as any).mediaPipelineWorker;
-    
-    // Setup result handler
-    hands.onResults((results: any) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      
-      // Calculate FPS
-      const now = performance.now();
-      const fps = lastFrameTimeRef.current ? 
-        Math.round(1000 / (now - lastFrameTimeRef.current)) : 0;
-      lastFrameTimeRef.current = now;
-      
-      // Clear canvas
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
-      // Process hands if available
-      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-        // If the mediaPipelineWorker is available, use it for processing
-        if (mediaPipelineWorker) {
-          // Send raw landmarks to the worker for processing
-          mediaPipelineWorker.postMessage({
-            command: 'process-frame',
-            data: {
-              rawLandmarks: results.multiHandLandmarks,
-              timestamp: now,
-              filterOptions: filterOptions,
-              fingerFlexionSettings: fingerFlexionSettings,
-              landmarkFilteringEnabled: performanceSettings.landmarkFiltering.enabled
+        hands.setOptions({
+          maxNumHands: 2,
+          modelComplexity: 1,
+          minDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5
+        });
+        
+        // Access the globally available media pipeline worker
+        const mediaPipelineWorker = (window as any).mediaPipelineWorker;
+        
+        // Setup result handler
+        hands.onResults((results: any) => {
+          const canvas = canvasRef.current;
+          if (!canvas) return;
+          
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return;
+          
+          // Calculate FPS
+          const now = performance.now();
+          const fps = lastFrameTimeRef.current ? 
+            Math.round(1000 / (now - lastFrameTimeRef.current)) : 0;
+          lastFrameTimeRef.current = now;
+          
+          // Clear canvas
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          
+          // Process hands if available
+          if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+            // If the mediaPipelineWorker is available, use it for processing
+            if (mediaPipelineWorker) {
+              // Send raw landmarks to the worker for processing
+              mediaPipelineWorker.postMessage({
+                command: 'process-frame',
+                data: {
+                  rawLandmarks: results.multiHandLandmarks,
+                  timestamp: now,
+                  filterOptions: filterOptions,
+                  fingerFlexionSettings: fingerFlexionSettings,
+                  landmarkFilteringEnabled: performanceSettings.landmarkFiltering.enabled
+                }
+              });
+              
+              // Simple drawing without worker response for now
+              results.multiHandLandmarks.forEach((landmarks: any) => {
+                if (landmarksSettings.showLandmarks) {
+                  mpDrawing.drawLandmarks(ctx, landmarks, {
+                    color: '#ffffff',
+                    lineWidth: 2,
+                    radius: landmarksSettings.landmarkSize
+                  });
+                }
+                
+                if (landmarksSettings.showConnections) {
+                  mpDrawing.drawConnectors(ctx, landmarks, mpHands.HAND_CONNECTIONS, {
+                    color: '#00ff00',
+                    lineWidth: landmarksSettings.connectionWidth
+                  });
+                }
+              });
+            } else {
+              // Fallback to main thread processing
+              results.multiHandLandmarks.forEach((landmarks: any) => {
+                if (landmarksSettings.showLandmarks) {
+                  mpDrawing.drawLandmarks(ctx, landmarks, {
+                    color: '#ffffff',
+                    lineWidth: 2,
+                    radius: landmarksSettings.landmarkSize
+                  });
+                }
+                
+                if (landmarksSettings.showConnections) {
+                  mpDrawing.drawConnectors(ctx, landmarks, mpHands.HAND_CONNECTIONS, {
+                    color: '#00ff00',
+                    lineWidth: landmarksSettings.connectionWidth
+                  });
+                }
+              });
             }
+          }
+          
+          // Dispatch FPS info to event bus instead of drawing directly
+          dispatch(EventType.FRAME_PROCESSED, {
+            fps: fps,
+            timestamp: now,
+            processingTime: {
+              total: now - lastFrameTimeRef.current
+            }
+          });
+        });
+        
+        // Initialize camera if video element is available
+        if (videoRef.current) {
+          const camera = new mpCamera.Camera(videoRef.current, {
+            onFrame: async () => {
+              if (videoRef.current) {
+                await hands.send({image: videoRef.current});
+              }
+            },
+            width: 640,
+            height: 480
           });
           
-          // Simple drawing without worker response for now
-          results.multiHandLandmarks.forEach((landmarks: any) => {
-            if (landmarksSettings.showLandmarks) {
-              mpDrawing.drawLandmarks(ctx, landmarks, {
-                color: '#ffffff',
-                lineWidth: 2,
-                radius: landmarksSettings.landmarkSize
-              });
-            }
-            
-            if (landmarksSettings.showConnections) {
-              mpDrawing.drawConnectors(ctx, landmarks, mpHands.HAND_CONNECTIONS, {
-                color: '#00ff00',
-                lineWidth: landmarksSettings.connectionWidth
-              });
-            }
-          });
-        } else {
-          // Fallback to main thread processing
-          results.multiHandLandmarks.forEach((landmarks: any) => {
-            if (landmarksSettings.showLandmarks) {
-              mpDrawing.drawLandmarks(ctx, landmarks, {
-                color: '#ffffff',
-                lineWidth: 2,
-                radius: landmarksSettings.landmarkSize
-              });
-            }
-            
-            if (landmarksSettings.showConnections) {
-              mpDrawing.drawConnectors(ctx, landmarks, mpHands.HAND_CONNECTIONS, {
-                color: '#00ff00',
-                lineWidth: landmarksSettings.connectionWidth
-              });
-            }
-          });
+          // Start camera
+          camera.start()
+            .then(() => {
+              dispatch(EventType.LOG, { message: 'MediaPipe Hands tracking initialized successfully', type: 'success' });
+              setIsTracking(true);
+            })
+            .catch((error: any) => {
+              console.error('Error starting camera:', error);
+              dispatch(EventType.LOG, { message: 'Failed to initialize MediaPipe Hands tracking: ' + error.message, type: 'error' });
+            });
         }
+      } catch (error) {
+        console.error('Error initializing MediaPipe:', error);
+        dispatch(EventType.LOG, { message: 'Failed to load MediaPipe libraries: ' + (error as Error).message, type: 'error' });
       }
-      
-      // Dispatch FPS info to event bus instead of drawing directly
-      dispatch(EventType.FRAME_PROCESSED, {
-        fps: fps,
-        timestamp: now,
-        processingTime: {
-          total: now - lastFrameTimeRef.current
-        }
-      });
-    });
+    };
     
-    // Initialize camera if video element is available
-    if (videoRef.current) {
-      const camera = new mpCamera.Camera(videoRef.current, {
-        onFrame: async () => {
-          if (videoRef.current) {
-            await hands.send({image: videoRef.current});
-          }
-        },
-        width: 640,
-        height: 480
-      });
-      
-      // Start camera
-      camera.start()
-        .then(() => {
-          dispatch(EventType.LOG, { message: 'MediaPipe Hands tracking initialized successfully', type: 'success' });
-          setIsTracking(true);
-        })
-        .catch((error: any) => {
-          console.error('Error starting camera:', error);
-          dispatch(EventType.LOG, { message: 'Failed to initialize MediaPipe Hands tracking: ' + error.message, type: 'error' });
-        });
-    }
+    // Call the initialization function
+    initializeMediaPipe();
     
-    // Cleanup function
+    // Cleanup function for the useEffect
     return () => {
-      hands.close();
-      setIsTracking(false);
+      // The camera and hands instances are managed inside the async function
+      // Additional cleanup can be done here if needed
     };
   }, [videoRef]);
 
