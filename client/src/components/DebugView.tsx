@@ -80,151 +80,148 @@ const DebugView: React.FC<DebugViewProps> = ({
           // Clear canvas
           ctx.clearRect(0, 0, canvas.width, canvas.height);
           
-          // Find the bounding box of the ROI points
-          let minX = Number.MAX_VALUE;
-          let minY = Number.MAX_VALUE; 
-          let maxX = Number.MIN_VALUE;
-          let maxY = Number.MIN_VALUE;
-
-          roi.points.forEach(point => {
-            minX = Math.min(minX, point.x);
-            minY = Math.min(minY, point.y);
-            maxX = Math.max(maxX, point.x);
-            maxY = Math.max(maxY, point.y);
-          });
-          
-          // Calculate scale to fit the ROI in the canvas with padding
-          const padding = 10;
-          const roiWidth = maxX - minX;
-          const roiHeight = maxY - minY;
-          const scaleX = (canvas.width - padding * 2) / roiWidth;
-          const scaleY = (canvas.height - padding * 2) / roiHeight;
-          const scale = Math.min(scaleX, scaleY);
-
-          // Calculate center offset to position ROI in the center of canvas
-          const centerX = (canvas.width / 2) - ((minX + roiWidth / 2) * scale);
-          const centerY = (canvas.height / 2) - ((minY + roiHeight / 2) * scale);
+          // Get video element for reference dimensions
+          const videoElements = document.getElementsByTagName('video');
+          const videoEl = videoElements.length > 0 ? videoElements[0] : null;
           
           // Add a gray background to the canvas by default
           ctx.fillStyle = '#222222';
           ctx.fillRect(0, 0, canvas.width, canvas.height);
           
-          // Capture current video frame
-          const videoElements = document.getElementsByTagName('video');
           console.log(`DEBUG: Found ${videoElements.length} video elements`);
           
           if (videoElements.length === 0) {
             console.log('DEBUG: No video elements found on the page');
           }
           
-          if (videoElements.length > 0) {
-            const videoElement = videoElements[0];
-            
-            console.log(`DEBUG: Video element ready state: ${videoElement.readyState}`);
-            console.log(`DEBUG: Video dimensions: ${videoElement.videoWidth}x${videoElement.videoHeight}`);
-            console.log(`DEBUG: Current time: ${videoElement.currentTime.toFixed(2)}s, Paused: ${videoElement.paused}`);
-            
-            if (videoElement && videoElement.readyState >= 2) {
-              try {
-                // APPROACH 1: Draw the entire video frame to see if it works at all
-                console.log("DEBUG: Drawing entire video frame as a test");
-                
-                // Calculate center position and scaling to fit the entire video while keeping aspect ratio
-                const videoAspect = videoElement.videoWidth / videoElement.videoHeight;
-                const canvasAspect = canvas.width / canvas.height;
-                
-                let drawWidth, drawHeight, drawX, drawY;
-                
-                if (videoAspect > canvasAspect) {
-                  // Video is wider than canvas
-                  drawWidth = canvas.width;
-                  drawHeight = canvas.width / videoAspect;
-                  drawX = 0;
-                  drawY = (canvas.height - drawHeight) / 2;
-                } else {
-                  // Video is taller than canvas
-                  drawHeight = canvas.height;
-                  drawWidth = canvas.height * videoAspect;
-                  drawX = (canvas.width - drawWidth) / 2;
-                  drawY = 0;
-                }
-                
-                // Draw a colored background first
-                ctx.fillStyle = '#444444';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                
-                // Draw the video directly to debug canvas
-                ctx.drawImage(videoElement, drawX, drawY, drawWidth, drawHeight);
-                console.log(`DEBUG: Successfully drew entire video frame to canvas`);
-                
-                // APPROACH 2: Try to calculate a more accurate ROI and crop
-                // For now, let's focus on showing the whole video with the ROI outline
-                // This way we can see the ROI in context of the entire image
-                console.log(`DEBUG: Drawing ROI on entire video frame, skipping cropping`);
-                
-                // Get ROI center for informational display
-                let roiCenterX = 0, roiCenterY = 0;
-                roi.points.forEach(point => {
-                  roiCenterX += point.x;
-                  roiCenterY += point.y;
-                });
-                roiCenterX /= roi.points.length;
-                roiCenterY /= roi.points.length;
-                
-                console.log(`DEBUG: ROI center at: (${roiCenterX}, ${roiCenterY})`);
-                
-                // No need for additional temp canvas if we're just showing the whole video
-                
-                // Draw ROI outline directly over the video image
-                // We need to map the ROI points to the current canvas coordinates
-                
-                // Determine the scale factors between the drawing canvas (where ROI was created)
-                // and our current debug canvas (where we're showing the video)
-                const videoDisplay = document.getElementById('camera-feed') as HTMLVideoElement;
-                let drawingCanvasWidth = canvas.width;
-                let drawingCanvasHeight = canvas.height;
-                
-                if (videoDisplay) {
-                  // Get the actual dimensions of the video display
-                  const rect = videoDisplay.getBoundingClientRect();
-                  drawingCanvasWidth = rect.width;
-                  drawingCanvasHeight = rect.height;
-                }
-                
-                // Calculate scale between the drawing canvas and our debug canvas
-                const scaleX = canvas.width / drawingCanvasWidth;
-                const scaleY = canvas.height / drawingCanvasHeight;
-                
-                // Apply scale factor to map ROI points to our debug canvas
-                const scaledPoints = roi.points.map(point => ({
-                  x: point.x * scaleX,
-                  y: point.y * scaleY
-                }));
-                
-                // Draw the ROI outline
-                ctx.shadowColor = 'rgba(255, 0, 0, 0.7)';
-                ctx.shadowBlur = 10;
-                ctx.beginPath();
-                
-                // Start with the first point
-                ctx.moveTo(scaledPoints[0].x, scaledPoints[0].y);
-                
-                // Draw the rest of the points
-                for (let i = 1; i < scaledPoints.length; i++) {
-                  ctx.lineTo(scaledPoints[i].x, scaledPoints[i].y);
-                }
-                
-                ctx.closePath();
-                ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
-                ctx.lineWidth = 2;
-                ctx.stroke();
-                
-                // Reset shadow for other drawings
-                ctx.shadowColor = 'transparent';
-                ctx.shadowBlur = 0;
-              } catch (e) {
-                console.error('Error capturing video frame for debug view:', e);
+          if (videoEl && videoEl.readyState >= 2) {
+            try {
+              // Get actual video dimensions for denormalizing coordinates
+              const videoWidth = videoEl.videoWidth || 640;
+              const videoHeight = videoEl.videoHeight || 480;
+              
+              // Log video element details 
+              console.log(`DEBUG: Video element ready state: ${videoEl.readyState}`);
+              console.log(`DEBUG: Video dimensions: ${videoWidth}x${videoHeight}`);
+              console.log(`DEBUG: Current time: ${videoEl.currentTime.toFixed(2)}s, Paused: ${videoEl.paused}`);
+              
+              // Denormalize points from 0-1 range to actual pixel coordinates
+              const denormalizedPoints = roi.points.map(point => ({
+                x: point.x * videoWidth,
+                y: point.y * videoHeight
+              }));
+              
+              console.log(`Denormalizing ROI points from 0-1 range to video dimensions (${videoWidth}x${videoHeight})`);
+              console.log(`First normalized point: (${roi.points[0].x.toFixed(4)}, ${roi.points[0].y.toFixed(4)})`);
+              console.log(`First denormalized point: (${denormalizedPoints[0].x.toFixed(2)}, ${denormalizedPoints[0].y.toFixed(2)})`);
+              
+              // Find the bounding box of the denormalized ROI points
+              let minX = Number.MAX_VALUE;
+              let minY = Number.MAX_VALUE; 
+              let maxX = Number.MIN_VALUE;
+              let maxY = Number.MIN_VALUE;
+    
+              denormalizedPoints.forEach(point => {
+                minX = Math.min(minX, point.x);
+                minY = Math.min(minY, point.y);
+                maxX = Math.max(maxX, point.x);
+                maxY = Math.max(maxY, point.y);
+              });
+              
+              // Calculate scale to fit the ROI in the canvas with padding
+              const padding = 10;
+              const roiWidth = maxX - minX;
+              const roiHeight = maxY - minY;
+              const scaleX = (canvas.width - padding * 2) / roiWidth;
+              const scaleY = (canvas.height - padding * 2) / roiHeight;
+              const scale = Math.min(scaleX, scaleY);
+    
+              // Calculate center offset to position ROI in the center of canvas
+              const centerX = (canvas.width / 2) - ((minX + roiWidth / 2) * scale);
+              const centerY = (canvas.height / 2) - ((minY + roiHeight / 2) * scale);
+              
+              // Draw the entire video frame to see if it works at all
+              console.log("DEBUG: Drawing entire video frame as a test");
+              
+              // Calculate center position and scaling to fit the entire video while keeping aspect ratio
+              const videoAspect = videoWidth / videoHeight;
+              const canvasAspect = canvas.width / canvas.height;
+              
+              let drawWidth, drawHeight, drawX, drawY;
+              
+              if (videoAspect > canvasAspect) {
+                // Video is wider than canvas
+                drawWidth = canvas.width;
+                drawHeight = canvas.width / videoAspect;
+                drawX = 0;
+                drawY = (canvas.height - drawHeight) / 2;
+              } else {
+                // Video is taller than canvas
+                drawHeight = canvas.height;
+                drawWidth = canvas.height * videoAspect;
+                drawX = (canvas.width - drawWidth) / 2;
+                drawY = 0;
               }
+              
+              // Draw a colored background first
+              ctx.fillStyle = '#444444';
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+              
+              // Draw the video directly to debug canvas
+              ctx.drawImage(videoEl, drawX, drawY, drawWidth, drawHeight);
+              console.log(`DEBUG: Successfully drew entire video frame to canvas`);
+              
+              // For now, let's focus on showing the whole video with the ROI outline
+              // This way we can see the ROI in context of the entire image
+              console.log(`DEBUG: Drawing ROI on entire video frame, skipping cropping`);
+              
+              // Get ROI center for informational display
+              let roiCenterX = 0, roiCenterY = 0;
+              roi.points.forEach(point => {
+                roiCenterX += point.x;
+                roiCenterY += point.y;
+              });
+              roiCenterX /= roi.points.length;
+              roiCenterY /= roi.points.length;
+              
+              console.log(`DEBUG: ROI center at: (${roiCenterX}, ${roiCenterY})`);
+              
+              // Draw ROI outline directly over the video image
+              // We need to map the normalized ROI points to the current canvas coordinates for display
+              
+              // Calculate the scale factors to map normalized coordinates to this debug canvas
+              const canvasScaleX = drawWidth;  // Scale from 0-1 to canvas width 
+              const canvasScaleY = drawHeight; // Scale from 0-1 to canvas height
+              
+              // Apply scale factors to map normalized ROI points to our debug canvas pixels
+              const canvasPoints = roi.points.map(point => ({
+                x: drawX + (point.x * canvasScaleX),
+                y: drawY + (point.y * canvasScaleY)
+              }));
+              
+              // Draw the ROI outline on top of the video
+              ctx.shadowColor = 'rgba(255, 0, 0, 0.7)';
+              ctx.shadowBlur = 10;
+              ctx.beginPath();
+              
+              // Start with the first point
+              ctx.moveTo(canvasPoints[0].x, canvasPoints[0].y);
+              
+              // Draw the rest of the points
+              for (let i = 1; i < canvasPoints.length; i++) {
+                ctx.lineTo(canvasPoints[i].x, canvasPoints[i].y);
+              }
+              
+              ctx.closePath();
+              ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+              ctx.lineWidth = 2;
+              ctx.stroke();
+              
+              // Reset shadow for other drawings
+              ctx.shadowColor = 'transparent';
+              ctx.shadowBlur = 0;
+            } catch (e) {
+              console.error('Error capturing video frame for debug view:', e);
             }
           }
           
