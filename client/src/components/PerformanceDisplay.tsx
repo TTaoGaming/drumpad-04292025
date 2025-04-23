@@ -41,8 +41,8 @@ const PerformanceDisplay: React.FC<PerformanceDisplayProps> = ({
     <div className={`bg-black/70 text-white text-sm p-2 rounded ${className}`}>
       <div className="flex justify-between items-center mb-1">
         <h3 className="font-bold">Performance</h3>
-        <div className={`font-mono ${getFpsColor(performance.estimatedFps)}`}>
-          {performance.estimatedFps} FPS
+        <div className={`font-mono ${getFpsColor(performance.estimatedFps || performance.fps || 0)}`}>
+          {(performance.estimatedFps || performance.fps || 0).toFixed(0)} FPS
         </div>
       </div>
       
@@ -52,13 +52,16 @@ const PerformanceDisplay: React.FC<PerformanceDisplayProps> = ({
           .map(([moduleName, timeMs]) => (
             <div key={moduleName} className="flex justify-between">
               <span>{formatModuleName(moduleName)}:</span>
-              <span className="font-mono">{timeMs.toFixed(2)} ms</span>
+              <span className="font-mono">{typeof timeMs === 'number' ? timeMs.toFixed(2) : '0.00'} ms</span>
             </div>
           ))}
         
         <div className="flex justify-between font-bold border-t border-white/30 pt-1 mt-1">
           <span>Total:</span>
-          <span className="font-mono">{performance.totalProcessingMs.toFixed(2)} ms</span>
+          <span className="font-mono">{
+            // Support both old and new format
+            (performance.totalProcessingMs || performance.totalFrame || 0).toFixed(2)
+          } ms</span>
         </div>
       </div>
     </div>
