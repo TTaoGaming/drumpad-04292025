@@ -252,8 +252,8 @@ function mpEndTiming(moduleId: string): number {
 function mpGetPerformanceMetrics(): Record<string, number> {
   const result: Record<string, number> = {};
   
-  // Convert to array first to avoid iteration issues in older JS engines
-  Array.from(performanceMetrics).forEach(([id, metric]) => {
+  // Simple approach that avoids Map iteration issues
+  performanceMetrics.forEach((metric, id) => {
     if (metric.duration !== undefined) {
       result[id] = metric.duration;
     }
