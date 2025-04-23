@@ -47,6 +47,7 @@ const PinchGestureSettings = () => {
   // Update settings in the tracker when changed
   useEffect(() => {
     // Dispatch event to update settings in the tracker
+    console.log("Dispatching pinch settings:", settings);
     dispatch(EventType.SETTINGS_VALUE_CHANGE, {
       section: 'gestures',
       setting: 'pinchGesture',
