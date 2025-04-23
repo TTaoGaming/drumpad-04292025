@@ -522,16 +522,40 @@ export class ORBFeatureDetector {
       
       // ----- CONTOUR DETECTION METHOD -----
       
-      // Apply threshold for high contrast markers (black on white)
+      // Create a mat for output
       const thresholdMat = new cv.Mat();
-      cv.threshold(roiMat, thresholdMat, 128, 255, cv.THRESH_BINARY_INV);
+      
+      // Try three different thresholding methods to handle different lighting conditions
+      // Method 1: Standard binary threshold
+      cv.threshold(roiMat, thresholdMat, 100, 255, cv.THRESH_BINARY_INV);
       
       // Find contours
       const contours = new cv.MatVector();
       const hierarchy = new cv.Mat();
       cv.findContours(thresholdMat, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
       
-      console.log(`Detected ${contours.size()} contours in ROI ${roi.id}`);
+      console.log(`Detected ${contours.size()} contours with standard threshold in ROI ${roi.id}`);
+      
+      // If no contours found, try adaptive thresholding
+      if (contours.size() === 0) {
+        console.log(`Trying adaptive threshold for ROI ${roi.id}`);
+        const adaptiveThresh = new cv.Mat();
+        cv.adaptiveThreshold(roiMat, adaptiveThresh, 255, 
+                             cv.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                             cv.THRESH_BINARY_INV, 11, 2);
+        
+        cv.findContours(adaptiveThresh, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+        console.log(`Detected ${contours.size()} contours with adaptive threshold in ROI ${roi.id}`);
+        adaptiveThresh.delete();
+      }
+      
+      // If still no contours, try a much lower threshold for darker images
+      if (contours.size() === 0) {
+        console.log(`Trying lower threshold for ROI ${roi.id}`);
+        cv.threshold(roiMat, thresholdMat, 60, 255, cv.THRESH_BINARY_INV);
+        cv.findContours(thresholdMat, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+        console.log(`Detected ${contours.size()} contours with lower threshold in ROI ${roi.id}`);
+      }
       
       // Clear previous features
       roi.features = [];
@@ -540,9 +564,9 @@ export class ORBFeatureDetector {
       for (let i = 0; i < contours.size(); i++) {
         const contour = contours.get(i);
         
-        // Skip tiny contours (noise)
+        // Calculate contour area - be more lenient with small contours
         const area = cv.contourArea(contour);
-        if (area < 10) continue; 
+        if (area < 5) continue; // Reduced from 10 to 5 to catch smaller markers 
         
         // Get contour perimeter
         const perimeter = cv.arcLength(contour, true);
@@ -608,21 +632,28 @@ export class ORBFeatureDetector {
         console.log("No contours found, trying corner detection as fallback");
         
         const corners = new cv.Mat();
-        const maxCorners = 100;
-        const qualityLevel = 0.01;
-        const minDistance = 5;
+        const maxCorners = 200;        // Increased from 100 to 200
+        const qualityLevel = 0.005;    // Reduced from 0.01 to 0.005 (more sensitive)
+        const minDistance = 3;         // Reduced from 5 to 3
         
+        // Try to enhance the image first
+        const enhancedMat = new cv.Mat();
+        cv.equalizeHist(roiMat, enhancedMat);
+                
+        // Detect corners using Harris on the enhanced image
         cv.goodFeaturesToTrack(
-          roiMat,            // Input image 
+          enhancedMat,       // Enhanced image for better detection
           corners,           // Output corners
           maxCorners,        // Max number of corners
-          qualityLevel,      // Quality level
+          qualityLevel,      // More sensitive quality level
           minDistance,       // Min distance between corners
           new cv.Mat(),      // Mask (none)
           3,                 // Block size
           true,              // Use Harris detector
-          0.04               // Harris parameter
+          0.02               // Harris parameter (more sensitive)
         );
+        
+        enhancedMat.delete();
         
         console.log(`Fallback: Detected ${corners.rows} corner features in ROI ${roi.id}`);
         
