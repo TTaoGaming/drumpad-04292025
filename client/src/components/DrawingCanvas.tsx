@@ -347,6 +347,21 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
     };
   }, []);
   
+  // Sync with initialPaths when they change
+  useEffect(() => {
+    if (initialPaths.length > 0) {
+      console.log('Initializing paths with:', initialPaths.length, 'paths');
+      setPaths(initialPaths);
+      
+      // Add these paths to the feature detector if they are ROIs
+      initialPaths.forEach(path => {
+        if (path.isROI && path.isComplete && path.points.length >= 3 && path.id) {
+          orbFeatureDetector.addROI(path);
+        }
+      });
+    }
+  }, [initialPaths]);
+  
   // Create the canvas style - absolute positioning on top of video
   const canvasStyle: React.CSSProperties = {
     position: 'absolute',
