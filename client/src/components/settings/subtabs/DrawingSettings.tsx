@@ -29,11 +29,11 @@ const DrawingSettings: React.FC = () => {
     mode: 'roi',
     strokeColor: '#FF0000', // Red - index finger color (1)
     fillColor: '#FF0000', // Red - index finger color (1)
-    strokeWidth: 3,
-    fillOpacity: 0.2,
+    strokeWidth: 2, // Thinner line for cleaner look
+    fillOpacity: 0.15, // More subtle transparency for professional look
     autoClose: true,
     smoothing: true,
-    showFeatures: true
+    showFeatures: false // Hide feature points for cleaner visualization
   });
   
   const [featureCount, setFeatureCount] = useState(0);

@@ -285,31 +285,13 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
         }
       }
       
-      // Draw vertices as small circles (only for completed paths)
+      // Clean, minimalistic look for completed paths
       if (path.isComplete) {
-        const originalStrokeStyle = ctx.strokeStyle;
-        const originalLineWidth = ctx.lineWidth;
-        
         // Fill the ROI with transparent color
         ctx.fillStyle = `${settings.fillColor}${Math.round(settings.fillOpacity * 255).toString(16).padStart(2, '0')}`;
         ctx.fill();
         
-        // Draw points at each vertex
-        points.forEach((point, index) => {
-          ctx.beginPath();
-          ctx.arc(point.x, point.y, 4, 0, Math.PI * 2);
-          ctx.fillStyle = settings.strokeColor;
-          ctx.fill();
-          
-          // Draw point number for debugging (uncomment if needed)
-          // ctx.fillStyle = 'white';
-          // ctx.font = '10px sans-serif';
-          // ctx.fillText(index.toString(), point.x + 5, point.y - 5);
-        });
-        
-        // Restore original styles
-        ctx.strokeStyle = originalStrokeStyle;
-        ctx.lineWidth = originalLineWidth;
+        // No vertex dots for clean, professional look
       }
     }
     
