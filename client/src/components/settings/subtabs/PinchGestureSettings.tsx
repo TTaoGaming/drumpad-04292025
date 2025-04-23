@@ -9,7 +9,6 @@ import { Slider } from '../../ui/slider';
 import { Switch } from '../../ui/switch';
 import { Label } from '../../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { RadioGroup, RadioGroupItem } from '../../ui/radio-group';
 import { addListener, dispatch, EventType } from '@/lib/eventBus';
 
 const PinchGestureSettings = () => {

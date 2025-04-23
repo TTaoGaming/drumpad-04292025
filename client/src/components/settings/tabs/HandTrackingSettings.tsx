@@ -19,7 +19,7 @@ const HandTrackingSettings: React.FC = () => {
           <TabsTrigger value="filters" className="text-xs px-2">Filters</TabsTrigger>
           <TabsTrigger value="ruler" className="text-xs px-2">Ruler</TabsTrigger>
           <TabsTrigger value="flexion" className="text-xs px-2">Flexion</TabsTrigger>
-          <TabsTrigger value="gestures" className="text-xs px-2">Gestures</TabsTrigger>
+          <TabsTrigger value="gestures" className="text-xs px-2">Pinch</TabsTrigger>
         </TabsList>
         
         <TabsContent value="landmarks" className="pt-4">
