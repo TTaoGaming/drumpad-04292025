@@ -370,6 +370,7 @@ export function useSettingsDispatch() {
 // Using named export object to avoid Fast Refresh incompatibility
 export const SettingsActions = {
   updateSettings: (section: string, setting: string, value: any) => {
+    // Dispatch using the event bus (the worker will listen for these events)
     dispatch(EventType.SETTINGS_VALUE_CHANGE, {
       section,
       setting,
