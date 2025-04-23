@@ -35,6 +35,9 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
   const lastFrameTimeRef = useRef<number | null>(null);
   const handFiltersRef = useRef<Map<number, OneEuroFilterArray[]>>(new Map());
   
+  // Loading state to handle initialization
+  const [modelLoading, setModelLoading] = useState(true);
+  
   // Filter settings state
   const [filterOptions, setFilterOptions] = useState({
     minCutoff: DEFAULT_FILTER_OPTIONS.minCutoff,
@@ -885,9 +888,19 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
   
   return (
     <>
+      {modelLoading ? (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/80">
+          <div className="text-center p-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto mb-2"></div>
+            <p className="text-white text-sm">Initializing MediaPipe model...</p>
+            <p className="text-white/60 text-xs mt-1">This may take a moment</p>
+          </div>
+        </div>
+      ) : null}
       <canvas
         ref={canvasRef}
         className="absolute inset-0 z-10 pointer-events-none"
+        style={{ opacity: modelLoading ? 0 : 1 }}
       />
     </>
   );
