@@ -500,6 +500,38 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
     return result;
   };
   
+  // Calculate the farthest distance between any two points
+  const calculateMaxDistance = (points: { x: number, y: number }[]): number => {
+    if (points.length < 2) return 0;
+    
+    let maxDistance = 0;
+    
+    // Check all point pairs
+    for (let i = 0; i < points.length; i++) {
+      for (let j = i + 1; j < points.length; j++) {
+        const distance = Math.sqrt(
+          Math.pow(points[i].x - points[j].x, 2) + 
+          Math.pow(points[i].y - points[j].y, 2)
+        );
+        
+        if (distance > maxDistance) {
+          maxDistance = distance;
+        }
+      }
+    }
+    
+    return maxDistance;
+  };
+  
+  // Find the diameter of the drawn shape (for circular ROI)
+  const findShapeDiameter = (points: { x: number, y: number }[]): number => {
+    if (points.length < 2) return 100; // Default diameter
+    
+    // Calculate the farthest distance between any two points
+    // This will serve as the diameter of our circle
+    return calculateMaxDistance(points);
+  };
+  
   // Complete the current drawing path
   const stopDrawing = () => {
     if (!currentPath) return;
@@ -507,75 +539,51 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
     let finalPoints = [...currentPath.points];
     let finalPathDescription = 'custom shape';
     
-    // Handle case for ROI paths
+    // For AR MPE drumpad applications, we always use circular ROIs based on drawn diameter
     if (currentPath.isROI) {
+      // First simplify the path to remove redundant points and filter out spikes
+      const simplifiedPoints = simplifyPath(currentPath.points, 5); // Lower tolerance value for more detailed paths
+      console.log(`Simplified points from ${currentPath.points.length} to ${simplifiedPoints.length} points`);
+      
       // For single point or very small movements, create a default circle
-      if (currentPath.points.length < 3) {
+      if (simplifiedPoints.length < 3) {
         // Create a circle with default size (50px radius) at the point
-        const point = currentPath.points[0];
+        const point = simplifiedPoints[0] || currentPath.points[0]; // Fallback to original points if needed
         const center = { x: point.x, y: point.y };
-        const radius = 50; // Default radius for single point (can be adjusted)
+        const radius = 50; // Default radius for single point
         
         // Generate circle points
         finalPoints = [];
-        for (let i = 0; i < 16; i++) {
-          const angle = (i / 16) * Math.PI * 2;
+        for (let i = 0; i < 24; i++) { // Increased to 24 points for smoother circles
+          const angle = (i / 24) * Math.PI * 2;
           finalPoints.push({
             x: center.x + radius * Math.cos(angle),
             y: center.y + radius * Math.sin(angle)
           });
         }
         finalPathDescription = 'circle (default size)';
+        console.log(`Created default circle with radius ${radius}px at (${center.x}, ${center.y})`);
       } 
-      // If we have enough points to determine a shape
       else {
-        // First simplify the path to remove redundant points
-        const simplifiedPoints = simplifyPath(currentPath.points);
+        // Calculate the center point of the drawing
+        const center = calculateCenter(simplifiedPoints);
         
-        // Calculate the maximum distance between any two points to determine the size
-        const { minX, minY, maxX, maxY } = getBoundingBox(simplifiedPoints);
-        const width = maxX - minX;
-        const height = maxY - minY;
-        const size = Math.max(width, height);
+        // Find the diameter of the shape based on farthest points
+        const diameter = findShapeDiameter(simplifiedPoints);
+        const radius = Math.max(diameter / 2, 30); // Ensure minimum 30px radius
         
-        // If the drawing is too small, create a reasonably sized circle
-        if (size < 30) {
-          const center = calculateCenter(simplifiedPoints);
-          const radius = Math.max(50, size * 2); // Minimum 50px radius or 2x the drawn size
-          
-          // Generate circle points
-          finalPoints = [];
-          for (let i = 0; i < 16; i++) {
-            const angle = (i / 16) * Math.PI * 2;
-            finalPoints.push({
-              x: center.x + radius * Math.cos(angle),
-              y: center.y + radius * Math.sin(angle)
-            });
-          }
-          finalPathDescription = 'circle (adjusted size)';
+        console.log(`Creating circle with center (${center.x}, ${center.y}) and radius ${radius}px`);
+        
+        // Create a perfect circle with this diameter
+        finalPoints = [];
+        for (let i = 0; i < 24; i++) { // Increased to 24 points for smoother circles
+          const angle = (i / 24) * Math.PI * 2;
+          finalPoints.push({
+            x: center.x + radius * Math.cos(angle),
+            y: center.y + radius * Math.sin(angle)
+          });
         }
-        // For normal sized drawings, detect shape type and convert
-        else {
-          // Determine if shape is more circular or rectangular
-          const center = calculateCenter(simplifiedPoints);
-          const radius = calculateAverageRadius(simplifiedPoints, center);
-          
-          // Calculate circularity vs. rectangularity
-          const area = width * height;
-          const circleArea = Math.PI * radius * radius;
-          const circularity = circleArea / area;
-          
-          // If more circular, create a circle
-          if (circularity > 0.7) {
-            finalPoints = convertToCircle(simplifiedPoints);
-            finalPathDescription = 'circle';
-          } 
-          // Otherwise create a rectangle
-          else {
-            finalPoints = convertToRectangle(simplifiedPoints);
-            finalPathDescription = 'rectangle';
-          }
-        }
+        finalPathDescription = 'circle (matched size)';
       }
     }
     
