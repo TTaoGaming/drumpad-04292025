@@ -9,6 +9,7 @@ import PerformanceDisplay from "@/components/PerformanceDisplay";
 import PerformanceMonitor from "@/components/PerformanceMonitor";
 import FpsStats from "@/components/PerformanceMetrics";
 import MediaPipeHandTracker from "@/components/MediaPipeHandTracker";
+import WorkerHandTracker from "@/components/WorkerHandTracker";
 import SettingsPanel from "@/components/settings/SettingsPanel";
 import { EventType, addListener, dispatch } from "@/lib/eventBus";
 import { Notification, HandData, PerformanceMetrics } from "@/lib/types";
@@ -255,9 +256,15 @@ function App() {
         videoRef={videoRef}
       />
       
-      {/* MediaPipe Hand Tracking - tracks your actual hands via webcam */}
+      {/* MediaPipe Hand Tracking Options */}
       {isCameraRunning && (
-        <MediaPipeHandTracker videoRef={videoRef} />
+        <>
+          {/* Worker-based MediaPipe Hand Tracking (New) */}
+          <WorkerHandTracker videoRef={videoRef} />
+          
+          {/* Original MediaPipe Hand Tracking (Legacy - disabled) */}
+          {false && <MediaPipeHandTracker videoRef={videoRef} />}
+        </>
       )}
       
       {/* Legacy hand visualization components (not used) */}
