@@ -220,14 +220,8 @@ export class ORBFeatureDetector {
       }
       ctx.closePath();
       
-      // ROI fill
-      ctx.fillStyle = 'rgba(0, 255, 0, 0.1)';
-      ctx.fill();
-      
-      // ROI outline
-      ctx.strokeStyle = 'rgba(0, 255, 0, 0.8)';
-      ctx.lineWidth = 2;
-      ctx.stroke();
+      // Only draw the feature points, not the entire ROI
+      // We've already drawn the ROI from the DrawingCanvas with the proper red color
       
       // Draw features
       roi.features.forEach(feature => {
@@ -256,18 +250,8 @@ export class ORBFeatureDetector {
         ctx.stroke();
       });
       
-      // Draw feature count text
-      const centroidX = roi.points.reduce((sum, p) => sum + p.x, 0) / roi.points.length;
-      const centroidY = roi.points.reduce((sum, p) => sum + p.y, 0) / roi.points.length;
-      
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-      ctx.fillRect(centroidX - 40, centroidY - 10, 80, 20);
-      
-      ctx.fillStyle = 'white';
-      ctx.font = '12px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(`${roi.features.length} features`, centroidX, centroidY);
+      // Don't draw feature count text box for cleaner look
+      // Features are being detected but we're not showing the count to maintain clean aesthetic
     });
   }
 }
