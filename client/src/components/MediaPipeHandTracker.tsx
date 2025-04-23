@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { EventType, dispatch, addListener } from '@/lib/eventBus';
-import { HandData, HandLandmark, HandConnection } from '@/lib/types';
+import { HandData, HandLandmark, HandConnection, PinchState } from '@/lib/types';
 import { OneEuroFilterArray, DEFAULT_FILTER_OPTIONS } from '@/lib/oneEuroFilter';
 import { HandTrackingOptimizer, OptimizationSettings, DEFAULT_OPTIMIZATION_SETTINGS } from '@/lib/handTrackingOptimizer';
 import { debounce, throttle } from '@/lib/utils';
@@ -414,7 +414,10 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
     
     return {
       isPinching: memory.isPinching,
-      distance
+      distance,
+      pendingState: newPinchState !== memory.isPinching ? newPinchState : null,
+      stableCount: memory.stableCount,
+      stabilityFrames: pinchGestureSettings.stabilityFrames
     };
   }, [calculateDistance, pinchGestureSettings]);
   

@@ -26,7 +26,10 @@ const PinchGestureSettings = () => {
   // Pinch state info from the tracker
   const [pinchState, setPinchState] = useState({
     isPinching: false,
-    distance: 0
+    distance: 0,
+    pendingState: null as boolean | null,
+    stableCount: 0,
+    stabilityFrames: 3
   });
   
   // Listen for pinch state updates from the tracker
