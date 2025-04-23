@@ -75,7 +75,14 @@ export class ORBFeatureDetector {
       return '';
     }
     
-    const id = Date.now().toString();
+    // Use the path's ID if available, otherwise generate a new one
+    const id = path.id || Date.now().toString();
+    
+    // Check if this ROI already exists
+    if (this.activeROIs.some(roi => roi.id === id)) {
+      return id; // Return the existing ID if already added
+    }
+    
     const roi: ROIWithFeatures = {
       id,
       points: [...path.points],
@@ -144,6 +151,7 @@ export class ORBFeatureDetector {
     let maxX = Number.MIN_VALUE;
     let maxY = Number.MIN_VALUE;
     
+    // Get the bounding box in pixel coordinates
     roi.points.forEach(point => {
       minX = Math.min(minX, point.x);
       minY = Math.min(minY, point.y);
@@ -151,8 +159,22 @@ export class ORBFeatureDetector {
       maxY = Math.max(maxY, point.y);
     });
     
+    // Add some margin inside the ROI
+    const marginX = (maxX - minX) * 0.1;
+    const marginY = (maxY - minY) * 0.1;
+    
+    minX += marginX;
+    minY += marginY;
+    maxX -= marginX;
+    maxY -= marginY;
+    
     // Generate random features within the bounding box that are inside the polygon
-    for (let i = 0; i < 20; i++) {
+    // Add more features for larger ROIs
+    const areaRatio = ((maxX - minX) * (maxY - minY)) / (width * height);
+    const featureCount = Math.max(10, Math.min(50, Math.floor(areaRatio * 2000)));
+    
+    for (let i = 0; i < featureCount; i++) {
+      // Generate a random position within the bounding box
       const x = minX + Math.random() * (maxX - minX);
       const y = minY + Math.random() * (maxY - minY);
       
@@ -164,11 +186,11 @@ export class ORBFeatureDetector {
           descriptor[j] = Math.floor(Math.random() * 256);
         }
         
-        // Add the feature
+        // Add the feature with reasonable parameters
         roi.features.push({
           x,
           y,
-          size: 5 + Math.random() * 10,
+          size: 3 + Math.random() * 5,  // Smaller size for better visualization
           angle: Math.random() * 360,
           response: Math.random(),
           octave: Math.floor(Math.random() * 4),
@@ -190,9 +212,11 @@ export class ORBFeatureDetector {
     this.activeROIs.forEach(roi => {
       // Draw ROI outline
       ctx.beginPath();
-      ctx.moveTo(roi.points[0].x * width, roi.points[0].y * height);
+      
+      // Points are already in pixel coordinates from the drawing canvas
+      ctx.moveTo(roi.points[0].x, roi.points[0].y);
       for (let i = 1; i < roi.points.length; i++) {
-        ctx.lineTo(roi.points[i].x * width, roi.points[i].y * height);
+        ctx.lineTo(roi.points[i].x, roi.points[i].y);
       }
       ctx.closePath();
       
@@ -207,8 +231,10 @@ export class ORBFeatureDetector {
       
       // Draw features
       roi.features.forEach(feature => {
-        const pixelX = feature.x * width;
-        const pixelY = feature.y * height;
+        // Feature coordinates are in normalized space (0-1)
+        // Convert to pixel coordinates
+        const pixelX = feature.x;
+        const pixelY = feature.y;
         
         // Feature circle
         ctx.beginPath();
@@ -231,8 +257,8 @@ export class ORBFeatureDetector {
       });
       
       // Draw feature count text
-      const centroidX = roi.points.reduce((sum, p) => sum + p.x, 0) / roi.points.length * width;
-      const centroidY = roi.points.reduce((sum, p) => sum + p.y, 0) / roi.points.length * height;
+      const centroidX = roi.points.reduce((sum, p) => sum + p.x, 0) / roi.points.length;
+      const centroidY = roi.points.reduce((sum, p) => sum + p.y, 0) / roi.points.length;
       
       ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
       ctx.fillRect(centroidX - 40, centroidY - 10, 80, 20);

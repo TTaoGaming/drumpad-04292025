@@ -11,6 +11,7 @@ export interface Point {
 
 // Path created by drawing on the canvas
 export interface DrawingPath {
+  id?: string;
   points: Point[];
   isComplete: boolean;
   isROI: boolean;

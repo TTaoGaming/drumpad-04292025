@@ -56,6 +56,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled })
           
           // Get the index fingertip position from event bus
           if (data.value.position) {
+            // Position already comes in normalized coordinates (0-1)
+            // No need to convert again
             handlePinchStateChange(isPinching, data.value.position);
           }
         }
@@ -136,6 +138,20 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled })
   useEffect(() => {
     // Only run feature detection when there are completed ROIs
     const completedROIs = paths.filter(path => path.isROI && path.isComplete);
+    
+    // Make sure the ROIs are added to the feature detector
+    completedROIs.forEach(roi => {
+      // Check if this ROI has already been added to the feature detector
+      // by looking at the existing IDs
+      const existingROIs = orbFeatureDetector.getROIs();
+      const existingROIIds = existingROIs.map(r => r.id);
+      
+      // If there's a new ROI that isn't in the feature detector, add it
+      if (roi.isComplete && roi.id && !existingROIIds.includes(roi.id) && roi.points.length >= 3) {
+        orbFeatureDetector.addROI(roi);
+      }
+    });
+    
     if (completedROIs.length === 0) return;
     
     // Set up animation frame for feature detection
@@ -226,6 +242,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled })
   // Start a new drawing path
   const startDrawing = (x: number, y: number) => {
     const newPath: DrawingPath = {
+      id: Date.now().toString(), // Add a unique ID based on timestamp
       points: [{ x, y }],
       isComplete: false,
       isROI: settings.mode === 'roi'
