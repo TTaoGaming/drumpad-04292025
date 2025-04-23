@@ -6,6 +6,7 @@ import Notifications from "@/components/Notifications";
 import ConsoleOutput from "@/components/ConsoleOutput";
 import HandVisualization from "@/components/HandVisualization";
 import PerformanceDisplay from "@/components/PerformanceDisplay";
+import PerformanceMonitor from "@/components/PerformanceMonitor";
 import MediaPipeHandTracker from "@/components/MediaPipeHandTracker";
 import SettingsPanel from "@/components/settings/SettingsPanel";
 import { EventType, addListener, dispatch } from "@/lib/eventBus";
@@ -86,6 +87,12 @@ function App() {
             ...(prev || {}),
             ...e.data.performance
           }));
+          
+          // Dispatch event for PerformanceMonitor
+          dispatch(EventType.FRAME_PROCESSED, {
+            performance: e.data.performance,
+            timestamp: Date.now()
+          });
         }
         
         // Continue processing frames
@@ -291,6 +298,9 @@ function App() {
       
       {/* Settings Panel */}
       <SettingsPanel />
+      
+      {/* Performance Monitor */}
+      <PerformanceMonitor />
     </div>
   );
 }
