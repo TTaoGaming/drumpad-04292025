@@ -145,14 +145,30 @@ function App() {
     // Listen for new drawing paths from DrawingCanvas
     const drawingListener = addListener(EventType.SETTINGS_VALUE_CHANGE, (data) => {
       if (data.section === 'drawing' && data.setting === 'newPath' && data.value) {
-        // Add the new path to our paths array
+        // Replace existing ROI paths with the new path - only keep one ROI at a time
         const newPath = data.value as DrawingPath;
-        setDrawingPaths(prev => [...prev, newPath]);
+        
+        // If this is an ROI path, replace all existing ROI paths
+        if (newPath.isROI) {
+          // Filter out any existing ROI paths and add the new one
+          setDrawingPaths(prev => {
+            // Keep only non-ROI paths (if any) and add the new ROI path
+            const nonRoiPaths = prev.filter(path => !path.isROI);
+            return [...nonRoiPaths, newPath];
+          });
+          
+          // Log for debugging
+          addLog(`Created a new ROI marker with ${newPath.points.length} points`, 'success');
+        } else {
+          // For non-ROI paths, just add to the array (maintaining backward compatibility)
+          setDrawingPaths(prev => [...prev, newPath]);
+        }
       }
       
       // Clear all paths if requested
       if (data.section === 'drawing' && data.setting === 'clearCanvas' && data.value === true) {
         setDrawingPaths([]);
+        addLog('Cleared all drawing paths', 'info');
       }
     });
 
