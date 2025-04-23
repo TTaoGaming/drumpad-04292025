@@ -13,11 +13,12 @@ import { addListener, dispatch, EventType } from '@/lib/eventBus';
 
 const PinchGestureSettings = () => {
   // Pinch gesture settings
+  const initialThreshold = 0.05;
   const [settings, setSettings] = useState({
     enabled: true,
     showVisualizer: true,
-    threshold: 0.05, // Normalized distance threshold for pinch detection (0-1)
-    releaseThreshold: 0.07, // Higher threshold to prevent flickering (hysteresis)
+    threshold: initialThreshold, // Normalized distance threshold for pinch detection (0-1)
+    releaseThreshold: initialThreshold + 0.02, // Higher threshold to prevent flickering (hysteresis)
     stabilityFrames: 3, // Number of frames to confirm a pinch state change
     activeFinger: 'index' as 'index' | 'middle' | 'ring' | 'pinky' // Which finger to use for pinching with thumb
   });
@@ -47,7 +48,6 @@ const PinchGestureSettings = () => {
   // Update settings in the tracker when changed
   useEffect(() => {
     // Dispatch event to update settings in the tracker
-    console.log("Dispatching pinch settings:", settings);
     dispatch(EventType.SETTINGS_VALUE_CHANGE, {
       section: 'gestures',
       setting: 'pinchGesture',
@@ -73,17 +73,25 @@ const PinchGestureSettings = () => {
   
   // Handle threshold change
   const handleThresholdChange = (value: number[]) => {
-    setSettings(prev => ({
-      ...prev,
-      threshold: value[0]
-    }));
+    const newThreshold = value[0];
+    setSettings(prev => {
+      // Ensure release threshold is at least equal to the pinch threshold
+      const newReleaseThreshold = Math.max(prev.releaseThreshold, newThreshold + 0.02);
+      return {
+        ...prev,
+        threshold: newThreshold,
+        releaseThreshold: newReleaseThreshold
+      };
+    });
   };
   
   // Handle release threshold change
   const handleReleaseThresholdChange = (value: number[]) => {
+    // Ensure release threshold is greater than pinch threshold
+    const newReleaseThreshold = Math.max(value[0], settings.threshold + 0.01);
     setSettings(prev => ({
       ...prev,
-      releaseThreshold: value[0]
+      releaseThreshold: newReleaseThreshold
     }));
   };
   
@@ -189,7 +197,7 @@ const PinchGestureSettings = () => {
             </div>
             <Slider
               value={[settings.releaseThreshold]}
-              min={settings.threshold}
+              min={settings.threshold + 0.01}  // Ensure at least 0.01 gap between thresholds
               max={0.2}
               step={0.01}
               onValueChange={handleReleaseThresholdChange}
