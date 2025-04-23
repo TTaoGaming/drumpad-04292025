@@ -14,6 +14,7 @@ interface DrawingCanvasProps {
   width: number;
   height: number;
   enabled: boolean;
+  initialPaths?: DrawingPath[];
 }
 
 export interface DrawingSettings {
@@ -28,10 +29,10 @@ export interface DrawingSettings {
   showFeatures: boolean;
 }
 
-const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled }) => {
+const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, initialPaths = [] }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [paths, setPaths] = useState<DrawingPath[]>([]);
+  const [paths, setPaths] = useState<DrawingPath[]>(initialPaths);
   const [currentPath, setCurrentPath] = useState<DrawingPath | null>(null);
   const [settings, setSettings] = useState<DrawingSettings>({
     enabled: enabled,

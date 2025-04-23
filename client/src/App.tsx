@@ -12,7 +12,7 @@ import MediaPipeHandTracker from "@/components/MediaPipeHandTracker";
 import DrawingCanvas from "@/components/DrawingCanvas";
 import SettingsPanel from "@/components/settings/SettingsPanel";
 import { EventType, addListener, dispatch } from "@/lib/eventBus";
-import { Notification, HandData, PerformanceMetrics } from "@/lib/types";
+import { Notification, HandData, PerformanceMetrics, DrawingPath } from "@/lib/types";
 import { getVideoFrame } from "@/lib/cameraManager";
 
 function App() {
@@ -25,6 +25,7 @@ function App() {
   const [handData, setHandData] = useState<HandData | undefined>(undefined);
   const [performanceMetrics, setPerformanceMetrics] = useState<PerformanceMetrics | undefined>(undefined);
   const [resolution, setResolution] = useState({ width: 640, height: 480 });
+  const [drawingPaths, setDrawingPaths] = useState<DrawingPath[]>([]);
 
   // References to workers
   const opencvWorkerRef = useRef<Worker | null>(null);
@@ -139,6 +140,20 @@ function App() {
     const notificationListener = addListener(EventType.NOTIFICATION, (data) => {
       addNotification(data.message, data.type);
     });
+    
+    // Listen for new drawing paths from DrawingCanvas
+    const drawingListener = addListener(EventType.SETTINGS_VALUE_CHANGE, (data) => {
+      if (data.section === 'drawing' && data.setting === 'newPath' && data.value) {
+        // Add the new path to our paths array
+        const newPath = data.value as DrawingPath;
+        setDrawingPaths(prev => [...prev, newPath]);
+      }
+      
+      // Clear all paths if requested
+      if (data.section === 'drawing' && data.setting === 'clearCanvas' && data.value === true) {
+        setDrawingPaths([]);
+      }
+    });
 
     // Initial log
     addLog('Application initialized. Click "Start Camera" to begin.');
@@ -159,6 +174,7 @@ function App() {
       fullscreenListener.remove();
       logListener.remove();
       notificationListener.remove();
+      drawingListener.remove();
     };
   }, []);
 
@@ -241,7 +257,8 @@ function App() {
 
   const addNotification = (message: string, type: 'info' | 'error' | 'success' | 'warning' = 'info') => {
     const id = Date.now().toString();
-    setNotifications(prev => [...prev, { id, message, type }]);
+    const timestamp = new Date();
+    setNotifications(prev => [...prev, { id, message, type, timestamp }]);
     
     // Auto-remove notification after 5 seconds
     setTimeout(() => {
@@ -267,6 +284,7 @@ function App() {
           width={resolution.width}
           height={resolution.height}
           enabled={true}
+          initialPaths={drawingPaths}
         />
       )}
       
