@@ -5,9 +5,6 @@ import ControlsOverlay from "@/components/ControlsOverlay";
 import Notifications from "@/components/Notifications";
 import ConsoleOutput from "@/components/ConsoleOutput";
 import HandVisualization from "@/components/HandVisualization";
-import PerformanceDisplay from "@/components/PerformanceDisplay";
-import PerformanceMonitor from "@/components/PerformanceMonitor";
-import FpsStats from "@/components/PerformanceMetrics";
 import MediaPipeHandTracker from "@/components/MediaPipeHandTracker";
 import SettingsPanel from "@/components/settings/SettingsPanel";
 import { EventType, addListener, dispatch } from "@/lib/eventBus";
@@ -84,19 +81,13 @@ function App() {
           setHandData(e.data.handData);
         }
         
-        // Update performance metrics
+        // Update performance metrics (kept for internal tracking)
         if (e.data.performance) {
           console.log('Setting performance metrics:', e.data.performance);
           setPerformanceMetrics(prev => ({
             ...(prev || {}),
             ...e.data.performance
           }));
-          
-          // Dispatch event for PerformanceMonitor
-          dispatch(EventType.FRAME_PROCESSED, {
-            performance: e.data.performance,
-            timestamp: Date.now()
-          });
         }
         
         // Continue processing frames
@@ -280,14 +271,6 @@ function App() {
         isFullscreen={isFullscreen}
       />
       
-      {/* Performance metrics display */}
-      {performanceMetrics && (
-        <PerformanceDisplay
-          performance={performanceMetrics}
-          className="absolute top-16 right-4 z-10"
-        />
-      )}
-      
       <Notifications 
         notifications={notifications}
       />
@@ -298,12 +281,6 @@ function App() {
       
       {/* Settings Panel */}
       <SettingsPanel />
-      
-      {/* Performance Monitor */}
-      <PerformanceMonitor />
-      
-      {/* FPS Statistics with averages */}
-      {isCameraRunning && <FpsStats />}
     </div>
   );
 }
