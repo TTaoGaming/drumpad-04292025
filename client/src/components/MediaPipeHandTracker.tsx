@@ -65,6 +65,25 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
     precision: 2
   });
   
+  // Pinch gesture settings
+  const [pinchGestureSettings, setPinchGestureSettings] = useState({
+    enabled: true,
+    showVisualizer: true,
+    threshold: 0.05, // Normalized distance threshold for pinch detection (0-1)
+    releaseThreshold: 0.07, // Higher threshold to prevent flickering (hysteresis)
+    stabilityFrames: 3, // Number of frames to confirm a pinch state change (prevents flickering)
+    activeFinger: 'index' as 'index' | 'middle' | 'ring' | 'pinky' // Which finger to use for pinching with thumb
+  });
+  
+  // Pinch state
+  const [isPinching, setIsPinching] = useState(false);
+  const [pinchDistance, setPinchDistance] = useState<number | null>(null);
+  const pinchStateMemoryRef = useRef({
+    isPinching: false,
+    stableCount: 0,
+    lastDistance: null as number | null
+  });
+  
   // State to store the index fingertip coordinates
   const [indexFingertipCoords, setIndexFingertipCoords] = useState<HandLandmark | null>(null);
   
@@ -307,6 +326,99 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
   const [showROI, setShowROI] = useState(true);
   
   /**
+   * Calculate distance between two landmarks in 3D space
+   * @param p1 First landmark
+   * @param p2 Second landmark
+   * @returns Distance in normalized space (0-1)
+   */
+  const calculateDistance = useCallback((p1: HandLandmark, p2: HandLandmark): number => {
+    // Calculate 3D Euclidean distance
+    return Math.sqrt(
+      Math.pow(p1.x - p2.x, 2) + 
+      Math.pow(p1.y - p2.y, 2) + 
+      Math.pow(p1.z - p2.z, 2)
+    );
+  }, []);
+  
+  /**
+   * Calculate and update pinch gesture state
+   * @param landmarks Array of landmarks from MediaPipe
+   * @returns Object with pinch state and distance
+   */
+  const calculatePinchGesture = useCallback((landmarks: HandLandmark[]): {isPinching: boolean, distance: number} => {
+    // Ensure we have landmarks
+    if (!landmarks || landmarks.length < 21) {
+      return { isPinching: false, distance: 1.0 };
+    }
+    
+    // Get the thumb tip (landmark 4)
+    const thumbTip = landmarks[4];
+    
+    // Get the active finger tip based on settings
+    let activeFingertip: HandLandmark;
+    switch (pinchGestureSettings.activeFinger) {
+      case 'index':
+        activeFingertip = landmarks[8]; // Index fingertip
+        break;
+      case 'middle':
+        activeFingertip = landmarks[12]; // Middle fingertip
+        break;
+      case 'ring':
+        activeFingertip = landmarks[16]; // Ring fingertip
+        break;
+      case 'pinky':
+        activeFingertip = landmarks[20]; // Pinky fingertip
+        break;
+      default:
+        activeFingertip = landmarks[8]; // Default to index
+    }
+    
+    // Calculate distance between thumb tip and selected finger tip
+    const distance = calculateDistance(thumbTip, activeFingertip);
+    
+    // Get current pinch state and memory
+    const memory = pinchStateMemoryRef.current;
+    
+    // Apply hysteresis - use different thresholds for pinching and releasing
+    // This prevents flickering when near the threshold
+    let newPinchState = memory.isPinching;
+    
+    if (memory.isPinching) {
+      // Currently pinching - only release if distance exceeds release threshold
+      if (distance > pinchGestureSettings.releaseThreshold) {
+        newPinchState = false;
+      }
+    } else {
+      // Currently not pinching - only start pinching if distance is below pinch threshold
+      if (distance < pinchGestureSettings.threshold) {
+        newPinchState = true;
+      }
+    }
+    
+    // Apply stability frames to prevent flickering
+    if (newPinchState !== memory.isPinching) {
+      memory.stableCount++;
+      
+      // Only change state after enough stable frames
+      if (memory.stableCount >= pinchGestureSettings.stabilityFrames) {
+        memory.isPinching = newPinchState;
+        memory.stableCount = 0;
+      }
+    } else {
+      // Reset stable count when state remains consistent
+      memory.stableCount = 0;
+    }
+    
+    // Update memory with latest values
+    memory.lastDistance = distance;
+    
+    return {
+      isPinching: memory.isPinching,
+      distance
+    };
+  }, [calculateDistance, pinchGestureSettings]);
+  
+  /**
    * Draw the Region of Interest (ROI) for debugging
    * @param ctx Canvas context 
    * @param roi ROI object with normalized coordinates
@@ -413,6 +525,11 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
         // Listen for coordinate display setting changes
         if (data.section === 'visualizations' && data.setting === 'coordinateDisplay') {
           setCoordinateDisplay(data.value);
+        }
+        
+        // Listen for pinch gesture setting changes
+        if (data.section === 'gestures' && data.setting === 'pinchGesture') {
+          setPinchGestureSettings(data.value);
         }
       }
     );
@@ -682,6 +799,164 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                     const zCoord = indexFingertip.z.toFixed(precision);
                     ctx.fillText(`Z: ${zCoord} (depth)`, displayX + 10, displayY + 95);
                   }
+                }
+              }
+            }
+            
+            // Process pinch gesture if enabled
+            if (pinchGestureSettings.enabled) {
+              // Get the first detected hand
+              const hand = results.multiHandLandmarks[0];
+              
+              // Use filtered landmarks if available
+              const landmarks = applyFilter(hand, 0, now);
+              
+              if (landmarks && landmarks.length >= 21) {
+                // Calculate pinch gesture
+                const { isPinching, distance } = calculatePinchGesture(landmarks);
+                
+                // Update state
+                setIsPinching(isPinching);
+                setPinchDistance(distance);
+                
+                // Dispatch event for other components
+                const dispatchFn = performanceSettings.throttling.enabled ? throttledDispatch : dispatch;
+                dispatchFn(EventType.SETTINGS_VALUE_CHANGE, {
+                  section: 'gestures',
+                  setting: 'pinchState',
+                  value: {
+                    isPinching,
+                    distance
+                  }
+                });
+                
+                // Visualize the pinch if enabled
+                if (pinchGestureSettings.showVisualizer) {
+                  // Get thumb and active finger tip landmarks
+                  const thumbTip = landmarks[4];
+                  
+                  // Get the selected finger tip based on settings
+                  let activeFingertip: HandLandmark;
+                  let fingerColorIndex = 1; // Default to index (orange)
+                  
+                  switch (pinchGestureSettings.activeFinger) {
+                    case 'index':
+                      activeFingertip = landmarks[8]; // Index fingertip
+                      fingerColorIndex = 1; // Orange
+                      break;
+                    case 'middle':
+                      activeFingertip = landmarks[12]; // Middle fingertip
+                      fingerColorIndex = 2; // Yellow
+                      break;
+                    case 'ring':
+                      activeFingertip = landmarks[16]; // Ring fingertip
+                      fingerColorIndex = 3; // Green
+                      break;
+                    case 'pinky':
+                      activeFingertip = landmarks[20]; // Pinky fingertip
+                      fingerColorIndex = 4; // Blue
+                      break;
+                    default:
+                      activeFingertip = landmarks[8]; // Default to index
+                      fingerColorIndex = 1; // Orange
+                  }
+                  
+                  // Convert to screen coordinates
+                  const thumbX = thumbTip.x * canvas.width;
+                  const thumbY = thumbTip.y * canvas.height;
+                  const fingerX = activeFingertip.x * canvas.width;
+                  const fingerY = activeFingertip.y * canvas.height;
+                  
+                  // Calculate midpoint between thumb and finger
+                  const midX = (thumbX + fingerX) / 2;
+                  const midY = (thumbY + fingerY) / 2;
+                  
+                  // Draw line connecting thumb and finger
+                  ctx.beginPath();
+                  ctx.moveTo(thumbX, thumbY);
+                  ctx.lineTo(fingerX, fingerY);
+                  
+                  // Line color based on pinch state
+                  const lineColor = isPinching ? '#00FF00' : FINGER_COLORS[fingerColorIndex];
+                  ctx.strokeStyle = lineColor;
+                  ctx.lineWidth = 3;
+                  ctx.stroke();
+                  
+                  // Draw circles at the tips
+                  const tipRadius = 8;
+                  
+                  // Thumb tip circle
+                  ctx.beginPath();
+                  ctx.arc(thumbX, thumbY, tipRadius, 0, 2 * Math.PI);
+                  ctx.fillStyle = FINGER_COLORS[0]; // Red (thumb color)
+                  ctx.fill();
+                  
+                  // Active finger tip circle
+                  ctx.beginPath();
+                  ctx.arc(fingerX, fingerY, tipRadius, 0, 2 * Math.PI);
+                  ctx.fillStyle = FINGER_COLORS[fingerColorIndex]; // Finger color
+                  ctx.fill();
+                  
+                  // Show distance label at midpoint
+                  // Create background for text
+                  const labelWidth = 80;
+                  const labelHeight = 24;
+                  ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                  ctx.fillRect(midX - labelWidth / 2, midY - labelHeight / 2, labelWidth, labelHeight);
+                  
+                  // Add border - green if pinching, otherwise standard color
+                  ctx.strokeStyle = isPinching ? '#00FF00' : lineColor;
+                  ctx.lineWidth = 1.5;
+                  ctx.strokeRect(midX - labelWidth / 2, midY - labelHeight / 2, labelWidth, labelHeight);
+                  
+                  // Show distance
+                  ctx.fillStyle = 'white';
+                  ctx.font = 'bold 12px sans-serif';
+                  ctx.textAlign = 'center';
+                  ctx.textBaseline = 'middle';
+                  
+                  // Format distance for display - normalized and in pixels
+                  const pixelDistance = distance * canvas.width;
+                  const distanceText = `${distance.toFixed(2)}/${Math.round(pixelDistance)}px`;
+                  ctx.fillText(distanceText, midX, midY);
+                  
+                  // Reset text alignment
+                  ctx.textAlign = 'start';
+                  ctx.textBaseline = 'alphabetic';
+                  
+                  // Add a pinch state indicator in the corner
+                  // Position below coordinate display if that's enabled
+                  const stateDisplayY = coordinateDisplay.enabled ? 
+                    (coordinateDisplay.showZ ? 160 : 130) : 40;
+                  
+                  const stateDisplayX = canvas.width - 220;
+                  const stateBoxWidth = 200;
+                  const stateBoxHeight = 70;
+                  
+                  // Create a semi-transparent background
+                  ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                  ctx.fillRect(stateDisplayX, stateDisplayY, stateBoxWidth, stateBoxHeight);
+                  
+                  // Add border that changes color based on pinch state
+                  ctx.strokeStyle = isPinching ? '#00FF00' : '#FF3333';
+                  ctx.lineWidth = 2;
+                  ctx.strokeRect(stateDisplayX, stateDisplayY, stateBoxWidth, stateBoxHeight);
+                  
+                  // Title for the state box
+                  ctx.fillStyle = 'white';
+                  ctx.font = 'bold 14px sans-serif';
+                  ctx.fillText('Pinch Gesture', stateDisplayX + 10, stateDisplayY + 20);
+                  
+                  // Display pinch state
+                  ctx.font = '13px sans-serif';
+                  const stateText = isPinching ? 'ACTIVE' : 'INACTIVE';
+                  ctx.fillStyle = isPinching ? '#00FF00' : '#FF3333';
+                  ctx.fillText(`State: ${stateText}`, stateDisplayX + 10, stateDisplayY + 45);
+                  
+                  // Display threshold info
+                  ctx.fillStyle = 'white';
+                  const thresholdText = `Threshold: ${pinchGestureSettings.threshold.toFixed(2)}`;
+                  ctx.fillText(thresholdText, stateDisplayX + 100, stateDisplayY + 45);
                 }
               }
             }
