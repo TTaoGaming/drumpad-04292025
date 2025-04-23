@@ -396,15 +396,18 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
     position: 'absolute',
     top: 0,
     left: 0,
+    width: '100%',        // Fill the entire container
+    height: '100%',       // Fill the entire container
     pointerEvents: 'none', // Allows clicks to pass through to elements below
-    zIndex: 10 // Above video but below UI controls
+    zIndex: 10,           // Above video but below UI controls
+    objectFit: 'cover'    // Cover the entire area without stretching
   };
   
   return (
     <canvas 
       ref={canvasRef}
-      width={width}
-      height={height}
+      width={canvasSize.width}
+      height={canvasSize.height}
       style={canvasStyle}
       className={!settings.enabled ? 'hidden' : ''}
     />
