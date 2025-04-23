@@ -5,7 +5,7 @@ import { getVideoFrame } from '@/lib/cameraManager';
 // Simple ROI interface without ORB features
 interface ROI {
   id: string;
-  points: {x: number, y: number}[];
+  points: {x: number, y: number}[];  // These should be normalized coords (0-1 range)
   timestamp?: number;
 }
 

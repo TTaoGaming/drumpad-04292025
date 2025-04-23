@@ -555,10 +555,31 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
       }
     }
     
-    // Add the completed path to our paths list with the new points
+    // Get the current canvas dimensions for normalization
+    const canvasWidth = canvasRef.current?.width || window.innerWidth;
+    const canvasHeight = canvasRef.current?.height || window.innerHeight;
+    
+    // For ROIs, normalize the points to 0-1 range before saving
+    let pointsToSave = finalPoints;
+    let pointsToPublish = finalPoints;
+    
+    if (currentPath.isROI) {
+      // Normalize the ROI points to 0-1 range for consistent coordinates across screen sizes
+      pointsToPublish = finalPoints.map(point => ({
+        x: point.x / canvasWidth,
+        y: point.y / canvasHeight
+      }));
+      
+      console.log(`Normalized ${finalPoints.length} ROI points from pixel coordinates to 0-1 range`);
+      console.log(`Canvas dimensions used for normalization: ${canvasWidth}x${canvasHeight}`);
+      console.log(`First point before: (${Math.round(finalPoints[0].x)}, ${Math.round(finalPoints[0].y)})`);
+      console.log(`First point after: (${pointsToPublish[0].x.toFixed(4)}, ${pointsToPublish[0].y.toFixed(4)})`);
+    }
+    
+    // Add the completed path to our paths list with the original points (for rendering in this component)
     const completedPath: DrawingPath = {
       ...currentPath,
-      points: finalPoints,
+      points: pointsToSave,
       isComplete: true
     };
     
@@ -581,11 +602,17 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
       });
     }
     
-    // Dispatch the new path as an event
+    // Create a version with normalized points for publishing
+    const publishPath = {
+      ...completedPath,
+      points: currentPath.isROI ? pointsToPublish : pointsToSave
+    };
+    
+    // Dispatch the new path as an event with normalized coordinates if ROI
     dispatch(EventType.SETTINGS_VALUE_CHANGE, {
       section: 'drawing',
       setting: 'newPath',
-      value: completedPath
+      value: publishPath
     });
   };
   
