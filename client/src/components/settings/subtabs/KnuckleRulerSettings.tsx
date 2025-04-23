@@ -25,7 +25,7 @@ const KnuckleRulerSettings: React.FC = () => {
   // Update the app when settings change
   useEffect(() => {
     dispatch(EventType.SETTINGS_VALUE_CHANGE, {
-      section: 'calibration',
+      section: 'ruler',
       setting: 'knuckleRuler',
       value: {
         enabled: isEnabled,
@@ -45,7 +45,7 @@ const KnuckleRulerSettings: React.FC = () => {
         normalizedDistance?: number;
       }
     }) => {
-      if (data.section === 'calibration' && data.setting === 'knuckleRulerRealtime') {
+      if (data.section === 'ruler' && data.setting === 'knuckleRulerRealtime') {
         setRealtimePixelDistance(data.value.pixelDistance || null);
       }
     });
