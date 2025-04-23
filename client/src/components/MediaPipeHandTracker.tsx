@@ -35,6 +35,9 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
   const lastFrameTimeRef = useRef<number | null>(null);
   const handFiltersRef = useRef<Map<number, OneEuroFilterArray[]>>(new Map());
   
+  // Loading state to handle initialization
+  const [modelLoading, setModelLoading] = useState(true);
+  
   // Filter settings state
   const [filterOptions, setFilterOptions] = useState({
     minCutoff: DEFAULT_FILTER_OPTIONS.minCutoff,
@@ -400,40 +403,16 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
           type: 'info'
         });
         
-        // Define a workaround for Module.arguments issue
-        if (typeof window !== 'undefined' && !window.hasOwnProperty('_mp_workaround_applied')) {
-          (window as any)._mp_workaround_applied = true;
-          
-          // Apply a fix before loading MediaPipe
-          const originalAO = Object.assign;
-          Object.assign = function(...args: any[]) {
-            // Check if this is the MediaPipe Module assignment that causes issues
-            if (args[0]?.hasOwnProperty?.('arguments') && args[1]?.hasOwnProperty?.('arguments')) {
-              const target = args[0];
-              const property = 'arguments';
-              if (Object.getOwnPropertyDescriptor(target, property)?.configurable === false) {
-                const otherArgs = Array.from(args).slice(1);
-                for (const source of otherArgs) {
-                  if (source.hasOwnProperty(property)) {
-                    delete source[property]; // Skip assigning this problematic property
-                  }
-                }
-              }
-            }
-            return originalAO.apply(this, args);
-          };
-        }
-        
         // Import MediaPipe libraries
         const mpHands = await import('@mediapipe/hands');
         const mpCamera = await import('@mediapipe/camera_utils');
         const mpDrawing = await import('@mediapipe/drawing_utils');
         
-        // Initialize MediaPipe Hands - use a more stable version and avoid CDN
+        // Initialize MediaPipe Hands with CDN - using version we know works
         // @ts-ignore - TypeScript doesn't like the locateFile, but it's required
         const hands = new mpHands.Hands({
           locateFile: (file: string) => {
-            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.3.1632795355/${file}`;
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`;
           }
         });
         
@@ -460,35 +439,11 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
             Math.round(1000 / (now - lastFrameTimeRef.current)) : 0;
           lastFrameTimeRef.current = now;
           
-          try {
-            // Clear canvas with a controlled fill instead of just clearing
-            // This helps prevent white flashing when errors occur
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.0)'; // Transparent fill
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-          } catch (err) {
-            console.error('Error while clearing canvas:', err);
-          }
+          // Clear canvas
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
           
           // Process hands if available
           if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-            // Extract fingertip positions from the first hand
-            if (results.multiHandLandmarks[0]) {
-              const fingertips = {
-                thumb: results.multiHandLandmarks[0][4],  // Thumb tip
-                index: results.multiHandLandmarks[0][8],  // Index fingertip
-                middle: results.multiHandLandmarks[0][12], // Middle fingertip
-                ring: results.multiHandLandmarks[0][16],  // Ring fingertip
-                pinky: results.multiHandLandmarks[0][20]  // Pinky fingertip
-              };
-              
-              // Dispatch fingertip positions
-              dispatch(EventType.SETTINGS_VALUE_CHANGE, {
-                section: 'handLandmarks',
-                setting: 'fingertipPositions',
-                value: fingertips
-              });
-            }
-            
             results.multiHandLandmarks.forEach((landmarks: any, handIndex: number) => {
               // Apply 1€ filter to hand landmarks
               const filteredLandmarks = applyFilter(landmarks, handIndex, now);
@@ -846,6 +801,9 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
             type: 'success'
           });
           
+          // Mark loading as complete when initialization is done
+          setModelLoading(false);
+          
           // Cleanup function to stop camera and hands when component unmounts
           return () => {
             camera.stop();
@@ -858,6 +816,9 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
           message: `MediaPipe initialization failed: ${error}`,
           type: 'error'
         });
+        
+        // Set loading to false even on error to allow interaction
+        setModelLoading(false);
       }
     };
     
@@ -933,9 +894,19 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
   
   return (
     <>
+      {modelLoading ? (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/80">
+          <div className="text-center p-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto mb-2"></div>
+            <p className="text-white text-sm">Initializing MediaPipe model...</p>
+            <p className="text-white/60 text-xs mt-1">This may take a moment</p>
+          </div>
+        </div>
+      ) : null}
       <canvas
         ref={canvasRef}
         className="absolute inset-0 z-10 pointer-events-none"
+        style={{ opacity: modelLoading ? 0 : 1 }}
       />
     </>
   );

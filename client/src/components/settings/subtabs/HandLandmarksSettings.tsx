@@ -3,8 +3,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
-import { Card } from '@/components/ui/card';
-import { EventType, dispatch, addListener } from '@/lib/eventBus';
+import { EventType, dispatch } from '@/lib/eventBus';
 
 const HandLandmarksSettings: React.FC = () => {
   const [showLandmarks, setShowLandmarks] = useState(true);
@@ -12,22 +11,6 @@ const HandLandmarksSettings: React.FC = () => {
   const [landmarkSize, setLandmarkSize] = useState(5);
   const [connectionWidth, setConnectionWidth] = useState(3);
   const [colorScheme, setColorScheme] = useState('rainbow');
-  const [showFingertips, setShowFingertips] = useState(true);
-  
-  // State for fingertip positions
-  const [fingertipPositions, setFingertipPositions] = useState<{
-    thumb: { x: number, y: number, z: number } | null;
-    index: { x: number, y: number, z: number } | null;
-    middle: { x: number, y: number, z: number } | null;
-    ring: { x: number, y: number, z: number } | null;
-    pinky: { x: number, y: number, z: number } | null;
-  }>({
-    thumb: null,
-    index: null,
-    middle: null,
-    ring: null,
-    pinky: null
-  });
   
   // Update app state when settings change
   useEffect(() => {
@@ -38,27 +21,10 @@ const HandLandmarksSettings: React.FC = () => {
         showConnections,
         landmarkSize,
         connectionWidth,
-        colorScheme,
-        showFingertips
+        colorScheme
       }
     });
-  }, [showLandmarks, showConnections, landmarkSize, connectionWidth, colorScheme, showFingertips]);
-  
-  // Listen for fingertip position updates
-  useEffect(() => {
-    const listener = addListener(
-      EventType.SETTINGS_VALUE_CHANGE,
-      (data) => {
-        if (data.section === 'handLandmarks' && data.setting === 'fingertipPositions') {
-          setFingertipPositions(data.value);
-        }
-      }
-    );
-    
-    return () => {
-      listener.remove();
-    };
-  }, []);
+  }, [showLandmarks, showConnections, landmarkSize, connectionWidth, colorScheme]);
   
   return (
     <div className="space-y-4">
@@ -136,42 +102,6 @@ const HandLandmarksSettings: React.FC = () => {
             </SelectContent>
           </Select>
         </div>
-      </div>
-      
-      {/* Fingertip Positions Section */}
-      <div className="pt-4 mt-4 border-t border-white/10">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h5 className="text-sm font-medium">Fingertip Positions</h5>
-            <p className="text-xs text-white/70">Real-time fingertip coordinates (normalized 0-1)</p>
-          </div>
-          <Switch 
-            checked={showFingertips}
-            onCheckedChange={setShowFingertips}
-          />
-        </div>
-        
-        {showFingertips && (
-          <Card className="bg-black/30 border-white/10 p-2">
-            <div className="space-y-2">
-              {/* Fingertip position data display */}
-              {Object.entries(fingertipPositions).map(([finger, position]) => (
-                <div key={finger} className="grid grid-cols-4 items-center text-xs">
-                  <div className="font-medium capitalize">{finger}</div>
-                  <div className="text-center">
-                    <span className="opacity-70">X:</span> {position ? position.x.toFixed(3) : '--'}
-                  </div>
-                  <div className="text-center">
-                    <span className="opacity-70">Y:</span> {position ? position.y.toFixed(3) : '--'}
-                  </div>
-                  <div className="text-center">
-                    <span className="opacity-70">Z:</span> {position ? position.z.toFixed(3) : '--'}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
-        )}
       </div>
     </div>
   );
