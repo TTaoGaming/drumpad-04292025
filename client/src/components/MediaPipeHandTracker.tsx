@@ -60,7 +60,7 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
   
   // Finger flexion settings
   const [fingerFlexionSettings, setFingerFlexionSettings] = useState({
-    enabled: true,
+    enabled: false, // Disabled by default for better performance
     enabledFingers: {
       thumb: true,
       index: true,

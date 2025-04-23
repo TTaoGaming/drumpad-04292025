@@ -50,7 +50,7 @@ type FingerType = 'thumb' | 'index' | 'middle' | 'ring' | 'pinky';
  */
 const FingerFlexionSettings: React.FC = () => {
   // Global enable/disable finger flexion detection
-  const [isEnabled, setIsEnabled] = useState(true);
+  const [isEnabled, setIsEnabled] = useState(false); // Disabled by default for better performance
   
   // Per-finger enable/disable
   const [enabledFingers, setEnabledFingers] = useState<{
@@ -184,7 +184,8 @@ const FingerFlexionSettings: React.FC = () => {
               <TooltipContent className="max-w-[280px]">
                 <p className="text-xs">
                   Measures the PIP joint angle (middle joint, like a trigger pull) to detect when fingers 
-                  are straight or bent. Enable only the specific fingers you need to save performance.
+                  are straight or bent. Disabled by default to ensure smooth performance. Only enable this
+                  feature when finger state detection is needed.
                 </p>
               </TooltipContent>
             </Tooltip>
@@ -294,8 +295,8 @@ const FingerFlexionSettings: React.FC = () => {
         </Tabs>
         
         <div className="pt-2 text-[10px] italic opacity-60">
-          PIP joint measurement focuses on the middle joint most people use when pressing buttons or triggers.
-          For best results, enable only the fingers you need to track.
+          <strong className="text-yellow-400">Performance Note:</strong> Finger flexion calculations are CPU-intensive and can reduce frame rates.
+          Only enable this feature when needed for your specific application. When enabled, use only the fingers you need.
         </div>
       </div>
     </div>
