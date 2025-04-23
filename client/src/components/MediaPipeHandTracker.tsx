@@ -209,20 +209,194 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                 landmarkFilteringEnabled: performanceSettings.landmarkFiltering.enabled
               });
               
-              // Simple drawing without worker response for now
+              // Setup worker response handler if not already set up
+              if (!mediaPipelineWorker.onmessage) {
+                mediaPipelineWorker.onmessage = (event) => {
+                  if (event.data.type === 'processed-frame' && event.data.handData) {
+                    const { landmarks: filteredLandmarks, fingerAngles, connections, colors } = event.data.handData;
+                    const canvas = canvasRef.current;
+                    if (!canvas) return;
+                    
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) return;
+                    
+                    // Clear canvas first
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    
+                    // Draw the hand landmarks and connections using the processed data
+                    if (filteredLandmarks && filteredLandmarks.length > 0) {
+                      filteredLandmarks.forEach((landmarks: any, handIndex: number) => {
+                        // Draw landmarks
+                        if (landmarksSettings.showLandmarks) {
+                          if (landmarksSettings.colorScheme === 'rainbow') {
+                            // Draw landmarks with rainbow colors by finger
+                            // Each group of landmarks (finger) gets its own color
+                            for (let i = 0; i < landmarks.length; i++) {
+                              const landmark = landmarks[i];
+                              
+                              // Determine which finger this landmark belongs to
+                              let colorIndex = 6; // Default to wrist color (violet)
+                              if (i >= 1 && i <= 4) colorIndex = 0;  // Thumb (red)
+                              else if (i >= 5 && i <= 8) colorIndex = 1;  // Index (orange)
+                              else if (i >= 9 && i <= 12) colorIndex = 2;  // Middle (yellow)
+                              else if (i >= 13 && i <= 16) colorIndex = 3;  // Ring (green)
+                              else if (i >= 17 && i <= 20) colorIndex = 4;  // Pinky (blue)
+                              
+                              const color = FINGER_COLORS[colorIndex];
+                              
+                              // Draw the landmark
+                              ctx.beginPath();
+                              ctx.arc(
+                                landmark.x * canvas.width, 
+                                landmark.y * canvas.height, 
+                                landmarksSettings.landmarkSize, 
+                                0, 
+                                2 * Math.PI
+                              );
+                              ctx.fillStyle = color;
+                              ctx.fill();
+                            }
+                          } else {
+                            // Use default MediaPipe drawing with single color
+                            mpDrawing.drawLandmarks(ctx, landmarks, {
+                              color: '#ffffff',
+                              lineWidth: 2,
+                              radius: landmarksSettings.landmarkSize
+                            });
+                          }
+                        }
+                        
+                        // Draw connections
+                        if (landmarksSettings.showConnections) {
+                          if (landmarksSettings.colorScheme === 'rainbow') {
+                            // Draw connections with rainbow colors
+                            // Get the connection info from MediaPipe
+                            const connections = mpHands.HAND_CONNECTIONS;
+                            
+                            for (let i = 0; i < connections.length; i++) {
+                              const connection = connections[i];
+                              const start = landmarks[connection[0]];
+                              const end = landmarks[connection[1]];
+                              
+                              // Determine which finger this connection belongs to
+                              let colorIndex = 5; // Default to palm color (indigo)
+                              
+                              // Check if it's a finger connection
+                              if (connection[0] >= 1 && connection[0] <= 4 && connection[1] >= 1 && connection[1] <= 4) {
+                                colorIndex = 0; // Thumb (red)
+                              } else if (connection[0] >= 5 && connection[0] <= 8 && connection[1] >= 5 && connection[1] <= 8) {
+                                colorIndex = 1; // Index (orange)
+                              } else if (connection[0] >= 9 && connection[0] <= 12 && connection[1] >= 9 && connection[1] <= 12) {
+                                colorIndex = 2; // Middle (yellow)
+                              } else if (connection[0] >= 13 && connection[0] <= 16 && connection[1] >= 13 && connection[1] <= 16) {
+                                colorIndex = 3; // Ring (green)
+                              } else if (connection[0] >= 17 && connection[0] <= 20 && connection[1] >= 17 && connection[1] <= 20) {
+                                colorIndex = 4; // Pinky (blue)
+                              }
+                              
+                              const color = FINGER_COLORS[colorIndex];
+                              
+                              // Draw the connection
+                              ctx.beginPath();
+                              ctx.moveTo(start.x * canvas.width, start.y * canvas.height);
+                              ctx.lineTo(end.x * canvas.width, end.y * canvas.height);
+                              ctx.strokeStyle = color;
+                              ctx.lineWidth = landmarksSettings.connectionWidth;
+                              ctx.stroke();
+                            }
+                          } else {
+                            // Use default MediaPipe drawing
+                            mpDrawing.drawConnectors(ctx, landmarks, mpHands.HAND_CONNECTIONS, {
+                              color: '#00ff00',
+                              lineWidth: landmarksSettings.connectionWidth
+                            });
+                          }
+                        }
+                        
+                        // Draw knuckle ruler if enabled
+                        if (knuckleRulerSettings.enabled) {
+                          const indexKnuckle = landmarks[5]; // MCP joint of index finger
+                          const pinkyKnuckle = landmarks[17]; // MCP joint of pinky finger
+                          
+                          // Calculate distance between knuckles
+                          const dx = (pinkyKnuckle.x - indexKnuckle.x) * canvas.width;
+                          const dy = (pinkyKnuckle.y - indexKnuckle.y) * canvas.height;
+                          const distance = Math.sqrt(dx * dx + dy * dy);
+                          
+                          // Scale factor (pixels per cm) based on known knuckle distance
+                          const pixelsPerCm = distance / knuckleRulerSettings.knuckleDistanceCm;
+                          
+                          // Draw ruler line
+                          ctx.beginPath();
+                          ctx.moveTo(indexKnuckle.x * canvas.width, indexKnuckle.y * canvas.height);
+                          ctx.lineTo(pinkyKnuckle.x * canvas.width, pinkyKnuckle.y * canvas.height);
+                          ctx.strokeStyle = '#00aaff';
+                          ctx.lineWidth = 2;
+                          ctx.stroke();
+                          
+                          // Draw measurement if enabled
+                          if (knuckleRulerSettings.showMeasurement) {
+                            const midX = (indexKnuckle.x + pinkyKnuckle.x) / 2 * canvas.width;
+                            const midY = (indexKnuckle.y + pinkyKnuckle.y) / 2 * canvas.height - 15;
+                            
+                            ctx.font = '12px sans-serif';
+                            ctx.fillStyle = '#ffffff';
+                            ctx.textAlign = 'center';
+                            ctx.fillText(`${knuckleRulerSettings.knuckleDistanceCm}cm`, midX, midY);
+                            ctx.fillText(`1px ≈ ${(1/pixelsPerCm).toFixed(2)}cm`, midX, midY + 15);
+                          }
+                        }
+                        
+                        // Render finger flexion state indicators if enabled
+                        if (fingerFlexionSettings.enabled && fingerFlexionSettings.showStateIndicators && fingerAngles) {
+                          const fingerNames = ['thumb', 'index', 'middle', 'ring', 'pinky'];
+                          const yOffset = 30;
+                          
+                          fingerNames.forEach((fingerName, index) => {
+                            if (!fingerFlexionSettings.enabledFingers[fingerName]) return;
+                            
+                            const angle = fingerAngles[fingerName].flex;
+                            const thresholds = fingerFlexionSettings.thresholds[fingerName].flex;
+                            
+                            // Determine state
+                            let state = 'in-between';
+                            let color = '#ffaa00';
+                            
+                            if (angle < thresholds.min) {
+                              state = 'straight';
+                              color = '#00ff00';
+                            } else if (angle > thresholds.max) {
+                              state = 'bent';
+                              color = '#0088ff';
+                            }
+                            
+                            // Draw indicator
+                            ctx.font = '12px sans-serif';
+                            ctx.fillStyle = color;
+                            ctx.textAlign = 'left';
+                            ctx.fillText(`${fingerName}: ${state} (${Math.round(angle)}°)`, 10, yOffset + (index * 20));
+                          });
+                        }
+                      });
+                    }
+                  }
+                };
+              }
+              
+              // For immediate visual feedback, draw raw landmarks while waiting for processed data
               results.multiHandLandmarks.forEach((landmarks: any) => {
                 if (landmarksSettings.showLandmarks) {
                   mpDrawing.drawLandmarks(ctx, landmarks, {
-                    color: '#ffffff',
-                    lineWidth: 2,
-                    radius: landmarksSettings.landmarkSize
+                    color: 'rgba(255, 255, 255, 0.3)', // Semi-transparent
+                    lineWidth: 1,
+                    radius: landmarksSettings.landmarkSize - 1
                   });
                 }
                 
                 if (landmarksSettings.showConnections) {
                   mpDrawing.drawConnectors(ctx, landmarks, mpHands.HAND_CONNECTIONS, {
-                    color: '#00ff00',
-                    lineWidth: landmarksSettings.connectionWidth
+                    color: 'rgba(0, 255, 0, 0.3)', // Semi-transparent
+                    lineWidth: landmarksSettings.connectionWidth - 1
                   });
                 }
               });
