@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { EventType, addListener } from '@/lib/eventBus';
 import orbFeatureDetector from '@/lib/orbFeatureDetector';
 import { ROIWithFeatures } from '@/lib/orbFeatureDetector';
+import { getVideoFrame } from '@/lib/cameraManager';
 
 interface DebugViewProps {
   width?: number;
@@ -20,6 +21,7 @@ const DebugView: React.FC<DebugViewProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [roi, setROI] = useState<ROIWithFeatures | null>(null);
   const [showDebug, setShowDebug] = useState(true);
+  const animationRef = useRef<number | null>(null);
 
   // Update ROI data when changed
   useEffect(() => {
@@ -96,6 +98,55 @@ const DebugView: React.FC<DebugViewProps> = ({
     // Calculate center offset to position ROI in the center of canvas
     const centerX = (canvas.width / 2) - ((minX + roiWidth / 2) * scale);
     const centerY = (canvas.height / 2) - ((minY + roiHeight / 2) * scale);
+
+    // Capture current video frame and draw it in the debug view
+    const videoElements = document.getElementsByTagName('video');
+    if (videoElements.length > 0) {
+      const videoElement = videoElements[0];
+      
+      if (videoElement && videoElement.readyState >= 2) {
+        try {
+          // Create a temporary canvas for cropping the video frame
+          const tempCanvas = document.createElement('canvas');
+          const tempCtx = tempCanvas.getContext('2d');
+          
+          if (tempCtx) {
+            // Extract the ROI area from the video frame
+            const margin = 20; // Add a small margin around the ROI
+            const cropX = Math.max(0, minX - margin);
+            const cropY = Math.max(0, minY - margin);
+            const cropWidth = Math.min(videoElement.videoWidth - cropX, roiWidth + margin * 2);
+            const cropHeight = Math.min(videoElement.videoHeight - cropY, roiHeight + margin * 2);
+            
+            // Set temp canvas size to the cropped area
+            tempCanvas.width = cropWidth;
+            tempCanvas.height = cropHeight;
+            
+            // Draw the cropped portion from the video
+            tempCtx.drawImage(
+              videoElement,
+              cropX, cropY, cropWidth, cropHeight,  // Source rectangle
+              0, 0, cropWidth, cropHeight           // Destination rectangle
+            );
+            
+            // Scale and draw the cropped image onto our debug canvas
+            // Position it to fit with the ROI overlay
+            const destX = (minX - cropX) * scale + centerX;
+            const destY = (minY - cropY) * scale + centerY;
+            const destWidth = cropWidth * scale;
+            const destHeight = cropHeight * scale;
+            
+            ctx.drawImage(
+              tempCanvas,
+              0, 0, cropWidth, cropHeight,         // Source rectangle
+              destX, destY, destWidth, destHeight  // Destination rectangle
+            );
+          }
+        } catch (e) {
+          console.error('Error capturing video frame for debug view:', e);
+        }
+      }
+    }
 
     // Draw ROI outline with glow effect
     // Glow effect (larger stroke with blur)
@@ -202,6 +253,192 @@ const DebugView: React.FC<DebugViewProps> = ({
     ctx.fillText(`Last Update: ${new Date(roi.timestamp || 0).toLocaleTimeString()}`, 10, 65);
 
   }, [roi]);
+  
+  // Set up animation loop for continuous updates
+  useEffect(() => {
+    // Skip if there's no ROI or no debug view
+    if (!roi || !showDebug) {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
+      return;
+    }
+    
+    // Function to render the canvas continuously
+    const updateCanvas = () => {
+      const canvas = canvasRef.current;
+      if (canvas) {
+        // Force a redraw of the canvas with the current ROI
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          // The ROI doesn't change, but the video frame does, so we'll redraw
+          // with a fresh video frame continuously
+          
+          // Find the bounding box of the ROI points
+          let minX = Number.MAX_VALUE;
+          let minY = Number.MAX_VALUE; 
+          let maxX = Number.MIN_VALUE;
+          let maxY = Number.MIN_VALUE;
+
+          roi.points.forEach(point => {
+            minX = Math.min(minX, point.x);
+            minY = Math.min(minY, point.y);
+            maxX = Math.max(maxX, point.x);
+            maxY = Math.max(maxY, point.y);
+          });
+
+          // Calculate scale to fit the ROI in the canvas with padding
+          const padding = 20;
+          const roiWidth = maxX - minX;
+          const roiHeight = maxY - minY;
+          const scaleX = (canvas.width - padding * 2) / roiWidth;
+          const scaleY = (canvas.height - padding * 2) / roiHeight;
+          const scale = Math.min(scaleX, scaleY);
+
+          // Calculate center offset to position ROI in the center of canvas
+          const centerX = (canvas.width / 2) - ((minX + roiWidth / 2) * scale);
+          const centerY = (canvas.height / 2) - ((minY + roiHeight / 2) * scale);
+          
+          // Clear canvas
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          
+          // Capture current video frame
+          const videoElements = document.getElementsByTagName('video');
+          if (videoElements.length > 0) {
+            const videoElement = videoElements[0];
+            
+            if (videoElement && videoElement.readyState >= 2) {
+              try {
+                // Create a temporary canvas for cropping the video frame
+                const tempCanvas = document.createElement('canvas');
+                const tempCtx = tempCanvas.getContext('2d');
+                
+                if (tempCtx) {
+                  // Extract the ROI area from the video frame
+                  const margin = 20; // Add a small margin around the ROI
+                  const cropX = Math.max(0, minX - margin);
+                  const cropY = Math.max(0, minY - margin);
+                  const cropWidth = Math.min(videoElement.videoWidth - cropX, roiWidth + margin * 2);
+                  const cropHeight = Math.min(videoElement.videoHeight - cropY, roiHeight + margin * 2);
+                  
+                  // Set temp canvas size to the cropped area
+                  tempCanvas.width = cropWidth;
+                  tempCanvas.height = cropHeight;
+                  
+                  // Draw the cropped portion from the video
+                  tempCtx.drawImage(
+                    videoElement,
+                    cropX, cropY, cropWidth, cropHeight,  // Source rectangle
+                    0, 0, cropWidth, cropHeight           // Destination rectangle
+                  );
+                  
+                  // Scale and draw the cropped image onto our debug canvas
+                  // Position it to fit with the ROI overlay
+                  const destX = (minX - cropX) * scale + centerX;
+                  const destY = (minY - cropY) * scale + centerY;
+                  const destWidth = cropWidth * scale;
+                  const destHeight = cropHeight * scale;
+                  
+                  ctx.drawImage(
+                    tempCanvas,
+                    0, 0, cropWidth, cropHeight,         // Source rectangle
+                    destX, destY, destWidth, destHeight  // Destination rectangle
+                  );
+                }
+              } catch (e) {
+                console.error('Error capturing video frame for debug view:', e);
+              }
+            }
+          }
+          
+          // Draw ROI outline with glow effect
+          ctx.shadowColor = 'rgba(255, 0, 0, 0.7)';
+          ctx.shadowBlur = 10;
+          ctx.beginPath();
+          ctx.moveTo(
+            roi.points[0].x * scale + centerX,
+            roi.points[0].y * scale + centerY
+          );
+          
+          for (let i = 1; i < roi.points.length; i++) {
+            ctx.lineTo(
+              roi.points[i].x * scale + centerX,
+              roi.points[i].y * scale + centerY
+            );
+          }
+          
+          ctx.closePath();
+          ctx.fillStyle = 'rgba(255, 0, 0, 0.1)';
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          
+          // Reset shadow for other drawings
+          ctx.shadowColor = 'transparent';
+          ctx.shadowBlur = 0;
+          
+          // Draw features
+          if (roi.features && roi.features.length > 0) {
+            // Draw all features
+            roi.features.forEach(feature => {
+              const x = feature.x * scale + centerX;
+              const y = feature.y * scale + centerY;
+              
+              // Feature circle with slight glow
+              ctx.shadowColor = 'rgba(255, 255, 0, 0.5)';
+              ctx.shadowBlur = 5;
+              ctx.beginPath();
+              ctx.arc(x, y, 3, 0, Math.PI * 2);
+              ctx.fillStyle = 'rgba(255, 255, 0, 0.8)';
+              ctx.fill();
+              ctx.shadowColor = 'transparent';
+              ctx.shadowBlur = 0;
+              
+              // Feature orientation line
+              const angle = feature.angle * Math.PI / 180;
+              const length = feature.size * scale;
+              ctx.beginPath();
+              ctx.moveTo(x, y);
+              ctx.lineTo(
+                x + Math.cos(angle) * length,
+                y + Math.sin(angle) * length
+              );
+              ctx.strokeStyle = 'rgba(255, 255, 0, 0.8)';
+              ctx.lineWidth = 1;
+              ctx.stroke();
+            });
+          }
+          
+          // Draw ROI info
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+          ctx.fillRect(5, 5, 190, 60);
+          
+          ctx.font = '12px sans-serif';
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+          ctx.fillText(`ROI ID: ${roi.id.substring(0, 8)}...`, 10, 20);
+          ctx.fillText(`Points: ${roi.points.length}`, 10, 35);
+          ctx.fillText(`Features: ${roi.features.length}`, 10, 50);
+          ctx.fillText(`Last Update: ${new Date(roi.timestamp || 0).toLocaleTimeString()}`, 10, 65);
+        }
+      }
+      
+      // Continue the animation loop
+      animationRef.current = requestAnimationFrame(updateCanvas);
+    };
+    
+    // Start the animation loop
+    animationRef.current = requestAnimationFrame(updateCanvas);
+    
+    // Clean up animation on unmount or when ROI/showDebug changes
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
+    };
+  }, [roi, showDebug]);
 
   // If no debug data to show but drawing is in progress
   if (!roi && showDebug) {
