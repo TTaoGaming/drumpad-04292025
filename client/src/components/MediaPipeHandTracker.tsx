@@ -840,6 +840,17 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                 
                 // Dispatch event for other components
                 const dispatchFn = performanceSettings.throttling.enabled ? throttledDispatch : dispatch;
+                
+                // Convert normalized coordinates (0-1) to pixel coordinates for the canvas
+                const canvasWidth = canvas.width;
+                const canvasHeight = canvas.height;
+                
+                const pixelX = Math.round(activeFingertip.x * canvasWidth);
+                const pixelY = Math.round(activeFingertip.y * canvasHeight);
+                
+                // Log the coordinate conversion for debugging
+                console.log(`Converting coordinates: (${activeFingertip.x.toFixed(3)}, ${activeFingertip.y.toFixed(3)}) => (${pixelX}, ${pixelY})`);
+                
                 dispatchFn(EventType.SETTINGS_VALUE_CHANGE, {
                   section: 'gestures',
                   setting: 'pinchState',
@@ -847,8 +858,8 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                     isPinching,
                     distance,
                     position: {
-                      x: activeFingertip.x,
-                      y: activeFingertip.y,
+                      x: pixelX, // Send pixel coordinates
+                      y: pixelY, // Send pixel coordinates
                       z: activeFingertip.z
                     }
                   }
@@ -859,8 +870,8 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                   section: 'tracking',
                   setting: 'indexFingertip',
                   value: {
-                    x: activeFingertip.x,
-                    y: activeFingertip.y,
+                    x: pixelX, // Send pixel coordinates
+                    y: pixelY, // Send pixel coordinates 
                     z: activeFingertip.z
                   }
                 });

@@ -72,7 +72,11 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
         if (data.section === 'tracking' && data.setting === 'indexFingertip' && settings.enabled) {
           const position = data.value;
           if (isDrawing && position) {
-            addPointToPath(position.x * width, position.y * height);
+            // No need to multiply by width/height since pinch coordinates are already in screen coordinates
+            addPointToPath(position.x, position.y);
+            
+            // Log for debugging the coordinate conversion
+            console.log('Adding point:', position.x, position.y);
           }
         }
       }
@@ -232,7 +236,11 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
   const handlePinchStateChange = (isPinching: boolean, position: { x: number, y: number }) => {
     // Start drawing when pinching begins
     if (isPinching && !isDrawing) {
-      startDrawing(position.x * width, position.y * height);
+      // Log raw position data for debugging
+      console.log('Pinch detected at raw position:', position);
+      
+      // Use coordinates directly - they are already in pixel space
+      startDrawing(position.x, position.y);
     } 
     // Stop drawing when pinching ends
     else if (!isPinching && isDrawing) {
