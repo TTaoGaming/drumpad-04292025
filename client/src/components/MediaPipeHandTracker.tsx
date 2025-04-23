@@ -399,6 +399,28 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
       perfSettingsListener.remove();
     };
   }, []);
+  
+  // Listen for visualization settings changes
+  useEffect(() => {
+    const visualizationListener = addListener(
+      EventType.SETTINGS_VALUE_CHANGE,
+      (data) => {
+        // Listen for knuckle ruler setting changes
+        if (data.section === 'calibration' && data.setting === 'knuckleRuler') {
+          setKnuckleRulerSettings(data.value);
+        }
+        
+        // Listen for coordinate display setting changes
+        if (data.section === 'visualizations' && data.setting === 'coordinateDisplay') {
+          setCoordinateDisplay(data.value);
+        }
+      }
+    );
+    
+    return () => {
+      visualizationListener.remove();
+    };
+  }, []);
 
   // Initialize MediaPipe when the component mounts
   useEffect(() => {
@@ -584,6 +606,83 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                 // Reset text alignment
                 ctx.textAlign = 'start';
                 ctx.textBaseline = 'alphabetic';
+              }
+            }
+            
+            // Extract and display index fingertip coordinates if enabled
+            if (coordinateDisplay.enabled) {
+              // Get the first detected hand
+              const hand = results.multiHandLandmarks[0];
+              
+              // Use filtered landmarks if available
+              const landmarks = applyFilter(hand, 0, now);
+              
+              // The index fingertip is landmark 8
+              if (landmarks && landmarks.length > 8) {
+                const indexFingertip = landmarks[8];
+                
+                if (indexFingertip) {
+                  // Update the state with the latest coordinates
+                  setIndexFingertipCoords(indexFingertip);
+                  
+                  // Draw a crosshair at the index fingertip position
+                  const tipX = indexFingertip.x * canvas.width;
+                  const tipY = indexFingertip.y * canvas.height;
+                  const crosshairSize = 20;
+                  
+                  // Draw crosshair lines
+                  ctx.beginPath();
+                  ctx.moveTo(tipX - crosshairSize, tipY);
+                  ctx.lineTo(tipX + crosshairSize, tipY);
+                  ctx.moveTo(tipX, tipY - crosshairSize);
+                  ctx.lineTo(tipX, tipY + crosshairSize);
+                  ctx.strokeStyle = FINGER_COLORS[1]; // Orange (index finger color)
+                  ctx.lineWidth = 2;
+                  ctx.stroke();
+                  
+                  // Draw circle around fingertip
+                  ctx.beginPath();
+                  ctx.arc(tipX, tipY, crosshairSize / 2, 0, 2 * Math.PI);
+                  ctx.strokeStyle = FINGER_COLORS[1]; // Orange (index finger color)
+                  ctx.lineWidth = 2;
+                  ctx.stroke();
+                  
+                  // Position for the coordinate display - right side of screen
+                  const displayX = canvas.width - 220;
+                  const displayY = 40; // Move up to avoid performance metrics
+                  const boxWidth = 200;
+                  const boxHeight = coordinateDisplay.showZ ? 110 : 80;
+                  
+                  // Create a semi-transparent background
+                  ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                  ctx.fillRect(displayX, displayY, boxWidth, boxHeight);
+                  
+                  // Add a border with the finger color
+                  ctx.strokeStyle = FINGER_COLORS[1]; // Orange (index finger color)
+                  ctx.lineWidth = 2;
+                  ctx.strokeRect(displayX, displayY, boxWidth, boxHeight);
+                  
+                  // Title for the coordinates box
+                  ctx.fillStyle = 'white';
+                  ctx.font = 'bold 14px sans-serif';
+                  ctx.fillText('Index Fingertip Position', displayX + 10, displayY + 20);
+                  
+                  // Format the coordinates
+                  const precision = coordinateDisplay.precision;
+                  const xCoord = indexFingertip.x.toFixed(precision);
+                  const yCoord = indexFingertip.y.toFixed(precision);
+                  
+                  // Display the X and Y coordinates
+                  ctx.font = '13px monospace'; // Monospace for better alignment
+                  ctx.fillText(`X: ${xCoord} (${Math.round(indexFingertip.x * canvas.width)}px)`, displayX + 10, displayY + 45);
+                  ctx.fillText(`Y: ${yCoord} (${Math.round(indexFingertip.y * canvas.height)}px)`, displayX + 10, displayY + 70);
+                  
+                  // Display Z coordinate if enabled
+                  if (coordinateDisplay.showZ) {
+                    const zCoord = indexFingertip.z.toFixed(precision);
+                    ctx.fillText(`Z: ${zCoord} (depth)`, displayX + 10, displayY + 95);
+                  }
+                }
               }
             }
             
