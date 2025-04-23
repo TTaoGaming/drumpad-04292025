@@ -398,25 +398,34 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
     // Dynamic imports to avoid bundling these heavy libraries
     const loadDependencies = async () => {
       try {
+        console.log("MediaPipeHandTracker - Starting to load MediaPipe dependencies");
+        
         dispatch(EventType.LOG, {
           message: 'Loading MediaPipe Hands dependencies...',
           type: 'info'
         });
         
         // Import MediaPipe libraries
+        console.log("MediaPipeHandTracker - Importing MediaPipe modules");
         const mpHands = await import('@mediapipe/hands');
         const mpCamera = await import('@mediapipe/camera_utils');
         const mpDrawing = await import('@mediapipe/drawing_utils');
+        console.log("MediaPipeHandTracker - MediaPipe modules imported successfully");
         
         // Initialize MediaPipe Hands with CDN - using version we know works
+        console.log("MediaPipeHandTracker - Creating Hands instance");
         // @ts-ignore - TypeScript doesn't like the locateFile, but it's required
         const hands = new mpHands.Hands({
           locateFile: (file: string) => {
-            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`;
+            const cdnUrl = `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`;
+            console.log(`MediaPipeHandTracker - Loading file from CDN: ${file} (${cdnUrl})`);
+            return cdnUrl;
           }
         });
+        console.log("MediaPipeHandTracker - Hands instance created successfully");
         
         // Configure Hands
+        console.log("MediaPipeHandTracker - Configuring Hands options");
         hands.setOptions({
           selfieMode: false, // Disabled mirror effect for desktop surface scenarios
           maxNumHands: 2,
@@ -424,14 +433,27 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
           minDetectionConfidence: 0.5,
           minTrackingConfidence: 0.5
         });
+        console.log("MediaPipeHandTracker - Hands options configured");
         
         // Setup result handler
+        console.log("MediaPipeHandTracker - Setting up onResults handler");
         hands.onResults((results: any) => {
+          // Log when we get results with hands
+          if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+            console.log(`MediaPipeHandTracker - Got results with ${results.multiHandLandmarks.length} hands`);
+          }
+          
           const canvas = canvasRef.current;
-          if (!canvas) return;
+          if (!canvas) {
+            console.warn("MediaPipeHandTracker - Canvas ref is null");
+            return;
+          }
           
           const ctx = canvas.getContext('2d');
-          if (!ctx) return;
+          if (!ctx) {
+            console.warn("MediaPipeHandTracker - Failed to get canvas context");
+            return;
+          }
           
           // Calculate FPS
           const now = performance.now();

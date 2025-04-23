@@ -259,11 +259,11 @@ function App() {
       {/* MediaPipe Hand Tracking Options */}
       {isCameraRunning && (
         <>
-          {/* Worker-based MediaPipe Hand Tracking (New) */}
-          <WorkerHandTracker videoRef={videoRef} />
+          {/* Original MediaPipe Hand Tracking (Main thread) */}
+          <MediaPipeHandTracker videoRef={videoRef} />
           
-          {/* Original MediaPipe Hand Tracking (Legacy - disabled) */}
-          {false && <MediaPipeHandTracker videoRef={videoRef} />}
+          {/* Worker-based MediaPipe Hand Tracking (Disabled - having CDN loading issues) */}
+          {false && <WorkerHandTracker videoRef={videoRef} />}
         </>
       )}
       
