@@ -10,6 +10,8 @@ export enum EventType {
   NOTIFICATION = 'notification',
   OPENCV_STATUS = 'opencv-status',
   PIPELINE_STATUS = 'pipeline-status',
+  // Debug and visualization
+  FEATURE_DEBUG = 'feature-debug',
   // Settings panel events
   SETTINGS_PANEL_OPEN = 'settings-panel-open',
   SETTINGS_PANEL_CLOSE = 'settings-panel-close',

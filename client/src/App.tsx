@@ -10,6 +10,7 @@ import PerformanceMonitor from "@/components/PerformanceMonitor";
 import FpsStats from "@/components/PerformanceMetrics";
 import MediaPipeHandTracker from "@/components/MediaPipeHandTracker";
 import DrawingCanvas from "@/components/DrawingCanvas";
+import DebugView from "@/components/DebugView";
 import SettingsPanel from "@/components/settings/SettingsPanel";
 import { EventType, addListener, dispatch } from "@/lib/eventBus";
 import { Notification, HandData, PerformanceMetrics, DrawingPath } from "@/lib/types";
@@ -437,6 +438,9 @@ function App() {
       
       {/* FPS Statistics with averages */}
       {isCameraRunning && <FpsStats />}
+      
+      {/* Debug View for contour detection visualization */}
+      {isCameraRunning && <DebugView enabled={true} />}
     </div>
   );
 }
