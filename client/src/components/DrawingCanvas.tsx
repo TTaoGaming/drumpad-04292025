@@ -329,6 +329,11 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
       // Use coordinates directly - they are already in pixel space
       startDrawing(position.x, position.y);
     } 
+    // Continue drawing when pinching and moving
+    else if (isPinching && isDrawing) {
+      // Add the current point to the path
+      addPointToPath(position.x, position.y);
+    }
     // Stop drawing when pinching ends
     else if (!isPinching && isDrawing) {
       stopDrawing();
@@ -502,30 +507,75 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
     let finalPoints = [...currentPath.points];
     let finalPathDescription = 'custom shape';
     
-    // Simplify or convert the shape if it's an ROI
-    if (currentPath.isROI && currentPath.points.length >= 3) {
-      // First simplify the path to remove redundant points
-      const simplifiedPoints = simplifyPath(currentPath.points);
-      
-      // Determine if shape is more circular or rectangular
-      const center = calculateCenter(simplifiedPoints);
-      const radius = calculateAverageRadius(simplifiedPoints, center);
-      const { minX, minY, maxX, maxY } = getBoundingBox(simplifiedPoints);
-      
-      // Calculate circularity vs. rectangularity
-      const area = (maxX - minX) * (maxY - minY);
-      const circleArea = Math.PI * radius * radius;
-      const circularity = circleArea / area;
-      
-      // If more circular, create a circle
-      if (circularity > 0.7) {
-        finalPoints = convertToCircle(simplifiedPoints);
-        finalPathDescription = 'circle';
+    // Handle case for ROI paths
+    if (currentPath.isROI) {
+      // For single point or very small movements, create a default circle
+      if (currentPath.points.length < 3) {
+        // Create a circle with default size (50px radius) at the point
+        const point = currentPath.points[0];
+        const center = { x: point.x, y: point.y };
+        const radius = 50; // Default radius for single point (can be adjusted)
+        
+        // Generate circle points
+        finalPoints = [];
+        for (let i = 0; i < 16; i++) {
+          const angle = (i / 16) * Math.PI * 2;
+          finalPoints.push({
+            x: center.x + radius * Math.cos(angle),
+            y: center.y + radius * Math.sin(angle)
+          });
+        }
+        finalPathDescription = 'circle (default size)';
       } 
-      // Otherwise create a rectangle
+      // If we have enough points to determine a shape
       else {
-        finalPoints = convertToRectangle(simplifiedPoints);
-        finalPathDescription = 'rectangle';
+        // First simplify the path to remove redundant points
+        const simplifiedPoints = simplifyPath(currentPath.points);
+        
+        // Calculate the maximum distance between any two points to determine the size
+        const { minX, minY, maxX, maxY } = getBoundingBox(simplifiedPoints);
+        const width = maxX - minX;
+        const height = maxY - minY;
+        const size = Math.max(width, height);
+        
+        // If the drawing is too small, create a reasonably sized circle
+        if (size < 30) {
+          const center = calculateCenter(simplifiedPoints);
+          const radius = Math.max(50, size * 2); // Minimum 50px radius or 2x the drawn size
+          
+          // Generate circle points
+          finalPoints = [];
+          for (let i = 0; i < 16; i++) {
+            const angle = (i / 16) * Math.PI * 2;
+            finalPoints.push({
+              x: center.x + radius * Math.cos(angle),
+              y: center.y + radius * Math.sin(angle)
+            });
+          }
+          finalPathDescription = 'circle (adjusted size)';
+        }
+        // For normal sized drawings, detect shape type and convert
+        else {
+          // Determine if shape is more circular or rectangular
+          const center = calculateCenter(simplifiedPoints);
+          const radius = calculateAverageRadius(simplifiedPoints, center);
+          
+          // Calculate circularity vs. rectangularity
+          const area = width * height;
+          const circleArea = Math.PI * radius * radius;
+          const circularity = circleArea / area;
+          
+          // If more circular, create a circle
+          if (circularity > 0.7) {
+            finalPoints = convertToCircle(simplifiedPoints);
+            finalPathDescription = 'circle';
+          } 
+          // Otherwise create a rectangle
+          else {
+            finalPoints = convertToRectangle(simplifiedPoints);
+            finalPathDescription = 'rectangle';
+          }
+        }
       }
     }
     
@@ -541,7 +591,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
     setIsDrawing(false);
     
     // If this is an ROI, add it to the feature detector
-    if (completedPath.isROI && completedPath.points.length >= 3) {
+    if (completedPath.isROI) {
       const roiId = orbFeatureDetector.addROI(completedPath);
       
       // Log ROI creation with the number of vertices and shape
