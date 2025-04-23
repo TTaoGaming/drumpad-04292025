@@ -23,11 +23,12 @@ import { DrawingSettings as IDrawingSettings } from '@/components/DrawingCanvas'
 import orbFeatureDetector from '@/lib/orbFeatureDetector';
 
 const DrawingSettings: React.FC = () => {
+  // Use educational number blocks color for index finger (RED = 1)
   const [settings, setSettings] = useState<IDrawingSettings>({
     enabled: true,
     mode: 'roi',
-    strokeColor: '#00FFFF', // Cyan
-    fillColor: '#00FFFF', // Cyan
+    strokeColor: '#FF0000', // Red - index finger color (1)
+    fillColor: '#FF0000', // Red - index finger color (1)
     strokeWidth: 3,
     fillOpacity: 0.2,
     autoClose: true,

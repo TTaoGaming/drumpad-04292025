@@ -49,8 +49,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
   const [settings, setSettings] = useState<DrawingSettings>({
     enabled: enabled,
     mode: 'roi',
-    strokeColor: FINGER_COLORS[0], // Blue - thumb color (5)
-    fillColor: FINGER_COLORS[0], // Blue - thumb color (5)
+    strokeColor: FINGER_COLORS[1], // Red - index finger color (1)
+    fillColor: FINGER_COLORS[1], // Red - index finger color (1)
     strokeWidth: 3,
     fillOpacity: 0.2,
     autoClose: true,
