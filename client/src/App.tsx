@@ -6,7 +6,7 @@ import Notifications from "@/components/Notifications";
 import ConsoleOutput from "@/components/ConsoleOutput";
 import HandVisualization from "@/components/HandVisualization";
 import PerformanceDisplay from "@/components/PerformanceDisplay";
-
+import PerformanceMonitor from "@/components/PerformanceMonitor";
 import FpsStats from "@/components/PerformanceMetrics";
 import MediaPipeHandTracker from "@/components/MediaPipeHandTracker";
 import SettingsPanel from "@/components/settings/SettingsPanel";
@@ -84,29 +84,14 @@ function App() {
         // Update performance metrics
         if (e.data.performance) {
           console.log('Setting performance metrics:', e.data.performance);
-          
-          // Add an FPS measurement if not present
-          const updatedPerformance = {
-            ...e.data.performance
-          };
-          
-          // Calculate fps if not provided
-          if (!updatedPerformance.fps) {
-            const now = performance.now();
-            const fps = 1000 / (now - (window as any).lastFrameTime || now);
-            (window as any).lastFrameTime = now;
-            updatedPerformance.fps = Math.min(60, fps); // Cap at 60fps
-            console.log('Calculated FPS:', updatedPerformance.fps);
-          }
-          
           setPerformanceMetrics(prev => ({
             ...(prev || {}),
-            ...updatedPerformance
+            ...e.data.performance
           }));
           
-          // Dispatch event for FPS stats
+          // Dispatch event for PerformanceMonitor
           dispatch(EventType.FRAME_PROCESSED, {
-            performance: updatedPerformance,
+            performance: e.data.performance,
             timestamp: Date.now()
           });
         }
@@ -314,6 +299,9 @@ function App() {
       
       {/* Settings Panel */}
       <SettingsPanel />
+      
+      {/* Performance Monitor */}
+      <PerformanceMonitor />
       
       {/* FPS Statistics with averages */}
       {isCameraRunning && <FpsStats />}
