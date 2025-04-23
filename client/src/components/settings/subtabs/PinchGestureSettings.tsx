@@ -244,6 +244,53 @@ const PinchGestureSettings = () => {
                 </div>
               </div>
             </div>
+            
+            {/* Thresholds Display */}
+            <div className="mt-3 pt-3 border-t border-primary/10">
+              <div className="text-sm font-medium mb-2">Current Threshold Settings</div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="flex flex-col">
+                  <div className="text-xs text-muted-foreground">Pinch Threshold</div>
+                  <div className="font-mono text-xs px-2 py-1 rounded bg-blue-500/20 text-blue-500">
+                    {settings.threshold.toFixed(3)}
+                  </div>
+                </div>
+                <div className="flex flex-col">
+                  <div className="text-xs text-muted-foreground">Release Threshold</div>
+                  <div className="font-mono text-xs px-2 py-1 rounded bg-purple-500/20 text-purple-500">
+                    {settings.releaseThreshold.toFixed(3)}
+                  </div>
+                </div>
+              </div>
+              
+              {/* Visual Gauge */}
+              <div className="mt-2 relative h-4 w-full bg-gray-200 dark:bg-gray-700 rounded overflow-hidden">
+                <div className="absolute inset-0 flex items-center">
+                  {/* Pinch threshold marker */}
+                  <div 
+                    className="absolute h-full w-0.5 bg-blue-500 z-20"
+                    style={{ left: `${(settings.threshold / 0.2) * 100}%` }}
+                  ></div>
+                  {/* Release threshold marker */}
+                  <div 
+                    className="absolute h-full w-0.5 bg-purple-500 z-20"
+                    style={{ left: `${(settings.releaseThreshold / 0.2) * 100}%` }}
+                  ></div>
+                  {/* Current distance marker */}
+                  <div 
+                    className="absolute h-full w-1 bg-orange-500 z-10"
+                    style={{ left: `${(pinchState.distance / 0.2) * 100}%` }}
+                  ></div>
+                </div>
+                {/* Gradient background */}
+                <div className="absolute inset-0 bg-gradient-to-r from-green-400 via-yellow-400 to-red-400 opacity-20"></div>
+              </div>
+              <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                <span>0.00</span>
+                <span>0.10</span>
+                <span>0.20</span>
+              </div>
+            </div>
           </div>
         </>
       )}
