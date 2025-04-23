@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { EventType, dispatch, addListener } from '@/lib/eventBus';
 import { HandData } from '@/lib/types';
 import mediaPipeWorkerService from '@/services/MediaPipeWorkerService';
-import { OneEuroFilterArray, DEFAULT_FILTER_OPTIONS } from '@/lib/oneEuroFilter';
+import { DEFAULT_FILTER_OPTIONS } from '@/lib/oneEuroFilter';
+import { OneEuroFilterArray } from '@/lib/oneEuroFilter';
 
 interface WorkerHandTrackerProps {
   videoRef: React.RefObject<HTMLVideoElement>;
@@ -305,8 +306,16 @@ const WorkerHandTracker: React.FC<WorkerHandTrackerProps> = ({ videoRef }) => {
   
   // Initialize MediaPipe worker when the component mounts
   useEffect(() => {
+    let mounted = true;
+    
     const setupWorker = async () => {
+      if (!mounted) return;
+      
       setModelLoading(true);
+      dispatch(EventType.LOG, {
+        message: 'Initializing MediaPipe hand tracking in worker...',
+        type: 'info'
+      });
       
       try {
         // Initialize the worker
@@ -320,22 +329,34 @@ const WorkerHandTracker: React.FC<WorkerHandTrackerProps> = ({ videoRef }) => {
           }
         );
         
-        if (success) {
+        if (success && mounted) {
           dispatch(EventType.LOG, {
             message: 'MediaPipe worker initialized successfully',
             type: 'success'
           });
-        } else {
+          
+          // Only if still mounted
+          if (mounted && videoRef.current && videoRef.current.readyState >= 2) {
+            mediaPipeWorkerService.startProcessing(
+              videoRef.current,
+              performanceSettings.frameProcessing.processEveryNth
+            );
+          }
+        } else if (mounted) {
           throw new Error('Failed to initialize MediaPipe worker');
         }
       } catch (error: any) {
+        if (!mounted) return;
+        
         console.error('Error initializing MediaPipe worker:', error);
         dispatch(EventType.LOG, {
           message: `MediaPipe worker initialization failed: ${error.message || error}`,
           type: 'error'
         });
       } finally {
-        setModelLoading(false);
+        if (mounted) {
+          setModelLoading(false);
+        }
       }
     };
     
@@ -343,9 +364,11 @@ const WorkerHandTracker: React.FC<WorkerHandTrackerProps> = ({ videoRef }) => {
     
     // Cleanup when component unmounts
     return () => {
+      mounted = false;
+      mediaPipeWorkerService.stopProcessing();
       mediaPipeWorkerService.dispose();
     };
-  }, [handleMediaPipeResults]);
+  }, [handleMediaPipeResults, performanceSettings.frameProcessing.processEveryNth, videoRef]);
   
   // Start processing frames when video is ready
   useEffect(() => {

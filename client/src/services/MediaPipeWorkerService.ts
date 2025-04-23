@@ -7,7 +7,7 @@
  */
 
 // Import worker as a module
-import MediaPipeWorker from '../workers/mediapipe-worker.ts?worker';
+import MediaPipeWorker from '@/workers/mediapipe-worker.ts?worker';
 import { EventType, dispatch } from '@/lib/eventBus';
 
 export interface HandLandmarks {
@@ -149,7 +149,8 @@ class MediaPipeWorkerService {
    */
   public startProcessing(videoElement: HTMLVideoElement, frameLimiter: number = 1): void {
     if (!this.initialized || !this.worker) {
-      throw new Error('MediaPipe worker not initialized');
+      console.warn('MediaPipe worker not initialized, cannot start processing');
+      return;
     }
     
     this.videoElement = videoElement;

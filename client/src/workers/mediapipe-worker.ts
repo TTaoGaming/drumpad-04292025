@@ -107,25 +107,44 @@ ctx.addEventListener('message', async (event: MessageEvent<WorkerInMessage>) => 
  */
 async function initializeMediaPipe(config: InitMessage['config']): Promise<void> {
   if (initialized) {
+    console.log('[Worker] MediaPipe already initialized, skipping');
     return;
   }
 
   if (loadingPromise) {
-    await loadingPromise;
-    return;
+    console.log('[Worker] MediaPipe initialization in progress, waiting');
+    try {
+      await loadingPromise;
+      console.log('[Worker] Existing initialization completed');
+      return;
+    } catch (error) {
+      console.error('[Worker] Existing initialization failed, retrying', error);
+      loadingPromise = null;
+    }
   }
+  
+  console.log('[Worker] Starting MediaPipe initialization');
 
   loadingPromise = (async () => {
     try {
-      // Import MediaPipe libraries
-      const mpHands = await import('@mediapipe/hands');
-      
-      // Initialize MediaPipe Hands with CDN - using version we know works
-      hands = new mpHands.Hands({
-        locateFile: (file: string) => {
-          return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`;
-        }
-      });
+      try {
+        // Import MediaPipe libraries
+        const mpHands = await import('@mediapipe/hands');
+        
+        console.log('[Worker] MediaPipe Hands imported successfully');
+        
+        // Initialize MediaPipe Hands with CDN - using version we know works
+        hands = new mpHands.Hands({
+          locateFile: (file: string) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`;
+          }
+        });
+        
+        console.log('[Worker] MediaPipe Hands instance created');
+      } catch (error) {
+        console.error('[Worker] Error importing MediaPipe Hands:', error);
+        throw error;
+      }
       
       // Configure Hands
       hands.setOptions({
@@ -185,23 +204,32 @@ async function processFrame(imageData: ImageData, timestamp: number): Promise<vo
     return; // Skip if we're still processing the previous frame
   }
   
+  if (!initialized || !hands) {
+    throw new Error('MediaPipe not initialized');
+  }
+  
   processing = true;
   lastFrameTime = timestamp;
   
-  // Create a canvas to draw the image data
-  const canvas = new OffscreenCanvas(imageData.width, imageData.height);
-  const ctx = canvas.getContext('2d');
-  
-  if (!ctx) {
+  try {
+    // Create a canvas to draw the image data
+    const canvas = new OffscreenCanvas(imageData.width, imageData.height);
+    const ctx = canvas.getContext('2d');
+    
+    if (!ctx) {
+      throw new Error('Could not get 2D context from canvas');
+    }
+    
+    // Put image data on canvas
+    ctx.putImageData(imageData, 0, 0);
+    
+    // Process with MediaPipe (results will be handled in the onResults callback)
+    await hands.send({image: canvas});
+  } catch (error) {
     processing = false;
-    throw new Error('Could not get 2D context from canvas');
+    console.error('[Worker] Error processing frame:', error);
+    throw error;
   }
-  
-  // Put image data on canvas
-  ctx.putImageData(imageData, 0, 0);
-  
-  // Process with MediaPipe (results will be handled in the onResults callback)
-  await hands.send({image: canvas});
 }
 
 /**
