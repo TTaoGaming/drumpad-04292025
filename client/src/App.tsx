@@ -6,7 +6,7 @@ import Notifications from "@/components/Notifications";
 import ConsoleOutput from "@/components/ConsoleOutput";
 import HandVisualization from "@/components/HandVisualization";
 import PerformanceDisplay from "@/components/PerformanceDisplay";
-import PerformanceMonitor from "@/components/PerformanceMonitor";
+
 import FpsStats from "@/components/PerformanceMetrics";
 import MediaPipeHandTracker from "@/components/MediaPipeHandTracker";
 import SettingsPanel from "@/components/settings/SettingsPanel";
@@ -299,9 +299,6 @@ function App() {
       
       {/* Settings Panel */}
       <SettingsPanel />
-      
-      {/* Performance Monitor */}
-      <PerformanceMonitor />
       
       {/* FPS Statistics with averages */}
       {isCameraRunning && <FpsStats />}
