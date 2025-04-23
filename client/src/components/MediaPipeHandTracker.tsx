@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { EventType, dispatch, addListener } from '@/lib/eventBus';
 import { HandData, HandLandmark, HandConnection } from '@/lib/types';
 import { OneEuroFilterArray, DEFAULT_FILTER_OPTIONS } from '@/lib/oneEuroFilter';
+import { debounce, throttle } from '@/lib/utils';
 
 interface MediaPipeHandTrackerProps {
   videoRef: React.RefObject<HTMLVideoElement>;
@@ -217,8 +218,37 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
     });
   }, []);
   
+  // Performance settings
+  const [performanceSettings, setPerformanceSettings] = useState({
+    throttling: {
+      enabled: true,
+      interval: 200, // ms
+    },
+    frameProcessing: {
+      processEveryNth: 3, // Process every 3rd frame
+    },
+    landmarkFiltering: {
+      enabled: true,
+    }
+  });
+  
+  // Create throttled dispatch function for UI updates
+  const throttledDispatch = useCallback((type: EventType, data: any) => {
+    // Use the throttle function with the current interval
+    const throttled = throttle((t: EventType, d: any) => {
+      dispatch(t, d);
+    }, performanceSettings.throttling.interval);
+    
+    throttled(type, data);
+  }, [performanceSettings.throttling.interval]);
+  
   // Apply the 1€ filter to hand landmarks
   const applyFilter = useCallback((landmarks: any, handIndex: number, timestamp: number): any => {
+    // Skip filtering if disabled in performance settings
+    if (!performanceSettings.landmarkFiltering.enabled) {
+      return landmarks;
+    }
+    
     if (!handFiltersRef.current.has(handIndex)) {
       // Create new filter array for each landmark (each has x,y,z coordinates)
       const handFilters: OneEuroFilterArray[] = [];
@@ -241,10 +271,13 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
         z: filteredValues[2]
       };
     });
-  }, [filterOptions]);
+  }, [filterOptions, performanceSettings.landmarkFiltering.enabled]);
   
   // Frame counter for limiting computation frequency
   const flexionFrameCountRef = useRef(0);
+  
+  // Frame counter for frame skipping
+  const frameCountRef = useRef(0);
   
   // State memory for hysteresis to prevent flickering
   const fingerStateMemoryRef = useRef<{
@@ -262,6 +295,37 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
     pinky: { state: 'straight', stable: true, stableCount: 0, lastAngle: null }
   });
   
+  // Listen for performance settings changes
+  useEffect(() => {
+    const perfSettingsListener = addListener(
+      EventType.SETTINGS_VALUE_CHANGE,
+      (data) => {
+        if (data.section === 'performance') {
+          if (data.setting === 'throttling') {
+            setPerformanceSettings(prev => ({
+              ...prev,
+              throttling: data.value
+            }));
+          } else if (data.setting === 'frameProcessing') {
+            setPerformanceSettings(prev => ({
+              ...prev,
+              frameProcessing: data.value
+            }));
+          } else if (data.setting === 'landmarkFiltering') {
+            setPerformanceSettings(prev => ({
+              ...prev,
+              landmarkFiltering: data.value
+            }));
+          }
+        }
+      }
+    );
+    
+    return () => {
+      perfSettingsListener.remove();
+    };
+  }, []);
+
   // Initialize MediaPipe when the component mounts
   useEffect(() => {
     // Dynamic imports to avoid bundling these heavy libraries
@@ -449,14 +513,13 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
               }
             }
             
-            // Calculate and send finger joint angles if finger flexion is enabled
-            if (fingerFlexionSettings.enabled && results.multiHandLandmarks.length > 0) {
-              // Only process angles at a reduced rate (every 3rd frame) to improve performance
-              // Increment the frame counter
-              flexionFrameCountRef.current = (flexionFrameCountRef.current + 1) % 3;
-              
-              // Only calculate on every 3rd frame
-              if (flexionFrameCountRef.current === 0) {
+            // Frame counter for skipping frames based on performance settings
+            frameCountRef.current = (frameCountRef.current + 1) % performanceSettings.frameProcessing.processEveryNth;
+            
+            // Only process frames based on the performance setting
+            if (frameCountRef.current === 0) {
+              // Calculate and send finger joint angles if finger flexion is enabled
+              if (fingerFlexionSettings.enabled && results.multiHandLandmarks.length > 0) {
                 // Performance monitoring - start timing finger angle calculations
                 const angleCalcStartTime = performance.now();
                 
@@ -478,7 +541,10 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                   const stateCalcStartTime = performance.now();
                   
                   // Send angle data to the settings panel for real-time display
-                  dispatch(EventType.SETTINGS_VALUE_CHANGE, {
+                  // Use throttled dispatch if throttling is enabled
+                  const dispatchFn = performanceSettings.throttling.enabled ? throttledDispatch : dispatch;
+                  
+                  dispatchFn(EventType.SETTINGS_VALUE_CHANGE, {
                     section: 'gestures',
                     setting: 'fingerFlexionAngles',
                     value: fingerAngles
@@ -544,7 +610,8 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                   });
                   
                   // Dispatch the finger states for gesture recognition
-                  dispatch(EventType.SETTINGS_VALUE_CHANGE, {
+                  // Use the same dispatch function (throttled or not)
+                  dispatchFn(EventType.SETTINGS_VALUE_CHANGE, {
                     section: 'gestures',
                     setting: 'fingerFlexionStates',
                     value: fingerStates

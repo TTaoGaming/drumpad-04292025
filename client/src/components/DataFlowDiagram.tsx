@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 /**
  * Data Flow Diagram Component
@@ -8,148 +7,144 @@ import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, Tabl
  * Displays a visual representation of the application's data flow architecture
  * using ASCII art and tables for simplicity and compatibility
  */
-const DataFlowDiagram: React.FC = () => {
-  const [visType, setVisType] = useState<'ascii' | 'table'>('ascii');
+const DataFlowDiagram = () => {
+  const [viewType, setViewType] = useState('ascii');
   
   return (
-    <div className="space-y-3">
-      <Tabs defaultValue="ascii" className="w-full" onValueChange={(v) => setVisType(v as 'ascii' | 'table')}>
-        <TabsList className="grid grid-cols-2 w-full">
-          <TabsTrigger value="ascii">Flow Diagram</TabsTrigger>
-          <TabsTrigger value="table">Data Table</TabsTrigger>
+    <div className="space-y-4">
+      <Tabs value={viewType} onValueChange={setViewType} className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="ascii">ASCII Diagram</TabsTrigger>
+          <TabsTrigger value="table">Component Table</TabsTrigger>
         </TabsList>
         
-        <TabsContent value="ascii" className="w-full overflow-x-auto">
-          <div className="bg-black/30 p-4 rounded-md font-mono text-xs leading-5 whitespace-pre text-white/80 min-w-[700px]">
+        <TabsContent value="ascii" className="mt-4">
+          <div className="bg-card rounded-md overflow-auto p-6">
+            <pre className="font-mono text-xs whitespace-pre text-card-foreground">
 {`
-┌───────────────┐     ┌────────────┐     ┌────────────────┐     ┌───────────────┐
-│    Webcam     │────▶│  MediaPipe │────▶│ Landmark Filter │────▶│  Angle Calc   │
-│  (30-60 FPS)  │     │(Hand Detect)│     │   (One Euro)    │     │  (PIP Joint)  │
-└───────────────┘     └────────────┘     └────────────────┘     └───────────────┘
-                                                                        │
-                                                                        ▼
-┌───────────────┐     ┌────────────┐     ┌────────────────┐     ┌───────────────┐
-│   UI Render   │◀────│  EventBus  │◀────│ State Hysteresis│◀────│ State Detect  │
-│  (React DOM)  │     │ (Messages) │     │  (Stability)    │     │(Bent/Straight)│
-└───────────────┘     └────────────┘     └────────────────┘     └───────────────┘
-
-┌─ Performance Optimization Points ──────────────────────────────────────────────┐
-│                                                                                │
-│ 1. Frame Processing (Skip frames) - Controls how often a new frame is processed │
-│ 2. Landmark Filtering - Smooth but adds processing cost                        │
-│ 3. UI Throttling - Batches visual updates to reduce render frequency           │
-│ 4. State Hysteresis - Prevents flickering by requiring consistent readings     │
-│                                                                                │
-└────────────────────────────────────────────────────────────────────────────────┘
-
-┌─ Data Type Flow ─────────────────────────────────────────────────────────────┐
-│                                                                              │
-│ Video Frame → Hand Landmarks → Filtered Points → Angles → States → UI Events │
-│  (Image)     (21 3D points)   (Smoothed XYZ)   (Degrees) (S/B/I)  (React)    │
-│                                                                              │
-└──────────────────────────────────────────────────────────────────────────────┘
+┌────────────────┐  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐
+│  User Browser  │  │  Camera Feed   │  │  MediaPipe     │  │  Landmark      │
+│  Interface     │◄─┼─Input          │◄─┼─Hand Tracking  │◄─┼─Visualization  │
+└───────┬────────┘  └───────┬────────┘  └───────┬────────┘  └───────┬────────┘
+        │                   │                   │                   │         
+        ▼                   ▼                   ▼                   ▼         
+┌────────────────┐  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐
+│  Event Bus     │  │  Frame         │  │  1€ Filter     │  │  Finger        │
+│  Messaging     │◄─┼─Processing     │◄─┼─Smoothing      │◄─┼─Tracking       │
+└───────┬────────┘  └───────┬────────┘  └───────┬────────┘  └───────┬────────┘
+        │                   │                   │                   │         
+        ▼                   ▼                   ▼                   ▼         
+┌────────────────┐  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐
+│  Settings      │  │  Performance   │  │  Gesture       │  │  Knuckle       │
+│  Panel         │◄─┼─Optimization   │◄─┼─Recognition    │◄─┼─Ruler          │
+└────────────────┘  └────────────────┘  └────────────────┘  └────────────────┘
 `}
+            </pre>
+          </div>
+          
+          <div className="text-xs text-muted-foreground mt-4">
+            <p className="mb-2">The diagram shows the flow of data through the main components:</p>
+            <ol className="list-decimal pl-5 space-y-1">
+              <li>User interface captures webcam input</li>
+              <li>MediaPipe processes video frames to detect hand landmarks</li>
+              <li>1€ Filter smooths landmarks to reduce jitter</li>
+              <li>Visualization components render the hand skeleton</li>
+              <li>Gesture detection analyzes finger positions</li>
+              <li>Event Bus enables communication between components</li>
+              <li>Settings panel controls behavior of all components</li>
+            </ol>
           </div>
         </TabsContent>
         
-        <TabsContent value="table">
-          <Table className="border border-white/10 rounded-md">
-            <TableCaption>Application Data Flow and Processing Pipeline</TableCaption>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[120px]">Stage</TableHead>
-                <TableHead>Input Data</TableHead>
-                <TableHead>Process</TableHead>
-                <TableHead>Output Data</TableHead>
-                <TableHead>Performance Impact</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow>
-                <TableCell className="font-semibold">Video Capture</TableCell>
-                <TableCell>Camera feed</TableCell>
-                <TableCell>Capture frames (30-60 FPS)</TableCell>
-                <TableCell>Video frames</TableCell>
-                <TableCell className="text-yellow-500">Medium</TableCell>
-              </TableRow>
-              
-              <TableRow>
-                <TableCell className="font-semibold">Hand Detection</TableCell>
-                <TableCell>Video frames</TableCell>
-                <TableCell>MediaPipe ML model</TableCell>
-                <TableCell>21 hand landmarks</TableCell>
-                <TableCell className="text-red-500">High</TableCell>
-              </TableRow>
-              
-              <TableRow>
-                <TableCell className="font-semibold">Filtering</TableCell>
-                <TableCell>Raw landmarks</TableCell>
-                <TableCell>One Euro Filter</TableCell>
-                <TableCell>Smooth landmarks</TableCell>
-                <TableCell className="text-green-500">Low</TableCell>
-              </TableRow>
-              
-              <TableRow>
-                <TableCell className="font-semibold">Angle Calculation</TableCell>
-                <TableCell>Filtered landmarks</TableCell>
-                <TableCell>PIP joint angle math</TableCell>
-                <TableCell>Finger flexion angles</TableCell>
-                <TableCell className="text-green-500">Low</TableCell>
-              </TableRow>
-              
-              <TableRow>
-                <TableCell className="font-semibold">State Detection</TableCell>
-                <TableCell>Joint angles</TableCell>
-                <TableCell>Threshold comparison</TableCell>
-                <TableCell>Finger states (S/B/I)</TableCell>
-                <TableCell className="text-green-500">Very Low</TableCell>
-              </TableRow>
-              
-              <TableRow>
-                <TableCell className="font-semibold">Hysteresis</TableCell>
-                <TableCell>Raw states</TableCell>
-                <TableCell>State stability check</TableCell>
-                <TableCell>Stable finger states</TableCell>
-                <TableCell className="text-green-500">Very Low</TableCell>
-              </TableRow>
-              
-              <TableRow>
-                <TableCell className="font-semibold">Event System</TableCell>
-                <TableCell>State changes</TableCell>
-                <TableCell>EventBus dispatch</TableCell>
-                <TableCell>UI update events</TableCell>
-                <TableCell className="text-yellow-500">Medium</TableCell>
-              </TableRow>
-              
-              <TableRow>
-                <TableCell className="font-semibold">UI Rendering</TableCell>
-                <TableCell>Event data</TableCell>
-                <TableCell>React DOM updates</TableCell>
-                <TableCell>Visual feedback</TableCell>
-                <TableCell className="text-yellow-500">Medium</TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
+        <TabsContent value="table" className="mt-4">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="bg-muted">
+                  <th className="border border-border p-2 text-left">Component</th>
+                  <th className="border border-border p-2 text-left">Purpose</th>
+                  <th className="border border-border p-2 text-left">Inputs</th>
+                  <th className="border border-border p-2 text-left">Outputs</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="border border-border p-2 font-medium">Camera Manager</td>
+                  <td className="border border-border p-2">Handles webcam access and provides video feed</td>
+                  <td className="border border-border p-2">User camera permission</td>
+                  <td className="border border-border p-2">Video stream, camera events</td>
+                </tr>
+                <tr>
+                  <td className="border border-border p-2 font-medium">MediaPipe Handler</td>
+                  <td className="border border-border p-2">Processes video frames to detect hand landmarks</td>
+                  <td className="border border-border p-2">Video frames</td>
+                  <td className="border border-border p-2">Hand landmark coordinates</td>
+                </tr>
+                <tr>
+                  <td className="border border-border p-2 font-medium">1€ Filter</td>
+                  <td className="border border-border p-2">Smooths hand landmarks to reduce jitter</td>
+                  <td className="border border-border p-2">Raw landmark coordinates</td>
+                  <td className="border border-border p-2">Filtered landmark coordinates</td>
+                </tr>
+                <tr>
+                  <td className="border border-border p-2 font-medium">Hand Visualization</td>
+                  <td className="border border-border p-2">Renders hand skeleton with rainbow coloring</td>
+                  <td className="border border-border p-2">Filtered landmarks, connections</td>
+                  <td className="border border-border p-2">Canvas rendering</td>
+                </tr>
+                <tr>
+                  <td className="border border-border p-2 font-medium">Finger Tracking</td>
+                  <td className="border border-border p-2">Calculates joint angles and finger states</td>
+                  <td className="border border-border p-2">Filtered landmarks</td>
+                  <td className="border border-border p-2">Finger flexion angles, states</td>
+                </tr>
+                <tr>
+                  <td className="border border-border p-2 font-medium">Knuckle Ruler</td>
+                  <td className="border border-border p-2">Calculates hand measurements for calibration</td>
+                  <td className="border border-border p-2">Hand landmarks</td>
+                  <td className="border border-border p-2">Distance measurements</td>
+                </tr>
+                <tr>
+                  <td className="border border-border p-2 font-medium">Event Bus</td>
+                  <td className="border border-border p-2">Provides pub/sub messaging between components</td>
+                  <td className="border border-border p-2">Events from all components</td>
+                  <td className="border border-border p-2">Event dispatches to subscribers</td>
+                </tr>
+                <tr>
+                  <td className="border border-border p-2 font-medium">Performance Optimizer</td>
+                  <td className="border border-border p-2">Controls processing rates and UI updates</td>
+                  <td className="border border-border p-2">User settings, system metrics</td>
+                  <td className="border border-border p-2">Throttling parameters</td>
+                </tr>
+                <tr>
+                  <td className="border border-border p-2 font-medium">Settings Panel</td>
+                  <td className="border border-border p-2">User interface for configuring all components</td>
+                  <td className="border border-border p-2">User interactions, event updates</td>
+                  <td className="border border-border p-2">Configuration changes</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          
+          <div className="text-xs text-muted-foreground mt-4">
+            <p>The architecture follows a mediator pattern using the Event Bus to decouple components. This enables:</p>
+            <ul className="list-disc pl-5 space-y-1 mt-2">
+              <li>Independent component development and testing</li>
+              <li>Easy addition of new processing modules</li>
+              <li>Runtime reconfiguration without component rewiring</li>
+              <li>Performance optimization through selective processing</li>
+            </ul>
+          </div>
         </TabsContent>
       </Tabs>
       
-      <div className="space-y-1 pt-2">
-        <h5 className="text-sm font-semibold">Performance Bottlenecks</h5>
-        <ul className="text-xs space-y-1 pl-5 list-disc">
-          <li><span className="font-medium">MediaPipe Hand Detection</span> - Most computationally expensive step</li>
-          <li><span className="font-medium">UI Updates</span> - Frequent DOM changes can cause browser to lag</li>
-          <li><span className="font-medium">Event Dispatching</span> - Too many events in quick succession</li>
-        </ul>
-      </div>
-      
-      <div className="space-y-1 pt-2">
-        <h5 className="text-sm font-semibold">Optimization Techniques</h5>
-        <ul className="text-xs space-y-1 pl-5 list-disc">
-          <li><span className="font-medium">Frame Skipping</span> - Process every Nth frame instead of every frame</li>
-          <li><span className="font-medium">UI Throttling</span> - Batch UI updates to reduce render frequency</li>
-          <li><span className="font-medium">Landmark Filtering</span> - Optional but helps prevent jitter</li>
-          <li><span className="font-medium">State Hysteresis</span> - Prevents state flickering</li>
-        </ul>
+      <div className="bg-muted/40 p-4 rounded-md mt-6">
+        <h4 className="text-sm font-medium mb-2">Technical Details</h4>
+        <p className="text-xs text-muted-foreground">
+          The application uses React for UI rendering, MediaPipe for ML-based hand detection,
+          and a custom implementation of the 1€ Filter algorithm for signal smoothing.
+          All processing happens client-side in the browser for privacy and low latency.
+        </p>
       </div>
     </div>
   );
