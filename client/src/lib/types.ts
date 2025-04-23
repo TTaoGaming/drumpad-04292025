@@ -48,14 +48,6 @@ export interface ProcessedFrameResult {
   handData?: HandData;
 }
 
-export interface PinchState {
-  isPinching: boolean;
-  distance: number;
-  pendingState: boolean | null;
-  stableCount: number;
-  stabilityFrames: number;
-}
-
 export interface WorkerMessage<T = any> {
   type: string;
   data?: T;

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { EventType, dispatch, addListener } from '@/lib/eventBus';
-import { HandData, HandLandmark, HandConnection, PinchState } from '@/lib/types';
+import { HandData, HandLandmark, HandConnection } from '@/lib/types';
 import { OneEuroFilterArray, DEFAULT_FILTER_OPTIONS } from '@/lib/oneEuroFilter';
 import { HandTrackingOptimizer, OptimizationSettings, DEFAULT_OPTIMIZATION_SETTINGS } from '@/lib/handTrackingOptimizer';
 import { debounce, throttle } from '@/lib/utils';
@@ -345,16 +345,10 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
    * @param landmarks Array of landmarks from MediaPipe
    * @returns Object with pinch state and distance
    */
-  const calculatePinchGesture = useCallback((landmarks: HandLandmark[]): PinchState => {
+  const calculatePinchGesture = useCallback((landmarks: HandLandmark[]): {isPinching: boolean, distance: number} => {
     // Ensure we have landmarks
     if (!landmarks || landmarks.length < 21) {
-      return { 
-        isPinching: false, 
-        distance: 1.0,
-        pendingState: null,
-        stableCount: 0,
-        stabilityFrames: pinchGestureSettings.stabilityFrames
-      };
+      return { isPinching: false, distance: 1.0 };
     }
     
     // Get the thumb tip (landmark 4)
@@ -389,14 +383,6 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
     // This prevents flickering when near the threshold
     let newPinchState = memory.isPinching;
     
-    // Debug pinch settings
-    console.log('Current pinch settings:', {
-      threshold: pinchGestureSettings.threshold,
-      releaseThreshold: pinchGestureSettings.releaseThreshold,
-      currentDistance: distance,
-      isPinching: memory.isPinching
-    });
-    
     if (memory.isPinching) {
       // Currently pinching - only release if distance exceeds release threshold
       if (distance > pinchGestureSettings.releaseThreshold) {
@@ -428,10 +414,7 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
     
     return {
       isPinching: memory.isPinching,
-      distance,
-      pendingState: newPinchState !== memory.isPinching ? newPinchState : null,
-      stableCount: memory.stableCount,
-      stabilityFrames: pinchGestureSettings.stabilityFrames
+      distance
     };
   }, [calculateDistance, pinchGestureSettings]);
   
@@ -546,20 +529,6 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
         
         // Listen for pinch gesture setting changes
         if (data.section === 'gestures' && data.setting === 'pinchGesture') {
-          console.log('Updating pinch gesture settings:', data.value);
-          
-          // Check if thresholds have changed to reset the pinch state memory
-          if (pinchGestureSettings.threshold !== data.value.threshold || 
-              pinchGestureSettings.releaseThreshold !== data.value.releaseThreshold) {
-            console.log('Threshold changed, resetting pinch state memory');
-            pinchStateMemoryRef.current = {
-              isPinching: false,
-              lastDistance: null,
-              stableCount: 0
-            };
-          }
-          
-          // Update the settings
           setPinchGestureSettings(data.value);
         }
       }
@@ -857,10 +826,7 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                   setting: 'pinchState',
                   value: {
                     isPinching,
-                    distance,
-                    pendingState: pinchStateMemoryRef.current.isPinching !== isPinching ? isPinching : null,
-                    stableCount: pinchStateMemoryRef.current.stableCount,
-                    stabilityFrames: pinchGestureSettings.stabilityFrames
+                    distance
                   }
                 });
                 
@@ -983,33 +949,14 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                   
                   // Display pinch state
                   ctx.font = '13px sans-serif';
-                  let stateText = isPinching ? 'ACTIVE' : 'INACTIVE';
-                  
-                  // Add pending information if state is transitioning
-                  const memory = pinchStateMemoryRef.current;
-                  const pendingState = memory.isPinching !== isPinching ? isPinching : null;
-                  if (pendingState !== null) {
-                    stateText += pendingState ? ' →ON' : ' →OFF';
-                  }
-                  
+                  const stateText = isPinching ? 'ACTIVE' : 'INACTIVE';
                   ctx.fillStyle = isPinching ? '#00FF00' : '#FF3333';
                   ctx.fillText(`State: ${stateText}`, stateDisplayX + 10, stateDisplayY + 45);
                   
                   // Display threshold info
                   ctx.fillStyle = 'white';
-                  const thresholdText = `Threshold: ${pinchGestureSettings.threshold.toFixed(3)}`;
+                  const thresholdText = `Threshold: ${pinchGestureSettings.threshold.toFixed(2)}`;
                   ctx.fillText(thresholdText, stateDisplayX + 100, stateDisplayY + 45);
-                  
-                  // Display release threshold
-                  const releaseText = `Release: ${pinchGestureSettings.releaseThreshold.toFixed(3)}`;
-                  ctx.fillText(releaseText, stateDisplayX + 100, stateDisplayY + 65);
-                  
-                  // Display stability counter if state is changing
-                  if (memory.stableCount > 0) {
-                    const stabilityText = `Stability: ${memory.stableCount}/${pinchGestureSettings.stabilityFrames}`;
-                    ctx.fillStyle = '#FFA500'; // Orange
-                    ctx.fillText(stabilityText, stateDisplayX + 10, stateDisplayY + 65);
-                  }
                 }
               }
             }

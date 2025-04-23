@@ -13,12 +13,11 @@ import { addListener, dispatch, EventType } from '@/lib/eventBus';
 
 const PinchGestureSettings = () => {
   // Pinch gesture settings
-  const initialThreshold = 0.05;
   const [settings, setSettings] = useState({
     enabled: true,
     showVisualizer: true,
-    threshold: initialThreshold, // Normalized distance threshold for pinch detection (0-1)
-    releaseThreshold: initialThreshold + 0.02, // Higher threshold to prevent flickering (hysteresis)
+    threshold: 0.05, // Normalized distance threshold for pinch detection (0-1)
+    releaseThreshold: 0.07, // Higher threshold to prevent flickering (hysteresis)
     stabilityFrames: 3, // Number of frames to confirm a pinch state change
     activeFinger: 'index' as 'index' | 'middle' | 'ring' | 'pinky' // Which finger to use for pinching with thumb
   });
@@ -26,10 +25,7 @@ const PinchGestureSettings = () => {
   // Pinch state info from the tracker
   const [pinchState, setPinchState] = useState({
     isPinching: false,
-    distance: 0,
-    pendingState: null as boolean | null,
-    stableCount: 0,
-    stabilityFrames: 3
+    distance: 0
   });
   
   // Listen for pinch state updates from the tracker
@@ -50,8 +46,6 @@ const PinchGestureSettings = () => {
   
   // Update settings in the tracker when changed
   useEffect(() => {
-    console.log('PinchGestureSettings: settings changed', settings);
-    
     // Dispatch event to update settings in the tracker
     dispatch(EventType.SETTINGS_VALUE_CHANGE, {
       section: 'gestures',
@@ -78,28 +72,17 @@ const PinchGestureSettings = () => {
   
   // Handle threshold change
   const handleThresholdChange = (value: number[]) => {
-    const newThreshold = value[0];
-    console.log('Threshold changed to:', newThreshold);
-    
-    setSettings(prev => {
-      // Ensure release threshold is at least equal to the pinch threshold
-      const newReleaseThreshold = Math.max(prev.releaseThreshold, newThreshold + 0.02);
-      console.log('New settings will be:', {threshold: newThreshold, releaseThreshold: newReleaseThreshold});
-      return {
-        ...prev,
-        threshold: newThreshold,
-        releaseThreshold: newReleaseThreshold
-      };
-    });
+    setSettings(prev => ({
+      ...prev,
+      threshold: value[0]
+    }));
   };
   
   // Handle release threshold change
   const handleReleaseThresholdChange = (value: number[]) => {
-    // Ensure release threshold is greater than pinch threshold
-    const newReleaseThreshold = Math.max(value[0], settings.threshold + 0.01);
     setSettings(prev => ({
       ...prev,
-      releaseThreshold: newReleaseThreshold
+      releaseThreshold: value[0]
     }));
   };
   
@@ -205,7 +188,7 @@ const PinchGestureSettings = () => {
             </div>
             <Slider
               value={[settings.releaseThreshold]}
-              min={settings.threshold + 0.01}  // Ensure at least 0.01 gap between thresholds
+              min={settings.threshold}
               max={0.2}
               step={0.01}
               onValueChange={handleReleaseThresholdChange}
@@ -243,11 +226,6 @@ const PinchGestureSettings = () => {
                   ? 'bg-green-500/20 text-green-500' 
                   : 'bg-red-500/20 text-red-500'}`}>
                   {pinchState.isPinching ? 'PINCHING' : 'INACTIVE'}
-                  {pinchState.pendingState !== null && (
-                    <span className="ml-1 text-xs">
-                      {pinchState.pendingState ? '(→on)' : '(→off)'}
-                    </span>
-                  )}
                 </div>
               </div>
               <div className="flex items-center space-x-2">
@@ -255,73 +233,6 @@ const PinchGestureSettings = () => {
                 <div className="font-mono px-2 py-1 rounded bg-primary/20">
                   {pinchState.distance.toFixed(3)}
                 </div>
-              </div>
-            </div>
-            
-            {/* Stability Information */}
-            {pinchState.pendingState !== null && (
-              <div className="mt-2 border-t border-primary/10 pt-2">
-                <div className="flex justify-between items-center">
-                  <div className="text-xs text-muted-foreground">Stability Counter:</div>
-                  <div className="flex items-center">
-                    <div className="h-1.5 w-full bg-gray-300 dark:bg-gray-700 rounded-full overflow-hidden mr-2">
-                      <div 
-                        className="h-full bg-blue-500 transition-all duration-200"
-                        style={{ width: `${(pinchState.stableCount / pinchState.stabilityFrames) * 100}%` }}
-                      ></div>
-                    </div>
-                    <span className="text-xs font-mono">
-                      {pinchState.stableCount}/{pinchState.stabilityFrames}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            {/* Thresholds Display */}
-            <div className="mt-3 pt-3 border-t border-primary/10">
-              <div className="text-sm font-medium mb-2">Current Threshold Settings</div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="flex flex-col">
-                  <div className="text-xs text-muted-foreground">Pinch Threshold</div>
-                  <div className="font-mono text-xs px-2 py-1 rounded bg-blue-500/20 text-blue-500">
-                    {settings.threshold.toFixed(3)}
-                  </div>
-                </div>
-                <div className="flex flex-col">
-                  <div className="text-xs text-muted-foreground">Release Threshold</div>
-                  <div className="font-mono text-xs px-2 py-1 rounded bg-purple-500/20 text-purple-500">
-                    {settings.releaseThreshold.toFixed(3)}
-                  </div>
-                </div>
-              </div>
-              
-              {/* Visual Gauge */}
-              <div className="mt-2 relative h-4 w-full bg-gray-200 dark:bg-gray-700 rounded overflow-hidden">
-                <div className="absolute inset-0 flex items-center">
-                  {/* Pinch threshold marker */}
-                  <div 
-                    className="absolute h-full w-0.5 bg-blue-500 z-20"
-                    style={{ left: `${(settings.threshold / 0.2) * 100}%` }}
-                  ></div>
-                  {/* Release threshold marker */}
-                  <div 
-                    className="absolute h-full w-0.5 bg-purple-500 z-20"
-                    style={{ left: `${(settings.releaseThreshold / 0.2) * 100}%` }}
-                  ></div>
-                  {/* Current distance marker */}
-                  <div 
-                    className="absolute h-full w-1 bg-orange-500 z-10"
-                    style={{ left: `${(pinchState.distance / 0.2) * 100}%` }}
-                  ></div>
-                </div>
-                {/* Gradient background */}
-                <div className="absolute inset-0 bg-gradient-to-r from-green-400 via-yellow-400 to-red-400 opacity-20"></div>
-              </div>
-              <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                <span>0.00</span>
-                <span>0.10</span>
-                <span>0.20</span>
               </div>
             </div>
           </div>
