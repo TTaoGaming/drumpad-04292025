@@ -47,6 +47,9 @@ function App() {
     // Store workers in refs
     opencvWorkerRef.current = opencvWorker;
     mediaPipelineWorkerRef.current = mediaPipelineWorker;
+    
+    // Make the worker globally accessible
+    (window as any).mediaPipelineWorker = mediaPipelineWorker;
 
     // Set up event listeners for worker messages
     opencvWorker.onmessage = (e) => {
@@ -192,13 +195,14 @@ function App() {
   };
 
   const processVideoFrame = () => {
-    // Only process if workers are ready and camera is running
+    // Only process if needed for non-MediaPipe processing (OpenCV, etc.)
+    // The MediaPipeHandTracker component now handles sending frames to the media pipeline worker
     if (
       isOpenCVReady && 
-      isMediaPipelineReady && 
       isCameraRunning && 
       videoRef.current && 
-      !frameProcessingRef.current
+      !frameProcessingRef.current &&
+      opencvWorkerRef.current // Only send to OpenCV worker now
     ) {
       frameProcessingRef.current = true;
       
@@ -206,23 +210,18 @@ function App() {
         // Capture frame from video
         const frameData = getVideoFrame(videoRef.current);
         
-        if (frameData && mediaPipelineWorkerRef.current) {
-          console.log('Sending frame to worker', frameData ? 'Frame available' : 'No frame');
-          
-          // Send frame to Media Pipeline worker for hand detection
-          mediaPipelineWorkerRef.current.postMessage({
+        // We now only send the frame to the OpenCV worker for additional processing
+        // The MediaPipe processing is handled directly in the MediaPipeHandTracker component
+        if (frameData && opencvWorkerRef.current) {
+          opencvWorkerRef.current.postMessage({
             command: 'process-frame',
             data: frameData
           });
-          
-          // We could also send to OpenCV worker in parallel for other processing
-          if (opencvWorkerRef.current) {
-            opencvWorkerRef.current.postMessage({
-              command: 'process-frame',
-              data: frameData
-            });
-          }
         }
+        
+        // We're no longer waiting for the media pipeline worker to respond
+        // since that's handled by the MediaPipeHandTracker component
+        frameProcessingRef.current = false;
       } catch (error) {
         console.error('Error processing video frame:', error);
         frameProcessingRef.current = false;
