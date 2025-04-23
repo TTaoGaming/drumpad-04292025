@@ -69,8 +69,8 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
   const [pinchGestureSettings, setPinchGestureSettings] = useState({
     enabled: true,
     showVisualizer: true,
-    threshold: 0.05, // Normalized distance threshold for pinch detection (0-1)
-    releaseThreshold: 0.07, // Higher threshold to prevent flickering (hysteresis)
+    threshold: 0.07, // Normalized distance threshold for pinch detection (0-1)
+    releaseThreshold: 0.10, // Higher threshold to prevent flickering (hysteresis)
     stabilityFrames: 3, // Number of frames to confirm a pinch state change (prevents flickering)
     activeFinger: 'index' as 'index' | 'middle' | 'ring' | 'pinky' // Which finger to use for pinching with thumb
   });
