@@ -3,7 +3,8 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
-import { EventType, dispatch } from '@/lib/eventBus';
+import { Card } from '@/components/ui/card';
+import { EventType, dispatch, addListener } from '@/lib/eventBus';
 
 const HandLandmarksSettings: React.FC = () => {
   const [showLandmarks, setShowLandmarks] = useState(true);
@@ -11,6 +12,22 @@ const HandLandmarksSettings: React.FC = () => {
   const [landmarkSize, setLandmarkSize] = useState(5);
   const [connectionWidth, setConnectionWidth] = useState(3);
   const [colorScheme, setColorScheme] = useState('rainbow');
+  const [showFingertips, setShowFingertips] = useState(true);
+  
+  // State for fingertip positions
+  const [fingertipPositions, setFingertipPositions] = useState<{
+    thumb: { x: number, y: number, z: number } | null;
+    index: { x: number, y: number, z: number } | null;
+    middle: { x: number, y: number, z: number } | null;
+    ring: { x: number, y: number, z: number } | null;
+    pinky: { x: number, y: number, z: number } | null;
+  }>({
+    thumb: null,
+    index: null,
+    middle: null,
+    ring: null,
+    pinky: null
+  });
   
   // Update app state when settings change
   useEffect(() => {

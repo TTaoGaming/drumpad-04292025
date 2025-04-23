@@ -441,6 +441,24 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
           
           // Process hands if available
           if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+            // Extract fingertip positions from the first hand
+            if (results.multiHandLandmarks[0]) {
+              const fingertips = {
+                thumb: results.multiHandLandmarks[0][4],  // Thumb tip
+                index: results.multiHandLandmarks[0][8],  // Index fingertip
+                middle: results.multiHandLandmarks[0][12], // Middle fingertip
+                ring: results.multiHandLandmarks[0][16],  // Ring fingertip
+                pinky: results.multiHandLandmarks[0][20]  // Pinky fingertip
+              };
+              
+              // Dispatch fingertip positions
+              dispatch(EventType.SETTINGS_VALUE_CHANGE, {
+                section: 'handLandmarks',
+                setting: 'fingertipPositions',
+                value: fingertips
+              });
+            }
+            
             results.multiHandLandmarks.forEach((landmarks: any, handIndex: number) => {
               // Apply 1€ filter to hand landmarks
               const filteredLandmarks = applyFilter(landmarks, handIndex, now);
