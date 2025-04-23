@@ -430,7 +430,9 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
         
         // Add to video container
         video.parentElement.appendChild(canvas);
-        canvasRef.current = canvas;
+        // Need to assign to a mutable ref to avoid TypeScript error
+        const currentRef = canvasRef as React.MutableRefObject<HTMLCanvasElement | null>;
+        currentRef.current = canvas;
       }
     };
     
@@ -481,11 +483,11 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
           drawConnectors: (window as any).drawConnectors
         };
         
-        // Initialize MediaPipe Hands with local files
+        // Initialize MediaPipe Hands with CDN files
         // @ts-ignore - TypeScript doesn't like the locateFile, but it's required
         const hands = new mpHands.Hands({
           locateFile: (file: string) => {
-            return `/assets/libs/mediapipe/${file}`;
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
           }
         });
         
