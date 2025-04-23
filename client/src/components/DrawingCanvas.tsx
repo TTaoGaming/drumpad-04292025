@@ -113,10 +113,10 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
               y = position.y * scaleY;
             }
             
-            addPointToPath(x, y);
-            
-            // Log for debugging the coordinate conversion
-            console.log('Adding point:', x, y);
+            // Add the point to our current path if we are drawing
+            if (currentPath && currentPath.points.length > 0) {
+              addPointToPath(x, y);
+            }
           }
         }
       }
@@ -321,21 +321,26 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
   
   // Handle pinch state changes
   const handlePinchStateChange = (isPinching: boolean, position: { x: number, y: number }) => {
+    console.log(`Pinch state change: isPinching=${isPinching}, position=(${Math.round(position.x)}, ${Math.round(position.y)}), isDrawing=${isDrawing}`);
+    
     // Start drawing when pinching begins
     if (isPinching && !isDrawing) {
       // Log raw position data for debugging
-      console.log('Pinch detected at raw position:', position);
+      console.log('Starting new drawing at:', position);
       
       // Use coordinates directly - they are already in pixel space
       startDrawing(position.x, position.y);
     } 
     // Continue drawing when pinching and moving
     else if (isPinching && isDrawing) {
-      // Add the current point to the path
+      // Add the current point to the path (with more distance info)
+      console.log('Continuing drawing with pinch at:', position);
       addPointToPath(position.x, position.y);
     }
     // Stop drawing when pinching ends
     else if (!isPinching && isDrawing) {
+      console.log('Pinch released, stopping drawing with points:', 
+                  currentPath ? currentPath.points.length : 0);
       stopDrawing();
     }
   };
@@ -363,6 +368,9 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
   const addPointToPath = (x: number, y: number) => {
     if (!currentPath) return;
     
+    // Print debug info about the point being added
+    console.log(`Adding point: (${Math.round(x)}, ${Math.round(y)})`);
+    
     // Add the new point to the current path
     setCurrentPath(prev => {
       if (!prev) return null;
@@ -371,8 +379,15 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
       const lastPoint = prev.points[prev.points.length - 1];
       const distance = Math.sqrt((x - lastPoint.x) ** 2 + (y - lastPoint.y) ** 2);
       
-      // Only add points that are at least 5 pixels away from the last point
-      if (distance < 5) return prev;
+      // Reduced distance threshold to capture more points - only 2 pixels away
+      if (distance < 2) {
+        // Skip very close points, but still log it
+        console.log(`  Point too close to last point (${Math.round(distance)}px), skipping`);
+        return prev;
+      }
+      
+      // Log addition of the point
+      console.log(`  Added point at distance ${Math.round(distance)}px from last point`);
       
       return {
         ...prev,
