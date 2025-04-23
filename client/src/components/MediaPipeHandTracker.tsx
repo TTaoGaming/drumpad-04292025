@@ -577,11 +577,29 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
               }
             }
             
-            // Frame counter for skipping frames based on performance settings
-            frameCountRef.current = (frameCountRef.current + 1) % performanceSettings.frameProcessing.processEveryNth;
+            // Get the first hand landmarks for ROI optimization
+            const firstHandLandmarks = results.multiHandLandmarks[0];
             
-            // Only process frames based on the performance setting
-            if (frameCountRef.current === 0) {
+            // Update ROI optimizer with current hand position
+            let shouldProcessFullFrame = true;
+            
+            if (performanceSettings.roiOptimization.enabled) {
+              // Update the optimizer with new hand landmarks
+              shouldProcessFullFrame = handOptimizerRef.current.update(firstHandLandmarks);
+              
+              // Draw ROI visualization if enabled
+              const roi = handOptimizerRef.current.getROI();
+              if (roi) {
+                drawROI(ctx, roi, canvas.width, canvas.height);
+              }
+            } else {
+              // If ROI optimization is disabled, use frame skipping logic
+              frameCountRef.current = (frameCountRef.current + 1) % performanceSettings.frameProcessing.processEveryNth;
+              shouldProcessFullFrame = frameCountRef.current === 0;
+            }
+            
+            // Only process frames based on optimization strategy
+            if (shouldProcessFullFrame) {
               // Calculate and send finger joint angles if finger flexion is enabled
               if (fingerFlexionSettings.enabled && results.multiHandLandmarks.length > 0) {
                 // Performance monitoring - start timing finger angle calculations
@@ -794,7 +812,17 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
     };
     
     loadDependencies();
-  }, [videoRef, applyFilter, landmarksSettings, knuckleRulerSettings, fingerFlexionSettings]);
+  }, [
+    videoRef, 
+    applyFilter, 
+    drawROI,
+    landmarksSettings, 
+    knuckleRulerSettings, 
+    fingerFlexionSettings, 
+    performanceSettings.roiOptimization.enabled,
+    calculateFingerAngles,
+    throttledDispatch
+  ]);
   
   // Resize canvas to match video dimensions
   useEffect(() => {
