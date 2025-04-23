@@ -801,6 +801,9 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
             type: 'success'
           });
           
+          // Mark loading as complete when initialization is done
+          setModelLoading(false);
+          
           // Cleanup function to stop camera and hands when component unmounts
           return () => {
             camera.stop();
@@ -813,6 +816,9 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
           message: `MediaPipe initialization failed: ${error}`,
           type: 'error'
         });
+        
+        // Set loading to false even on error to allow interaction
+        setModelLoading(false);
       }
     };
     
