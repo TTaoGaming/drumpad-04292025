@@ -72,23 +72,18 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
         if (data.section === 'gestures' && data.setting === 'pinchState' && settings.enabled) {
           const { isPinching, distance } = data.value;
           
+          console.log(`Received pinch event - isPinching: ${isPinching}, distance: ${distance.toFixed(3)}`);
+          
           // Get the index fingertip position from event bus
           if (data.value.position) {
-            // Scale coordinates to match video display size if needed
+            // The position already comes in pixel coordinates from MediaPipeHandTracker
+            // We don't need to scale - just use directly
             const position = data.value.position;
-            let x = position.x;
-            let y = position.y;
             
-            // If canvas size differs from video display size, scale coordinates
-            if (canvasSize.width !== videoDisplayWidth || canvasSize.height !== videoDisplayHeight) {
-              const scaleX = canvasSize.width / videoDisplayWidth;
-              const scaleY = canvasSize.height / videoDisplayHeight;
-              x = position.x * scaleX;
-              y = position.y * scaleY;
-              console.log(`Scaling coordinates: (${position.x}, ${position.y}) => (${x}, ${y})`);
-            }
+            console.log(`Pinch position: (${position.x}, ${position.y})`);
             
-            handlePinchStateChange(isPinching, { x, y });
+            // Handle the pinch state change with the position
+            handlePinchStateChange(isPinching, { x: position.x, y: position.y });
           }
         }
       }
@@ -100,23 +95,15 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
       (data) => {
         if (data.section === 'tracking' && data.setting === 'indexFingertip' && settings.enabled) {
           const position = data.value;
-          if (isDrawing && position) {
-            // Scale coordinates if needed
-            let x = position.x;
-            let y = position.y;
+          if (isDrawing && position && currentPath && currentPath.points.length > 0) {
+            // No need to scale - coordinates are already in pixel space from MediaPipeHandTracker
+            // Just use them directly
             
-            // If canvas size differs from video display size, scale coordinates
-            if (canvasSize.width !== videoDisplayWidth || canvasSize.height !== videoDisplayHeight) {
-              const scaleX = canvasSize.width / videoDisplayWidth;
-              const scaleY = canvasSize.height / videoDisplayHeight;
-              x = position.x * scaleX;
-              y = position.y * scaleY;
-            }
+            // Add point to our current drawing path
+            addPointToPath(position.x, position.y);
             
-            // Add the point to our current path if we are drawing
-            if (currentPath && currentPath.points.length > 0) {
-              addPointToPath(x, y);
-            }
+            // Log for debugging
+            console.log(`Continuing drawing with fingertip at (${Math.round(position.x)}, ${Math.round(position.y)})`);
           }
         }
       }
@@ -137,7 +124,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
       fingerPositionListener.remove();
       settingsListener.remove();
     };
-  }, [isDrawing, width, height, settings.enabled]);
+  }, [isDrawing, width, height, settings.enabled, currentPath]);
   
   // Drawing canvas renderer
   useEffect(() => {
@@ -556,20 +543,16 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
     
     // For AR MPE drumpad applications, we always use circular ROIs based on drawn diameter
     if (currentPath.isROI) {
-      // First simplify the path to remove redundant points and filter out spikes
-      const simplifiedPoints = simplifyPath(currentPath.points, 5); // Lower tolerance value for more detailed paths
-      console.log(`Simplified points from ${currentPath.points.length} to ${simplifiedPoints.length} points`);
-      
-      // For single point or very small movements, create a default circle
-      if (simplifiedPoints.length < 3) {
-        // Create a circle with default size (50px radius) at the point
-        const point = simplifiedPoints[0] || currentPath.points[0]; // Fallback to original points if needed
+      // First validate that we have enough points to work with
+      if (currentPath.points.length < 3) {
+        // Create a default circle at the single point
+        const point = currentPath.points[0];
         const center = { x: point.x, y: point.y };
-        const radius = 50; // Default radius for single point
+        const radius = 50; // Default radius for single point (100px diameter)
         
         // Generate circle points
         finalPoints = [];
-        for (let i = 0; i < 24; i++) { // Increased to 24 points for smoother circles
+        for (let i = 0; i < 24; i++) {
           const angle = (i / 24) * Math.PI * 2;
           finalPoints.push({
             x: center.x + radius * Math.cos(angle),
@@ -580,18 +563,25 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
         console.log(`Created default circle with radius ${radius}px at (${center.x}, ${center.y})`);
       } 
       else {
-        // Calculate the center point of the drawing
-        const center = calculateCenter(simplifiedPoints);
+        // We have enough points for a proper shape
+        console.log(`Processing ${currentPath.points.length} points for ROI creation`);
         
-        // Find the diameter of the shape based on farthest points
-        const diameter = findShapeDiameter(simplifiedPoints);
+        // Keep all points for better size measurement - no simplification for diameter calculation
+        const allPoints = [...currentPath.points];
+        
+        // Calculate the center point of the drawing
+        const center = calculateCenter(allPoints);
+        
+        // Find the diameter based on farthest points (the true maximum width of drawing)
+        const diameter = findShapeDiameter(allPoints);
         const radius = Math.max(diameter / 2, 30); // Ensure minimum 30px radius
         
-        console.log(`Creating circle with center (${center.x}, ${center.y}) and radius ${radius}px`);
+        console.log(`Measured drawing diameter: ${diameter}px (radius: ${radius}px)`);
+        console.log(`Creating circle with center (${Math.round(center.x)}, ${Math.round(center.y)}) and radius ${Math.round(radius)}px`);
         
         // Create a perfect circle with this diameter
         finalPoints = [];
-        for (let i = 0; i < 24; i++) { // Increased to 24 points for smoother circles
+        for (let i = 0; i < 24; i++) {
           const angle = (i / 24) * Math.PI * 2;
           finalPoints.push({
             x: center.x + radius * Math.cos(angle),
