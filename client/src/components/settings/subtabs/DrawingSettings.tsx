@@ -33,10 +33,8 @@ const DrawingSettings: React.FC = () => {
     fillOpacity: 0.15, // More subtle transparency for professional look
     autoClose: true,
     smoothing: true,
-    showFeatures: false // Hide feature points for cleaner visualization
+    showFeatures: false // Kept for interface compatibility
   });
-  
-  const [featureCount, setFeatureCount] = useState(0);
 
   // Update global state when settings change
   useEffect(() => {
@@ -47,16 +45,9 @@ const DrawingSettings: React.FC = () => {
     });
   }, [settings]);
   
-  // Update feature count periodically
+  // No longer need to track feature count since we removed the feature detection
   useEffect(() => {
-    const intervalId = setInterval(() => {
-      // Count total features across all ROIs
-      const rois = orbFeatureDetector.getROIs();
-      const totalFeatures = rois.reduce((sum, roi) => sum + roi.features.length, 0);
-      setFeatureCount(totalFeatures);
-    }, 1000);
-    
-    return () => clearInterval(intervalId);
+    // No need for any interval or updating feature count
   }, []);
 
   // Handle changes to individual settings
@@ -219,36 +210,7 @@ const DrawingSettings: React.FC = () => {
             </div>
           )}
           
-          {/* Feature visualization settings - only shown in ROI mode */}
-          {settings.mode === 'roi' && (
-            <>
-              <Separator />
-              
-              <div className="space-y-4">
-                <h3 className="text-sm font-medium">Feature Detection</h3>
-                
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="show-features">Show Feature Points</Label>
-                  <Switch 
-                    id="show-features"
-                    checked={settings.showFeatures}
-                    onCheckedChange={(checked) => handleSettingChange('showFeatures', checked)}
-                  />
-                </div>
-                
-                <div className="p-3 bg-black/20 rounded-md">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-white/70">Total detected features:</span>
-                    <span className="text-sm font-medium">{featureCount}</span>
-                  </div>
-                  
-                  <div className="mt-2 text-xs text-white/60">
-                    Features are detected within your ROI selections. Draw closed shapes to define regions of interest.
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
+          {/* Feature detection section removed */}
           
           <Separator />
           

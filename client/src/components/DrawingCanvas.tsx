@@ -161,11 +161,6 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
       drawPath(ctx, currentPath);
     }
     
-    // Draw feature points if enabled
-    if (settings.showFeatures) {
-      orbFeatureDetector.drawFeatures(ctx, canvasSize.width, canvasSize.height);
-    }
-    
     // Publish the current ROIs to the event bus
     const rois = paths.filter(path => path.isROI && path.isComplete);
     if (rois.length > 0) {
@@ -177,58 +172,20 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
     }
   }, [paths, currentPath, canvasSize, settings]);
   
-  // Process video frames for feature detection
+  // ROI Management
   useEffect(() => {
-    // Only run feature detection when there are completed ROIs
+    // Only track completed ROIs
     const completedROIs = paths.filter(path => path.isROI && path.isComplete);
     
-    // Make sure the ROIs are added to the feature detector
+    // Make sure the ROIs are added to the ROI manager
     completedROIs.forEach(roi => {
-      // Check if this ROI has already been added to the feature detector
-      // by looking at the existing IDs
-      const existingROIs = orbFeatureDetector.getROIs();
-      const existingROIIds = existingROIs.map(r => r.id);
-      
-      // If there's a new ROI that isn't in the feature detector, add it
-      if (roi.isComplete && roi.id && !existingROIIds.includes(roi.id) && roi.points.length >= 3) {
+      // Add the ROI if it has enough points and is complete
+      if (roi.isComplete && roi.id && roi.points.length >= 3) {
         orbFeatureDetector.addROI(roi);
       }
     });
     
-    if (completedROIs.length === 0) return;
-    
-    // Set up animation frame for feature detection
-    let animationFrameId: number;
-    let videoElement: HTMLVideoElement | null = null;
-    
-    // Find the first video element
-    const videos = document.getElementsByTagName('video');
-    if (videos.length > 0) {
-      videoElement = videos[0];
-    }
-    
-    // Process frames for feature detection
-    const processFrame = () => {
-      if (videoElement && videoElement.readyState >= 2) {
-        const frameData = getVideoFrame(videoElement);
-        if (frameData) {
-          orbFeatureDetector.processFrame(frameData);
-        }
-      }
-      
-      // Request next frame
-      animationFrameId = requestAnimationFrame(processFrame);
-    };
-    
-    // Start processing
-    animationFrameId = requestAnimationFrame(processFrame);
-    
-    // Clean up on component unmount
-    return () => {
-      if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
-      }
-    };
+    // No frame processing needed anymore since we removed feature detection
   }, [paths]);
   
   // Draw a path to the canvas
@@ -669,7 +626,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
       // If we're drawing a new ROI, clear previous paths
       setPaths([]);
       
-      // Also clear the orbFeatureDetector ROIs
+      // Also clear the ROIs
       orbFeatureDetector.clearROIs();
     }
   }, [isDrawing, currentPath]);
