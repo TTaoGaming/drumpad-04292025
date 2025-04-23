@@ -483,11 +483,11 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
           drawConnectors: (window as any).drawConnectors
         };
         
-        // Initialize MediaPipe Hands with CDN files
+        // Initialize MediaPipe Hands with local files
         // @ts-ignore - TypeScript doesn't like the locateFile, but it's required
         const hands = new mpHands.Hands({
           locateFile: (file: string) => {
-            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+            return `/assets/libs/mediapipe/${file}`;
           }
         });
         

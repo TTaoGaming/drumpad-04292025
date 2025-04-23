@@ -4,18 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
     
-    <!-- Load OpenCV (base computer vision library) -->
-    <script async src="https://docs.opencv.org/4.5.5/opencv.js" 
-            onload="console.log('OpenCV.js loaded from CDN')"
-            onerror="console.error('Failed to load OpenCV.js from CDN')"></script>
+    <!-- Load OpenCV (base computer vision library) - LOCAL VERSION -->
+    <script async src="/assets/libs/opencv/opencv.js" 
+            onload="console.log('OpenCV.js loaded from local file')"
+            onerror="console.error('Failed to load OpenCV.js from local file')"></script>
     
-    <!-- Load MediaPipe libraries (for hand tracking) -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" 
-            crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" 
-            crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" 
-            crossorigin="anonymous"></script>
+    <!-- Load MediaPipe libraries (for hand tracking) - LOCAL VERSIONS -->
+    <script src="/assets/libs/mediapipe/camera_utils.js"></script>
+    <script src="/assets/libs/mediapipe/drawing_utils.js"></script>
+    <script src="/assets/libs/mediapipe/hands.js"></script>
   </head>
   <body>
     <div id="root"></div>
