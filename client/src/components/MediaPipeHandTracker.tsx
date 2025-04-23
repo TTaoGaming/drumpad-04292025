@@ -403,16 +403,20 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
           type: 'info'
         });
         
-        // Import MediaPipe libraries
-        const mpHands = await import('@mediapipe/hands');
-        const mpCamera = await import('@mediapipe/camera_utils');
-        const mpDrawing = await import('@mediapipe/drawing_utils');
+        // Use local MediaPipe libraries instead of dynamic imports
+        // This loads our saved local versions
+        const mpHands = { Hands: (window as any).Hands };
+        const mpCamera = { Camera: (window as any).Camera };
+        const mpDrawing = {
+          drawLandmarks: (window as any).drawLandmarks,
+          drawConnectors: (window as any).drawConnectors
+        };
         
-        // Initialize MediaPipe Hands with CDN - using version we know works
+        // Initialize MediaPipe Hands with local files
         // @ts-ignore - TypeScript doesn't like the locateFile, but it's required
         const hands = new mpHands.Hands({
           locateFile: (file: string) => {
-            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`;
+            return `/assets/libs/mediapipe/${file}`;
           }
         });
         
