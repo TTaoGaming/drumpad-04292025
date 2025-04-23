@@ -1,21 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { EventType, dispatch, addListener } from '@/lib/eventBus';
 import { HandData, HandLandmark, HandConnection } from '@/lib/types';
-
-// Define MediaPipe interfaces for local usage
-interface MediaPipeHands {
-  Hands: any;
-  HAND_CONNECTIONS: [number, number][];
-}
-
-interface MediaPipeCamera {
-  Camera: any;
-}
-
-interface MediaPipeDrawing {
-  drawLandmarks: (ctx: CanvasRenderingContext2D, landmarks: any, options?: any) => void;
-  drawConnectors: (ctx: CanvasRenderingContext2D, landmarks: any, connections: any, options?: any) => void;
-}
 import { OneEuroFilterArray, DEFAULT_FILTER_OPTIONS } from '@/lib/oneEuroFilter';
 import { HandTrackingOptimizer, OptimizationSettings, DEFAULT_OPTIMIZATION_SETTINGS } from '@/lib/handTrackingOptimizer';
 import { debounce, throttle } from '@/lib/utils';
@@ -410,35 +395,6 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
 
   // Initialize MediaPipe when the component mounts
   useEffect(() => {
-    // Add a canvas for hand visualization
-    const setupCanvas = () => {
-      if (!canvasRef.current) {
-        const video = videoRef.current;
-        if (!video || !video.parentElement) return;
-        
-        // Create a new canvas element for hand tracking visualization
-        const canvas = document.createElement('canvas');
-        canvas.width = video.videoWidth || 640;
-        canvas.height = video.videoHeight || 480;
-        canvas.style.position = 'absolute';
-        canvas.style.top = '0';
-        canvas.style.left = '0';
-        canvas.style.width = '100%';
-        canvas.style.height = '100%';
-        canvas.style.zIndex = '10';
-        canvas.style.pointerEvents = 'none'; // Allow click-through
-        
-        // Add to video container
-        video.parentElement.appendChild(canvas);
-        // Need to assign to a mutable ref to avoid TypeScript error
-        const currentRef = canvasRef as React.MutableRefObject<HTMLCanvasElement | null>;
-        currentRef.current = canvas;
-      }
-    };
-    
-    // First set up the canvas
-    setupCanvas();
-    
     // Dynamic imports to avoid bundling these heavy libraries
     const loadDependencies = async () => {
       try {
@@ -447,100 +403,16 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
           type: 'info'
         });
         
-        // MediaPipe Hands has a different export structure depending on how it's loaded
-        let mpHandsLib: any; 
-        let mpDrawingLib: any;
-        let mpCameraLib: any;
+        // Import MediaPipe libraries
+        const mpHands = await import('@mediapipe/hands');
+        const mpCamera = await import('@mediapipe/camera_utils');
+        const mpDrawing = await import('@mediapipe/drawing_utils');
         
-        // Try different ways the libraries might be exposed
-        // From local files
-        if ((window as any).mp) {
-          // The local version might expose APIs under 'mp' namespace
-          mpHandsLib = (window as any).mp?.hands || (window as any).mp?.Hands;
-          mpDrawingLib = (window as any).mp?.drawing_utils || (window as any).mp?.DrawingUtils;
-          mpCameraLib = (window as any).mp?.camera_utils || (window as any).mp?.CameraUtils;
-        }
-        
-        // From CDN structure
-        if (!mpHandsLib) {
-          mpHandsLib = (window as any).Hands;
-          mpDrawingLib = {
-            drawLandmarks: (window as any).drawLandmarks,
-            drawConnectors: (window as any).drawConnectors
-          };
-          mpCameraLib = {
-            Camera: (window as any).Camera
-          };
-        }
-        
-        // Define our own MediaPipe interfaces with the libraries we found
-        if (!mpHandsLib || !mpDrawingLib) {
-          dispatch(EventType.LOG, {
-            message: 'MediaPipe libraries not found in window object. Make sure the scripts are loaded properly in index.html.',
-            type: 'error'
-          });
-          console.error('MediaPipe libraries not available in window object:',
-                        'Hands:', mpHandsLib,
-                        'drawLandmarks:', mpDrawingLib?.drawLandmarks,
-                        'drawConnectors:', mpDrawingLib?.drawConnectors);
-            
-          // Let's try loading MediaPipe from CDN as fallback to ensure functionality
-          dispatch(EventType.LOG, {
-            message: 'Falling back to CDN version of MediaPipe...',
-            type: 'info'
-          });
-            
-          // Create script elements for MediaPipe libraries
-          const createScript = (src: string): Promise<void> => {
-            return new Promise((resolve) => {
-              const script = document.createElement('script');
-              script.src = src;
-              script.crossOrigin = 'anonymous';
-              script.onload = () => resolve();
-              document.head.appendChild(script);
-            });
-          };
-            
-          // Try to load from CDN
-          Promise.all([
-            createScript('https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js'),
-            createScript('https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js'),
-            createScript('https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js')
-          ]).then(() => {
-            // After loading, retry initialization
-            setTimeout(() => loadDependencies(), 500);
-          });
-            
-          return;
-        }
-            
-        // Use our found MediaPipe libraries
-        const mpHands: MediaPipeHands = { 
-          Hands: mpHandsLib,
-          // Define HAND_CONNECTIONS if not available in our local version
-          HAND_CONNECTIONS: (window as any).HAND_CONNECTIONS || [
-            [0, 1], [1, 2], [2, 3], [3, 4], // thumb
-            [0, 5], [5, 6], [6, 7], [7, 8], // index finger
-            [0, 9], [9, 10], [10, 11], [11, 12], // middle finger
-            [0, 13], [13, 14], [14, 15], [15, 16], // ring finger
-            [0, 17], [17, 18], [18, 19], [19, 20], // pinky
-            [5, 9], [9, 13], [13, 17], // palm connections
-            [1, 5] // Connect thumb to palm
-          ]
-        };
-        const mpCamera: MediaPipeCamera = { 
-          Camera: mpCameraLib?.Camera
-        };
-        const mpDrawing: MediaPipeDrawing = {
-          drawLandmarks: mpDrawingLib?.drawLandmarks,
-          drawConnectors: mpDrawingLib?.drawConnectors
-        };
-        
-        // Initialize MediaPipe Hands with local files
+        // Initialize MediaPipe Hands with CDN - using version we know works
         // @ts-ignore - TypeScript doesn't like the locateFile, but it's required
         const hands = new mpHands.Hands({
           locateFile: (file: string) => {
-            return `/assets/libs/mediapipe/${file}`;
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`;
           }
         });
         

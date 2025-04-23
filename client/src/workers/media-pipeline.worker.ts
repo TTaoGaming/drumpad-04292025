@@ -135,39 +135,25 @@ const HAND_LANDMARKS = {
   PINKY_TIP: 20
 };
 
-// Initialize MediaPipe Hands (we can't directly use the full MP Hands in a worker)
-// We'll implement essential processing functionality here
+// Initialize MediaPipe Hands (we can't directly use it in a worker)
+// Instead, we'll process the raw data ourselves
 function mpInitMediaPipeline(): void {
   mpStartTiming('initMediaPipeline');
   mpLog('Creating Media Pipeline Worker...');
   
-  try {
-    // In a worker environment, we can't fully load MediaPipe Hands with its WASM
-    // but we can use the data processing and calculation algorithms
-    
-    // For now, we'll use a simplified version that handles landmark data
-    // The main thread will do the actual MediaPipe Hands processing
-    
-    pipelineReady = true;
+  // In a real implementation, we would load MediaPipe Hands here
+  // For now, we'll simulate it with a setTimeout
+  setTimeout(() => {
     mpLog('Media Pipeline Worker created successfully');
     
-    // Set up any internal data structures or models
+    // Simulate additional setup time
     setTimeout(() => {
+      pipelineReady = true;
       mpLog('Media Pipeline initialized and ready');
       mpUpdateStatus(true);
       mpEndTiming('initMediaPipeline');
-    }, 500);
-  } catch (error) {
-    mpLog(`Error initializing media pipeline: ${error}`);
-    
-    // Fallback to simulated mode for development
-    setTimeout(() => {
-      pipelineReady = true;
-      mpLog('Media Pipeline initialized in fallback mode');
-      mpUpdateStatus(true);
-      mpEndTiming('initMediaPipeline');
-    }, 500);
-  }
+    }, 1000);
+  }, 1000);
 }
 
 // Process hand landmarks and connections to create visualization data

@@ -3,22 +3,6 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-    
-    <!-- Load OpenCV (base computer vision library) -->
-    <script async src="/assets/libs/opencv/opencv.js" 
-            onload="console.log('OpenCV.js loaded from local file')"
-            onerror="console.error('Failed to load OpenCV.js from local file')"></script>
-    
-    <!-- Load MediaPipe libraries (using CDN for now to ensure it works) -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" 
-            crossorigin="anonymous"
-            onload="console.log('camera_utils.js loaded')"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" 
-            crossorigin="anonymous" 
-            onload="console.log('drawing_utils.js loaded')"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" 
-            crossorigin="anonymous"
-            onload="console.log('hands.js loaded')"></script>
   </head>
   <body>
     <div id="root"></div>
