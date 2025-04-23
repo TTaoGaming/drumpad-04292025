@@ -769,12 +769,14 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
             }
           }
           
-          // Draw FPS counter
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-          ctx.fillRect(10, canvas.height - 40, 120, 30);
-          ctx.fillStyle = 'white';
-          ctx.font = 'bold 16px Arial';
-          ctx.fillText(`FPS: ${fps}`, 20, canvas.height - 18);
+          // Dispatch FPS info to event bus instead of drawing directly
+          dispatch(EventType.FRAME_PROCESSED, {
+            fps: fps,
+            timestamp: now,
+            processingTime: {
+              total: now - lastFrameTimeRef.current
+            }
+          });
         });
         
         // Initialize camera if video element is available
