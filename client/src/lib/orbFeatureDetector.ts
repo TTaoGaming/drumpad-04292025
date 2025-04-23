@@ -144,6 +144,19 @@ export class ORBFeatureDetector {
   }
   
   /**
+   * Check if OpenCV is loaded and ready to use
+   * @returns True if OpenCV is loaded and ready
+   */
+  public isOpenCVReady(): boolean {
+    const isAvailable = this.isOpenCVLoaded && typeof (window as any).cv !== 'undefined';
+    console.log(`OpenCV ready state: ${isAvailable}`);
+    if (isAvailable) {
+      console.log(`OpenCV version: ${(window as any).cv.version || 'unknown'}`);
+    }
+    return isAvailable;
+  }
+  
+  /**
    * Update feature detection for all ROIs using the current frame
    * @param imageData The current frame
    */

@@ -36,6 +36,24 @@ function App() {
   const resolutionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    // Listen for OpenCV ready event from CDN
+    window.addEventListener('opencv-ready', () => {
+      addLog("OpenCV.js loaded from CDN and ready");
+      setIsOpenCVReady(true);
+      
+      // Log OpenCV version if available
+      if (typeof (window as any).cv !== 'undefined') {
+        const version = (window as any).cv.version || 'unknown';
+        addLog(`OpenCV.js version: ${version}`);
+      }
+    });
+    
+    // Check if OpenCV is already available
+    if (typeof (window as any).cv !== 'undefined') {
+      addLog("OpenCV.js already loaded from CDN");
+      setIsOpenCVReady(true);
+    }
+  
     // Initialize workers when component mounts
     const opencvWorker = new Worker(
       new URL('./workers/opencv.worker.ts', import.meta.url),
@@ -174,6 +192,12 @@ function App() {
 
     // Initial log
     addLog('Application initialized. Click "Start Camera" to begin.');
+    
+    // Test the ORB detector with real OpenCV integration
+    import('@/lib/orbFeatureDetector').then(module => {
+      const detector = module.ORBFeatureDetector.getInstance();
+      addLog(`ORB Feature Detector OpenCV Ready: ${detector.isOpenCVReady()}`);
+    });
 
     // Cleanup event listeners on unmount
     return () => {
