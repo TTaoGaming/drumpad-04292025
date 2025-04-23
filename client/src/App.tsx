@@ -11,6 +11,7 @@ import FpsStats from "@/components/PerformanceMetrics";
 import MediaPipeHandTracker from "@/components/MediaPipeHandTracker";
 import DrawingCanvas from "@/components/DrawingCanvas";
 import SettingsPanel from "@/components/settings/SettingsPanel";
+import DebugView from "@/components/DebugView";
 import { EventType, addListener, dispatch } from "@/lib/eventBus";
 import { Notification, HandData, PerformanceMetrics, DrawingPath } from "@/lib/types";
 import { getVideoFrame } from "@/lib/cameraManager";
@@ -413,6 +414,9 @@ function App() {
       
       {/* FPS Statistics with averages */}
       {isCameraRunning && <FpsStats />}
+
+      {/* Debug View for ROI visualization */}
+      {isCameraRunning && <DebugView />}
     </div>
   );
 }
