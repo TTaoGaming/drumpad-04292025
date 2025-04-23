@@ -1,0 +1,4 @@
+// Add to line ~195, inside processVideoFrame function
+console.log('Sending frame to worker', frameData ? 'Frame available' : 'No frame');
+// Add to line ~77, in the mediaPipelineWorker.onmessage handler
+console.log('Received from media worker:', e.data);

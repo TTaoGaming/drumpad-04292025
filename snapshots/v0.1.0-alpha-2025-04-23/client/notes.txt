@@ -1,0 +1,7 @@
+saving this version working well after initial loading and has all the structure i would need. time to refactor
+
+hand tracking
+knuckle ruler
+flexion thresholds
+one euro filter
+
