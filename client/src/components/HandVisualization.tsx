@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { HandData } from '@/lib/types';
+import { HandData, HandLandmark } from '@/lib/types';
 import { EventType, addListener, dispatch } from '@/lib/eventBus';
 
 interface HandVisualizationProps {
@@ -13,6 +13,12 @@ interface KnuckleRulerSettings {
   enabled: boolean;
   showMeasurement: boolean;
   knuckleDistanceCm: number;
+}
+
+interface CoordinateDisplaySettings {
+  enabled: boolean;
+  showZ: boolean;
+  precision: number;
 }
 
 /**
@@ -45,6 +51,16 @@ const HandVisualization: React.FC<HandVisualizationProps> = ({
     knuckleDistanceCm: 8.0
   });
   
+  // State for coordinate display settings
+  const [coordinateDisplay, setCoordinateDisplay] = useState<CoordinateDisplaySettings>({
+    enabled: true,
+    showZ: true,
+    precision: 2
+  });
+  
+  // State to store the index fingertip coordinates
+  const [indexFingertipCoords, setIndexFingertipCoords] = useState<HandLandmark | null>(null);
+  
   // Debug log for knuckle ruler settings
   useEffect(() => {
     console.log("Current knuckle ruler settings:", knuckleRulerSettings);
@@ -55,6 +71,11 @@ const HandVisualization: React.FC<HandVisualizationProps> = ({
     const listener = addListener(EventType.SETTINGS_VALUE_CHANGE, (data) => {
       if (data.section === 'calibration' && data.setting === 'knuckleRuler') {
         setKnuckleRulerSettings(data.value);
+      }
+      
+      // Listen for coordinate display settings changes
+      if (data.section === 'visualizations' && data.setting === 'coordinateDisplay') {
+        setCoordinateDisplay(data.value);
       }
     });
     
@@ -177,6 +198,80 @@ const HandVisualization: React.FC<HandVisualizationProps> = ({
       });
     }
     
+    // Extract index fingertip coordinates (index 8 is the index fingertip)
+    if (handData.landmarks && handData.landmarks.length > 8) {
+      const indexFingertip = handData.landmarks[8];
+      if (indexFingertip) {
+        // Update the state with the latest coordinates
+        setIndexFingertipCoords(indexFingertip);
+      }
+    }
+    
+    // Draw index fingertip coordinates if enabled
+    if (coordinateDisplay.enabled && indexFingertipCoords) {
+      // Index fingertip is highlighed in orange (colorIndex 1)
+      const colorIndex = 1;
+      const color = handData.colors[colorIndex];
+      
+      // Draw a crosshair at the index fingertip position
+      const tipX = indexFingertipCoords.x * width;
+      const tipY = indexFingertipCoords.y * height;
+      const crosshairSize = 20;
+      
+      // Draw crosshair lines
+      ctx.beginPath();
+      ctx.moveTo(tipX - crosshairSize, tipY);
+      ctx.lineTo(tipX + crosshairSize, tipY);
+      ctx.moveTo(tipX, tipY - crosshairSize);
+      ctx.lineTo(tipX, tipY + crosshairSize);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      
+      // Draw circle around fingertip
+      ctx.beginPath();
+      ctx.arc(tipX, tipY, crosshairSize / 2, 0, 2 * Math.PI);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      
+      // Position for the coordinate display - right side of screen
+      const displayX = width - 220;
+      const displayY = 80;
+      const boxWidth = 200;
+      const boxHeight = coordinateDisplay.showZ ? 110 : 80;
+      
+      // Create a semi-transparent background
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      ctx.fillRect(displayX, displayY, boxWidth, boxHeight);
+      
+      // Add a border with the finger color
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(displayX, displayY, boxWidth, boxHeight);
+      
+      // Title for the coordinates box
+      ctx.fillStyle = 'white';
+      ctx.font = 'bold 14px sans-serif';
+      ctx.fillText('Index Fingertip Position', displayX + 10, displayY + 20);
+      
+      // Format the coordinates
+      const precision = coordinateDisplay.precision;
+      const xCoord = indexFingertipCoords.x.toFixed(precision);
+      const yCoord = indexFingertipCoords.y.toFixed(precision);
+      
+      // Display the X and Y coordinates
+      ctx.font = '13px monospace'; // Monospace for better alignment
+      ctx.fillText(`X: ${xCoord} (${Math.round(indexFingertipCoords.x * width)}px)`, displayX + 10, displayY + 45);
+      ctx.fillText(`Y: ${yCoord} (${Math.round(indexFingertipCoords.y * height)}px)`, displayX + 10, displayY + 70);
+      
+      // Display Z coordinate if enabled
+      if (coordinateDisplay.showZ) {
+        const zCoord = indexFingertipCoords.z.toFixed(precision);
+        ctx.fillText(`Z: ${zCoord} (depth)`, displayX + 10, displayY + 95);
+      }
+    }
+    
     // Draw knuckle ruler measurement if enabled
     if (knuckleRulerSettings.enabled && handData.landmarks) {
       // Log the ruler state for debugging
@@ -263,7 +358,7 @@ const HandVisualization: React.FC<HandVisualizationProps> = ({
       }
     }
     
-  }, [handData, videoElement, width, height, knuckleRulerSettings]);
+  }, [handData, videoElement, width, height, knuckleRulerSettings, coordinateDisplay]);
   
   return (
     <>
