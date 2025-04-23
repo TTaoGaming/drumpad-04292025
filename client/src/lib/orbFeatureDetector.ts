@@ -33,6 +33,12 @@ export class ORBFeatureDetector {
   private nextFeatureId: number = 0;
   private activeROIs: ROIWithFeatures[] = [];
   
+  // Keep track of baseline feature counts for occlusion detection
+  private baselineFeatureCounts: Map<string, number> = new Map();
+  private baselineEstablished: Map<string, boolean> = new Map();
+  private baselineSamples: Map<string, number[]> = new Map();
+  private maxBaselineSamples: number = 10;
+  
   // Private constructor for singleton
   private constructor() {}
   
@@ -131,11 +137,52 @@ export class ORBFeatureDetector {
     
     // For now, add some random features within each ROI as a placeholder
     this.activeROIs.forEach(roi => {
-      // Only generate features if we don't have enough
-      if (roi.features.length < 10) {
-        this.generatePlaceholderFeatures(roi, imageData.width, imageData.height);
-      }
+      // Clear previous features to simulate frame-by-frame detection
+      roi.features = [];
+      
+      // Generate new features for this frame
+      this.generatePlaceholderFeatures(roi, imageData.width, imageData.height);
+      
+      // Update baseline feature counts for occlusion detection
+      this.updateBaselineFeatures(roi);
     });
+  }
+  
+  /**
+   * Update baseline feature counts for occlusion detection
+   * @param roi The ROI to update baseline for
+   */
+  private updateBaselineFeatures(roi: ROIWithFeatures): void {
+    const id = roi.id;
+    const currentFeatureCount = roi.features.length;
+    
+    // Initialize collections if needed
+    if (!this.baselineSamples.has(id)) {
+      this.baselineSamples.set(id, []);
+      this.baselineEstablished.set(id, false);
+    }
+    
+    // Get current samples array
+    const samples = this.baselineSamples.get(id)!;
+    
+    // If baseline not established yet, collect samples
+    if (!this.baselineEstablished.get(id)) {
+      // Add current sample
+      samples.push(currentFeatureCount);
+      
+      // If we have enough samples, calculate the baseline
+      if (samples.length >= this.maxBaselineSamples) {
+        // Calculate average of samples as the baseline
+        const sum = samples.reduce((total, count) => total + count, 0);
+        const baseline = Math.round(sum / samples.length);
+        
+        // Store the baseline
+        this.baselineFeatureCounts.set(id, baseline);
+        this.baselineEstablished.set(id, true);
+        
+        console.log(`Established baseline of ${baseline} features for ROI ${id}`);
+      }
+    }
   }
   
   /**
@@ -250,8 +297,42 @@ export class ORBFeatureDetector {
         ctx.stroke();
       });
       
-      // Don't draw feature count text box for cleaner look
-      // Features are being detected but we're not showing the count to maintain clean aesthetic
+      // Draw essential information for ROI using a minimal design
+      const centroidX = roi.points.reduce((sum, p) => sum + p.x, 0) / roi.points.length;
+      const centroidY = roi.points.reduce((sum, p) => sum + p.y, 0) / roi.points.length;
+      
+      // Calculate feature stats
+      const featureCount = roi.features.length;
+      
+      // Get baseline count or use default if not established yet
+      let baselineCount = 50; // Default max features
+      let percentageText = '% detected';
+      
+      // If we have a baseline established, use it for calculating percentage
+      if (this.baselineEstablished.get(roi.id)) {
+        baselineCount = this.baselineFeatureCounts.get(roi.id) || baselineCount;
+        percentageText = '% of baseline';
+      }
+      
+      // Calculate percentage relative to baseline
+      const featurePercentage = Math.min(100, Math.round((featureCount / baselineCount) * 100));
+      
+      // Semi-transparent background for text
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.fillRect(centroidX - 50, centroidY - 30, 100, 60);
+      
+      // Text for ID and feature info
+      ctx.fillStyle = 'white';
+      ctx.font = '14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      
+      // ID line (ID:1 for index finger)
+      ctx.fillText(`ID:1`, centroidX, centroidY - 15);
+      
+      // Feature count and percentage
+      ctx.fillText(`${featureCount} features`, centroidX, centroidY + 5);
+      ctx.fillText(`${featurePercentage}${percentageText}`, centroidX, centroidY + 25);
     });
   }
 }
