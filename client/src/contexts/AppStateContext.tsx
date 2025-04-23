@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
-import { HandData, Notification, PerformanceMetrics } from '@/lib/types';
+import { v4 as uuidv4 } from 'uuid';
 import { EventType, addListener, dispatch } from '@/lib/eventBus';
+import { HandData, PerformanceMetrics } from '@/lib/types';
 
-// Define the state interface
+// Define the app state interface
 interface AppState {
   // Camera and status states
   isCameraRunning: boolean;
@@ -21,10 +22,15 @@ interface AppState {
     type: 'info' | 'error' | 'success' | 'warning';
     timestamp: Date;
   }>;
-  notifications: Notification[];
+  notifications: Array<{
+    id: string;
+    message: string;
+    type: 'info' | 'error' | 'success' | 'warning';
+    timestamp: Date;
+  }>;
 }
 
-// Define action types to make actions strongly typed
+// Define action types for state updates
 type AppAction = 
   | { type: 'CAMERA_STATUS_CHANGE'; payload: { isRunning: boolean; resolution?: { width: number; height: number } } }
   | { type: 'FULLSCREEN_CHANGE'; payload: { isFullscreen: boolean } }
@@ -33,7 +39,7 @@ type AppAction =
   | { type: 'UPDATE_HAND_DATA'; payload: { handData?: HandData } }
   | { type: 'UPDATE_PERFORMANCE_METRICS'; payload: { metrics?: PerformanceMetrics } }
   | { type: 'ADD_LOG'; payload: { message: string; type: 'info' | 'error' | 'success' | 'warning' } }
-  | { type: 'ADD_NOTIFICATION'; payload: { notification: Notification } }
+  | { type: 'ADD_NOTIFICATION'; payload: { message: string; type: 'info' | 'error' | 'success' | 'warning' } }
   | { type: 'REMOVE_NOTIFICATION'; payload: { id: string } };
 
 // Initial state
@@ -47,18 +53,14 @@ const initialState: AppState = {
   notifications: []
 };
 
-// Create contexts for state and dispatch
-const AppStateContext = createContext<AppState | undefined>(undefined);
-const AppDispatchContext = createContext<React.Dispatch<AppAction> | undefined>(undefined);
-
-// Reducer function to handle state updates
+// Reducer function
 function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case 'CAMERA_STATUS_CHANGE':
       return {
         ...state,
         isCameraRunning: action.payload.isRunning,
-        resolution: action.payload.resolution || state.resolution
+        ...(action.payload.resolution ? { resolution: action.payload.resolution } : {})
       };
     
     case 'FULLSCREEN_CHANGE':
@@ -101,27 +103,40 @@ function appReducer(state: AppState, action: AppAction): AppState {
             type: action.payload.type,
             timestamp: new Date()
           }
-        ]
+        ].slice(-100) // Keep only the last 100 logs
       };
     
     case 'ADD_NOTIFICATION':
       return {
         ...state,
-        notifications: [...state.notifications, action.payload.notification]
+        notifications: [
+          ...state.notifications,
+          {
+            id: uuidv4(),
+            message: action.payload.message,
+            type: action.payload.type,
+            timestamp: new Date()
+          }
+        ]
       };
     
     case 'REMOVE_NOTIFICATION':
       return {
         ...state,
-        notifications: state.notifications.filter(
-          notification => notification.id !== action.payload.id
-        )
+        notifications: state.notifications.filter(n => n.id !== action.payload.id)
       };
     
     default:
       return state;
   }
 }
+
+// Create contexts
+const AppStateContext = createContext<AppState | undefined>(undefined);
+const AppDispatchContext = createContext<React.Dispatch<AppAction> | undefined>(undefined);
+
+// Global reference to dispatch function for use outside React components
+let globalDispatch: React.Dispatch<AppAction> | null = null;
 
 // Provider component
 interface AppStateProviderProps {
@@ -131,90 +146,109 @@ interface AppStateProviderProps {
 export function AppStateProvider({ children }: AppStateProviderProps) {
   const [state, dispatch] = useReducer(appReducer, initialState);
   
-  // Bridge between the event bus and the context
+  // Set global dispatch reference
   useEffect(() => {
-    // Set up listeners for events from the event bus
-    const cameraListener = addListener(EventType.CAMERA_STATUS_CHANGE, (data) => {
-      dispatch({
-        type: 'CAMERA_STATUS_CHANGE',
-        payload: {
-          isRunning: data.isRunning,
-          resolution: data.resolution
-        }
-      });
-    });
+    globalDispatch = dispatch;
     
-    const fullscreenListener = addListener(EventType.FULLSCREEN_CHANGE, (data) => {
-      dispatch({
-        type: 'FULLSCREEN_CHANGE',
-        payload: { isFullscreen: data.isFullscreen }
-      });
-    });
-    
-    const opencvStatusListener = addListener(EventType.OPENCV_STATUS, (data) => {
-      dispatch({
-        type: 'OPENCV_STATUS_CHANGE',
-        payload: { isReady: data.ready }
-      });
-    });
-    
-    const pipelineStatusListener = addListener(EventType.PIPELINE_STATUS, (data) => {
-      dispatch({
-        type: 'MEDIA_PIPELINE_STATUS_CHANGE',
-        payload: { isReady: data.ready }
-      });
-    });
-    
-    const logListener = addListener(EventType.LOG, (data) => {
-      dispatch({
-        type: 'ADD_LOG',
-        payload: {
-          message: data.message,
-          type: data.type
-        }
-      });
-    });
-    
-    const notificationListener = addListener(EventType.NOTIFICATION, (data) => {
-      const notificationId = Date.now().toString();
-      
-      dispatch({
-        type: 'ADD_NOTIFICATION',
-        payload: {
-          notification: {
-            id: notificationId,
-            message: data.message,
-            type: data.type
-          }
-        }
-      });
-      
-      // Auto-remove notifications after 5 seconds
-      setTimeout(() => {
-        dispatch({
-          type: 'REMOVE_NOTIFICATION',
-          payload: { id: notificationId }
+    // EventBus listeners for various events
+    const cameraStatusListener = addListener(
+      EventType.CAMERA_STATUS_CHANGE,
+      (data) => {
+        dispatch({ 
+          type: 'CAMERA_STATUS_CHANGE', 
+          payload: { 
+            isRunning: data.isRunning,
+            ...(data.resolution ? { resolution: data.resolution } : {})
+          } 
         });
-      }, 5000);
-    });
-    
-    // Initial log (moved from App.tsx)
-    dispatch({
-      type: 'ADD_LOG',
-      payload: {
-        message: 'Application initialized. Click "Start Camera" to begin.',
-        type: 'info'
       }
-    });
+    );
     
-    // Clean up all listeners when component unmounts
+    const fullscreenListener = addListener(
+      EventType.FULLSCREEN_CHANGE,
+      (data) => {
+        dispatch({ 
+          type: 'FULLSCREEN_CHANGE', 
+          payload: { isFullscreen: data.isFullscreen } 
+        });
+      }
+    );
+    
+    const opencvStatusListener = addListener(
+      EventType.OPENCV_STATUS,
+      (data) => {
+        dispatch({ 
+          type: 'OPENCV_STATUS_CHANGE', 
+          payload: { isReady: data.isReady } 
+        });
+      }
+    );
+    
+    const pipelineStatusListener = addListener(
+      EventType.PIPELINE_STATUS,
+      (data) => {
+        dispatch({ 
+          type: 'MEDIA_PIPELINE_STATUS_CHANGE', 
+          payload: { isReady: data.isReady } 
+        });
+      }
+    );
+    
+    const frameProcessedListener = addListener(
+      EventType.FRAME_PROCESSED,
+      (data) => {
+        if (data.handData) {
+          dispatch({ 
+            type: 'UPDATE_HAND_DATA', 
+            payload: { handData: data.handData } 
+          });
+        }
+        
+        if (data.performance) {
+          dispatch({ 
+            type: 'UPDATE_PERFORMANCE_METRICS', 
+            payload: { metrics: data.performance } 
+          });
+        }
+      }
+    );
+    
+    const logListener = addListener(
+      EventType.LOG,
+      (data) => {
+        dispatch({ 
+          type: 'ADD_LOG', 
+          payload: { 
+            message: data.message, 
+            type: data.type || 'info' 
+          } 
+        });
+      }
+    );
+    
+    const notificationListener = addListener(
+      EventType.NOTIFICATION,
+      (data) => {
+        dispatch({ 
+          type: 'ADD_NOTIFICATION', 
+          payload: { 
+            message: data.message, 
+            type: data.type || 'info' 
+          } 
+        });
+      }
+    );
+    
+    // Cleanup all listeners when component unmounts
     return () => {
-      cameraListener.remove();
+      cameraStatusListener.remove();
       fullscreenListener.remove();
       opencvStatusListener.remove();
       pipelineStatusListener.remove();
+      frameProcessedListener.remove();
       logListener.remove();
       notificationListener.remove();
+      globalDispatch = null;
     };
   }, []);
   
@@ -227,7 +261,7 @@ export function AppStateProvider({ children }: AppStateProviderProps) {
   );
 }
 
-// Custom hooks to access the state and dispatch
+// Custom hooks to access app state and dispatch
 export function useAppState() {
   const context = useContext(AppStateContext);
   if (context === undefined) {
@@ -244,25 +278,38 @@ export function useAppDispatch() {
   return context;
 }
 
-// Helper functions to call both the context dispatch and the event bus dispatch
+// For use outside React components
 export function dispatchAppAction(action: AppAction) {
-  // This function will be used from components that have access to the dispatch context
-  const dispatch = useAppDispatch();
-  dispatch(action);
+  if (globalDispatch) {
+    globalDispatch(action);
+  } else {
+    console.error('Attempted to dispatch an app action outside of React component tree');
+  }
 }
 
-// Helper to add a log entry
-export const addLog = (message: string, type: 'info' | 'error' | 'success' | 'warning' = 'info') => {
-  dispatch(EventType.LOG, {
-    message,
-    type
-  });
-};
-
-// Helper to add a notification
-export const addNotification = (message: string, type: 'info' | 'error' | 'success' | 'warning' = 'info') => {
-  dispatch(EventType.NOTIFICATION, {
-    message,
-    type
-  });
+// Helper functions for common dispatches
+export const AppStateActions = {
+  addLog: (message: string, type: 'info' | 'error' | 'success' | 'warning' = 'info') => {
+    dispatch(EventType.LOG, { message, type });
+  },
+  
+  addNotification: (message: string, type: 'info' | 'error' | 'success' | 'warning' = 'info') => {
+    dispatch(EventType.NOTIFICATION, { message, type });
+  },
+  
+  updateCameraStatus: (isRunning: boolean, resolution?: { width: number; height: number }) => {
+    dispatch(EventType.CAMERA_STATUS_CHANGE, { isRunning, resolution });
+  },
+  
+  toggleFullscreen: (isFullscreen: boolean) => {
+    dispatch(EventType.FULLSCREEN_CHANGE, { isFullscreen });
+  },
+  
+  updateOpenCVStatus: (isReady: boolean) => {
+    dispatch(EventType.OPENCV_STATUS, { isReady });
+  },
+  
+  updatePipelineStatus: (isReady: boolean) => {
+    dispatch(EventType.PIPELINE_STATUS, { isReady });
+  }
 };

@@ -50,9 +50,11 @@ interface PerformanceSettings {
   };
   roiOptimization: {
     enabled: boolean;
-    padding: number;
-    stickiness: number;
-    minTrackingConfidence: number;
+    minROISize: number;
+    maxROISize: number;
+    velocityMultiplier: number;
+    movementThreshold: number;
+    maxTimeBetweenFullFrames: number;
   };
 }
 
@@ -365,14 +367,13 @@ export function useSettingsDispatch() {
 }
 
 // Helper functions to update settings and notify via event bus
-export function updateSettings(
-  section: string,
-  setting: string,
-  value: any
-) {
-  dispatch(EventType.SETTINGS_VALUE_CHANGE, {
-    section,
-    setting,
-    value
-  });
-}
+// Using named export object to avoid Fast Refresh incompatibility
+export const SettingsActions = {
+  updateSettings: (section: string, setting: string, value: any) => {
+    dispatch(EventType.SETTINGS_VALUE_CHANGE, {
+      section,
+      setting,
+      value
+    });
+  }
+};
