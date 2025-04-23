@@ -6,6 +6,11 @@
  */
 
 import { DrawingPath, Point, RegionOfInterest } from './types';
+import { dispatch, EventType } from './eventBus';
+
+// Helper canvas for debug visualizations
+const debugCanvas = document.createElement('canvas');
+const debugCtx = debugCanvas.getContext('2d');
 
 // Feature point with descriptors
 export interface Feature {
@@ -483,6 +488,12 @@ export class ORBFeatureDetector {
     // Make cv a local reference for the global object
     const cv = (window as any).cv;
     
+    // Initialize debug visualization data
+    let debugOriginal: ImageData | undefined;
+    let debugThreshold: ImageData | undefined;
+    let debugContours: ImageData | undefined;
+    let debugROI = { x: 0, y: 0, width: 0, height: 0 };
+    
     try {
       // Create OpenCV mat from imageData
       const width = imageData.width;
@@ -683,6 +694,51 @@ export class ORBFeatureDetector {
         }
         
         corners.delete();
+      }
+      
+      // Create debug visualization images
+      // 1. Capture the original ROI
+      if (debugCanvas && debugCtx) {
+        debugROI = { x: rectX, y: rectY, width: rectWidth, height: rectHeight };
+        
+        // Original ROI - grayscale
+        debugCanvas.width = rectWidth;
+        debugCanvas.height = rectHeight;
+        
+        // Create color version of source for better visibility
+        const origColor = new cv.Mat();
+        const tempRoi = src.roi(new cv.Rect(rectX, rectY, rectWidth, rectHeight));
+        debugCtx.clearRect(0, 0, rectWidth, rectHeight);
+        cv.imshow(debugCanvas, tempRoi);
+        debugOriginal = debugCtx.getImageData(0, 0, rectWidth, rectHeight);
+        tempRoi.delete();
+        
+        // Threshold image
+        debugCanvas.width = rectWidth;
+        debugCanvas.height = rectHeight;
+        debugCtx.clearRect(0, 0, rectWidth, rectHeight);
+        cv.imshow(debugCanvas, thresholdMat);
+        debugThreshold = debugCtx.getImageData(0, 0, rectWidth, rectHeight);
+        
+        // Contours visualization
+        const contoursVis = new cv.Mat.zeros(rectHeight, rectWidth, cv.CV_8UC3);
+        const color = new cv.Scalar(255, 255, 255);
+        cv.drawContours(contoursVis, contours, -1, color, 1);
+        
+        debugCanvas.width = rectWidth;
+        debugCanvas.height = rectHeight;
+        debugCtx.clearRect(0, 0, rectWidth, rectHeight);
+        cv.imshow(debugCanvas, contoursVis);
+        debugContours = debugCtx.getImageData(0, 0, rectWidth, rectHeight);
+        contoursVis.delete();
+        
+        // Send debug data to visualization component
+        dispatch(EventType.FEATURE_DEBUG, {
+          original: debugOriginal,
+          threshold: debugThreshold,
+          contours: debugContours,
+          roi: debugROI
+        });
       }
       
       // Clean up OpenCV objects
