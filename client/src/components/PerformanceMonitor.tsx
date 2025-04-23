@@ -56,63 +56,46 @@ const PerformanceMonitor: React.FC = () => {
   
   // Listen for performance data
   useEffect(() => {
-    let frameCounter = 0;
-    let lastFpsUpdate = performance.now();
     let intervalId: NodeJS.Timeout;
-    
-    // FPS calculation based on animation frames
-    const calculateFPS = () => {
-      const now = performance.now();
-      frameCounter++;
-      
-      // Check if UPDATE_INTERVAL has passed
-      if (now - lastFpsUpdate >= UPDATE_INTERVAL) {
-        // Calculate FPS
-        const elapsedSec = (now - lastFpsUpdate) / 1000;
-        const newFPS = Math.round(frameCounter / elapsedSec);
-        
-        // Add to accumulator for average calculation
-        fpsAccumulatorRef.current.push(newFPS);
-        // Keep only MAX_HISTORY values
-        if (fpsAccumulatorRef.current.length > MAX_HISTORY) {
-          fpsAccumulatorRef.current.shift();
-        }
-        
-        // Calculate average
-        const sum = fpsAccumulatorRef.current.reduce((a, b) => a + b, 0);
-        const avg = Math.round(sum / fpsAccumulatorRef.current.length);
-        
-        // Update state
-        setCurrentFPS(newFPS);
-        setAverageFPS(avg);
-        
-        // Add to chart history
-        const timestamp = Date.now();
-        setFpsHistory(prev => {
-          const newHistory = [...prev, { time: timestamp, fps: newFPS }];
-          // Keep only MAX_HISTORY data points
-          if (newHistory.length > MAX_HISTORY) {
-            return newHistory.slice(newHistory.length - MAX_HISTORY);
-          }
-          return newHistory;
-        });
-        
-        // Reset counter and timestamp
-        frameCounter = 0;
-        lastFpsUpdate = now;
-      }
-      
-      // Continue loop
-      requestAnimationFrame(calculateFPS);
-    };
     
     // Listen for performance metrics from MediaPipe processor
     const performanceListener = addListener(EventType.FRAME_PROCESSED, (data) => {
       if (data.performance) {
+        // Process FPS data
+        if (data.performance.fps) {
+          const newFPS = data.performance.fps as number;
+          
+          // Add to accumulator for average calculation
+          fpsAccumulatorRef.current.push(newFPS);
+          // Keep only MAX_HISTORY values
+          if (fpsAccumulatorRef.current.length > MAX_HISTORY) {
+            fpsAccumulatorRef.current.shift();
+          }
+          
+          // Calculate average
+          const sum = fpsAccumulatorRef.current.reduce((a, b) => a + b, 0);
+          const avg = Math.round(sum / fpsAccumulatorRef.current.length);
+          
+          // Update state
+          setCurrentFPS(Math.round(newFPS));
+          setAverageFPS(avg);
+          
+          // Add to chart history
+          const timestamp = Date.now();
+          setFpsHistory(prev => {
+            const newHistory = [...prev, { time: timestamp, fps: Math.round(newFPS) }];
+            // Keep only MAX_HISTORY data points
+            if (newHistory.length > MAX_HISTORY) {
+              return newHistory.slice(newHistory.length - MAX_HISTORY);
+            }
+            return newHistory;
+          });
+        }
+        
         // Process each module's performance
         Object.entries(data.performance).forEach(([moduleId, duration]) => {
-          // Skip total processing time as it's a sum
-          if (moduleId === 'totalProcessingMs') return;
+          // Skip total processing time as it's a sum and fps
+          if (moduleId === 'totalProcessingMs' || moduleId === 'fps') return;
           
           // Initialize array if not exist
           if (!performanceRef.current[moduleId]) {
@@ -153,13 +136,10 @@ const PerformanceMonitor: React.FC = () => {
       }
     });
     
-    // Start FPS calculation
-    requestAnimationFrame(calculateFPS);
-    
     // Cleanup
     return () => {
       performanceListener.remove();
-      clearInterval(intervalId);
+      if (intervalId) clearInterval(intervalId);
     };
   }, []);
   
