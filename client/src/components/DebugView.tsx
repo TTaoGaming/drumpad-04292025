@@ -105,73 +105,146 @@ const DebugView: React.FC<DebugViewProps> = ({
           const centerX = (canvas.width / 2) - ((minX + roiWidth / 2) * scale);
           const centerY = (canvas.height / 2) - ((minY + roiHeight / 2) * scale);
           
+          // Add a gray background to the canvas by default
+          ctx.fillStyle = '#222222';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          
           // Capture current video frame
           const videoElements = document.getElementsByTagName('video');
+          console.log(`DEBUG: Found ${videoElements.length} video elements`);
+          
+          if (videoElements.length === 0) {
+            console.log('DEBUG: No video elements found on the page');
+          }
+          
           if (videoElements.length > 0) {
             const videoElement = videoElements[0];
             
+            console.log(`DEBUG: Video element ready state: ${videoElement.readyState}`);
+            console.log(`DEBUG: Video dimensions: ${videoElement.videoWidth}x${videoElement.videoHeight}`);
+            console.log(`DEBUG: Current time: ${videoElement.currentTime.toFixed(2)}s, Paused: ${videoElement.paused}`);
+            
             if (videoElement && videoElement.readyState >= 2) {
               try {
+                // APPROACH 1: Draw the entire video frame to see if it works at all
+                console.log("DEBUG: Drawing entire video frame as a test");
+                
+                // Calculate center position and scaling to fit the entire video while keeping aspect ratio
+                const videoAspect = videoElement.videoWidth / videoElement.videoHeight;
+                const canvasAspect = canvas.width / canvas.height;
+                
+                let drawWidth, drawHeight, drawX, drawY;
+                
+                if (videoAspect > canvasAspect) {
+                  // Video is wider than canvas
+                  drawWidth = canvas.width;
+                  drawHeight = canvas.width / videoAspect;
+                  drawX = 0;
+                  drawY = (canvas.height - drawHeight) / 2;
+                } else {
+                  // Video is taller than canvas
+                  drawHeight = canvas.height;
+                  drawWidth = canvas.height * videoAspect;
+                  drawX = (canvas.width - drawWidth) / 2;
+                  drawY = 0;
+                }
+                
+                // Draw a colored background first
+                ctx.fillStyle = '#444444';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // Draw the video directly to debug canvas
+                ctx.drawImage(videoElement, drawX, drawY, drawWidth, drawHeight);
+                console.log(`DEBUG: Successfully drew entire video frame to canvas`);
+                
+                // APPROACH 2: Try to calculate a more accurate ROI and crop
                 // Create a temporary canvas for cropping the video frame
                 const tempCanvas = document.createElement('canvas');
                 const tempCtx = tempCanvas.getContext('2d');
                 
                 if (tempCtx) {
                   // Extract the ROI area from the video frame with a margin
-                  const margin = 5; // Small margin around the ROI
-                  const cropX = Math.max(0, minX - margin);
-                  const cropY = Math.max(0, minY - margin);
-                  const cropWidth = Math.min(videoElement.videoWidth - cropX, roiWidth + margin * 2);
-                  const cropHeight = Math.min(videoElement.videoHeight - cropY, roiHeight + margin * 2);
+                  const margin = 20; // Larger margin around the ROI for testing
                   
-                  // Set temp canvas size to the cropped area
-                  tempCanvas.width = cropWidth;
-                  tempCanvas.height = cropHeight;
+                  // Get center of ROI
+                  let roiCenterX = 0, roiCenterY = 0;
+                  roi.points.forEach(point => {
+                    roiCenterX += point.x;
+                    roiCenterY += point.y;
+                  });
+                  roiCenterX /= roi.points.length;
+                  roiCenterY /= roi.points.length;
                   
-                  // Draw the cropped portion from the video
-                  tempCtx.drawImage(
-                    videoElement,
-                    cropX, cropY, cropWidth, cropHeight,  // Source rectangle
-                    0, 0, cropWidth, cropHeight           // Destination rectangle
-                  );
+                  // Use the ROI center and a fixed size for simplicity
+                  const fixedSize = 100; // Fixed size crop area
+                  const cropX = Math.max(0, Math.round(roiCenterX - fixedSize/2));
+                  const cropY = Math.max(0, Math.round(roiCenterY - fixedSize/2));
+                  const cropWidth = Math.min(videoElement.videoWidth - cropX, fixedSize);
+                  const cropHeight = Math.min(videoElement.videoHeight - cropY, fixedSize);
                   
-                  // Scale and draw the cropped image onto our debug canvas
-                  const destX = (minX - cropX) * scale + centerX;
-                  const destY = (minY - cropY) * scale + centerY;
-                  const destWidth = cropWidth * scale;
-                  const destHeight = cropHeight * scale;
+                  console.log(`DEBUG: ROI center: (${roiCenterX}, ${roiCenterY})`);
+                  console.log(`DEBUG: Fixed crop rect: x=${cropX}, y=${cropY}, width=${cropWidth}, height=${cropHeight}`);
                   
-                  ctx.drawImage(
-                    tempCanvas,
-                    0, 0, cropWidth, cropHeight,         // Source rectangle
-                    destX, destY, destWidth, destHeight  // Destination rectangle
-                  );
-                  
-                  // Draw ROI outline with glow effect
-                  ctx.shadowColor = 'rgba(255, 0, 0, 0.7)';
-                  ctx.shadowBlur = 10;
-                  ctx.beginPath();
-                  ctx.moveTo(
-                    roi.points[0].x * scale + centerX,
-                    roi.points[0].y * scale + centerY
-                  );
-                  
-                  for (let i = 1; i < roi.points.length; i++) {
-                    ctx.lineTo(
-                      roi.points[i].x * scale + centerX,
-                      roi.points[i].y * scale + centerY
-                    );
+                  if (cropWidth <= 0 || cropHeight <= 0) {
+                    console.error('Invalid crop dimensions:', cropWidth, cropHeight);
+                  } else {
+                    // Set temp canvas size 
+                    tempCanvas.width = cropWidth;
+                    tempCanvas.height = cropHeight;
+                    
+                    // Add a background color to the temp canvas for debugging
+                    tempCtx.fillStyle = 'rgba(255, 0, 0, 0.2)';
+                    tempCtx.fillRect(0, 0, cropWidth, cropHeight);
+                    
+                    try {
+                      // Draw the cropped portion from the video
+                      tempCtx.drawImage(
+                        videoElement,
+                        cropX, cropY, cropWidth, cropHeight,  // Source rectangle
+                        0, 0, cropWidth, cropHeight           // Destination rectangle
+                      );
+                      console.log(`DEBUG: Drew video to temp canvas`);
+                      
+                      // Position the ROI capture in the center of our debug canvas
+                      const destX = (canvas.width - cropWidth) / 2;
+                      const destY = (canvas.height - cropHeight) / 2;
+                      
+                      ctx.drawImage(
+                        tempCanvas,
+                        0, 0, cropWidth, cropHeight,         // Source rectangle
+                        destX, destY, cropWidth, cropHeight  // Destination rectangle
+                      );
+                      console.log(`DEBUG: Drew temp canvas to main canvas`);
+                    } catch (drawError) {
+                      console.error('Error in ROI drawing process:', drawError);
+                    }
                   }
-                  
-                  ctx.closePath();
-                  ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
-                  ctx.lineWidth = 2;
-                  ctx.stroke();
-                  
-                  // Reset shadow for other drawings
-                  ctx.shadowColor = 'transparent';
-                  ctx.shadowBlur = 0;
                 }
+                
+                // Draw ROI outline with glow effect
+                ctx.shadowColor = 'rgba(255, 0, 0, 0.7)';
+                ctx.shadowBlur = 10;
+                ctx.beginPath();
+                ctx.moveTo(
+                  roi.points[0].x * scale + centerX,
+                  roi.points[0].y * scale + centerY
+                );
+                
+                for (let i = 1; i < roi.points.length; i++) {
+                  ctx.lineTo(
+                    roi.points[i].x * scale + centerX,
+                    roi.points[i].y * scale + centerY
+                  );
+                }
+                
+                ctx.closePath();
+                ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                // Reset shadow for other drawings
+                ctx.shadowColor = 'transparent';
+                ctx.shadowBlur = 0;
               } catch (e) {
                 console.error('Error capturing video frame for debug view:', e);
               }
@@ -179,13 +252,15 @@ const DebugView: React.FC<DebugViewProps> = ({
           }
           
           // Draw ROI info (only the essential information, no feature data)
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-          ctx.fillRect(5, 5, 190, 45);
-          
-          ctx.font = '12px sans-serif';
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-          ctx.fillText(`ROI ID: ${roi.id.substring(0, 8)}...`, 10, 20);
-          ctx.fillText(`Points: ${roi.points.length}`, 10, 35);
+          if (ctx && roi) {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(5, 5, 190, 45);
+            
+            ctx.font = '12px sans-serif';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.fillText(`ROI ID: ${roi.id.substring(0, 8)}...`, 10, 20);
+            ctx.fillText(`Points: ${roi.points.length}`, 10, 35);
+          }
         }
       }
       
