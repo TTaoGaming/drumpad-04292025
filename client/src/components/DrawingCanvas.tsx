@@ -6,7 +6,7 @@
  */
 import React, { useRef, useEffect, useState } from 'react';
 import { EventType, addListener, dispatch } from '@/lib/eventBus';
-import orbFeatureDetector from '@/lib/orbFeatureDetector';
+// Removed orbFeatureDetector import - moving to direct ROI handling
 import { getVideoFrame } from '@/lib/cameraManager';
 import { DrawingPath } from '@/lib/types';
 
@@ -161,10 +161,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
       drawPath(ctx, currentPath);
     }
     
-    // Draw feature points if enabled
-    if (settings.showFeatures) {
-      orbFeatureDetector.drawFeatures(ctx, canvasSize.width, canvasSize.height);
-    }
+    // Removed ORB feature visualization
     
     // Publish the current ROIs to the event bus
     const rois = paths.filter(path => path.isROI && path.isComplete);
@@ -177,58 +174,31 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
     }
   }, [paths, currentPath, canvasSize, settings]);
   
-  // Process video frames for feature detection
+  // Process ROIs for visualization and processing
   useEffect(() => {
-    // Only run feature detection when there are completed ROIs
+    // Get completed ROIs
     const completedROIs = paths.filter(path => path.isROI && path.isComplete);
-    
-    // Make sure the ROIs are added to the feature detector
-    completedROIs.forEach(roi => {
-      // Check if this ROI has already been added to the feature detector
-      // by looking at the existing IDs
-      const existingROIs = orbFeatureDetector.getROIs();
-      const existingROIIds = existingROIs.map(r => r.id);
-      
-      // If there's a new ROI that isn't in the feature detector, add it
-      if (roi.isComplete && roi.id && !existingROIIds.includes(roi.id) && roi.points.length >= 3) {
-        orbFeatureDetector.addROI(roi);
-      }
-    });
     
     if (completedROIs.length === 0) return;
     
-    // Set up animation frame for feature detection
-    let animationFrameId: number;
-    let videoElement: HTMLVideoElement | null = null;
-    
-    // Find the first video element
-    const videos = document.getElementsByTagName('video');
-    if (videos.length > 0) {
-      videoElement = videos[0];
-    }
-    
-    // Process frames for feature detection
-    const processFrame = () => {
-      if (videoElement && videoElement.readyState >= 2) {
-        const frameData = getVideoFrame(videoElement);
-        if (frameData) {
-          orbFeatureDetector.processFrame(frameData);
-        }
-      }
+    // Notify about ROIs for debug visualization
+    if (completedROIs.length > 0) {
+      // Send the most recent ROI to the event bus (for the debug panel)
+      const mostRecentROI = [...completedROIs].sort((a, b) => {
+        // If IDs are timestamp-based, sort by ID
+        const idA = parseInt(a.id || '0');
+        const idB = parseInt(b.id || '0');
+        return idB - idA;
+      })[0];
       
-      // Request next frame
-      animationFrameId = requestAnimationFrame(processFrame);
-    };
-    
-    // Start processing
-    animationFrameId = requestAnimationFrame(processFrame);
-    
-    // Clean up on component unmount
-    return () => {
-      if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
-      }
-    };
+      dispatch(EventType.SETTINGS_VALUE_CHANGE, {
+        section: 'drawing',
+        setting: 'newPath',
+        value: mostRecentROI
+      });
+      
+      console.log(`Published ROI with ID ${mostRecentROI.id} and ${mostRecentROI.points.length} points for visualization`);
+    }
   }, [paths]);
   
   // Draw a path to the canvas
@@ -598,11 +568,9 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
     
     // If this is an ROI, add it to the feature detector
     if (completedPath.isROI) {
-      const roiId = orbFeatureDetector.addROI(completedPath);
-      
       // Log ROI creation with the number of vertices and shape
       dispatch(EventType.LOG, {
-        message: `Created ROI ${finalPathDescription} with ${completedPath.points.length} vertices (ID: ${roiId})`,
+        message: `Created ROI ${finalPathDescription} with ${completedPath.points.length} vertices (ID: ${completedPath.id})`,
         type: 'success'
       });
     } else {
@@ -654,12 +622,17 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
       console.log('Initializing paths with:', initialPaths.length, 'paths');
       setPaths(initialPaths);
       
-      // Add these paths to the feature detector if they are ROIs
-      initialPaths.forEach(path => {
-        if (path.isROI && path.isComplete && path.points.length >= 3 && path.id) {
-          orbFeatureDetector.addROI(path);
-        }
-      });
+      // Send ROIs to the debug visualization
+      const rois = initialPaths.filter(path => path.isROI && path.isComplete && path.points.length >= 3 && path.id);
+      
+      if (rois.length > 0) {
+        // Send the most recent ROI for visualization
+        dispatch(EventType.SETTINGS_VALUE_CHANGE, {
+          section: 'drawing',
+          setting: 'newPath',
+          value: rois[0]
+        });
+      }
     }
   }, [initialPaths]);
   
@@ -669,8 +642,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
       // If we're drawing a new ROI, clear previous paths
       setPaths([]);
       
-      // Also clear the orbFeatureDetector ROIs
-      orbFeatureDetector.clearROIs();
+      // Clear ROIs from the debug system
+      console.log("Clearing previous ROIs");
     }
   }, [isDrawing, currentPath]);
   
