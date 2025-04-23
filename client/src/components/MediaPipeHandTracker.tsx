@@ -58,6 +58,16 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
     knuckleDistanceCm: 8.0
   });
   
+  // Coordinate display settings
+  const [coordinateDisplay, setCoordinateDisplay] = useState({
+    enabled: true,
+    showZ: true,
+    precision: 2
+  });
+  
+  // State to store the index fingertip coordinates
+  const [indexFingertipCoords, setIndexFingertipCoords] = useState<HandLandmark | null>(null);
+  
   // Finger flexion settings
   const [fingerFlexionSettings, setFingerFlexionSettings] = useState({
     enabled: false, // Disabled by default for better performance
