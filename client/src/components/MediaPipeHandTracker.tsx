@@ -841,12 +841,21 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                 // Dispatch event for other components
                 const dispatchFn = performanceSettings.throttling.enabled ? throttledDispatch : dispatch;
                 
-                // Convert normalized coordinates (0-1) to pixel coordinates for the canvas
-                const canvasWidth = canvas.width;
-                const canvasHeight = canvas.height;
+                // Get the visible dimensions of the video element
+                const videoElement = document.getElementById('camera-feed') as HTMLVideoElement;
+                let videoWidth = canvas.width;
+                let videoHeight = canvas.height;
                 
-                const pixelX = Math.round(activeFingertip.x * canvasWidth);
-                const pixelY = Math.round(activeFingertip.y * canvasHeight);
+                if (videoElement) {
+                  // Get the actual display dimensions of the video
+                  const videoRect = videoElement.getBoundingClientRect();
+                  videoWidth = videoRect.width;
+                  videoHeight = videoRect.height;
+                }
+                
+                // Convert normalized coordinates (0-1) to pixel coordinates for the canvas
+                const pixelX = Math.round(activeFingertip.x * videoWidth);
+                const pixelY = Math.round(activeFingertip.y * videoHeight);
                 
                 // Log the coordinate conversion for debugging
                 console.log(`Converting coordinates: (${activeFingertip.x.toFixed(3)}, ${activeFingertip.y.toFixed(3)}) => (${pixelX}, ${pixelY})`);
@@ -858,8 +867,8 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                     isPinching,
                     distance,
                     position: {
-                      x: pixelX, // Send pixel coordinates
-                      y: pixelY, // Send pixel coordinates
+                      x: pixelX, // Send pixel coordinates based on visible video size
+                      y: pixelY, // Send pixel coordinates based on visible video size
                       z: activeFingertip.z
                     }
                   }
@@ -870,8 +879,8 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                   section: 'tracking',
                   setting: 'indexFingertip',
                   value: {
-                    x: pixelX, // Send pixel coordinates
-                    y: pixelY, // Send pixel coordinates 
+                    x: pixelX, // Send pixel coordinates based on visible video size
+                    y: pixelY, // Send pixel coordinates based on visible video size
                     z: activeFingertip.z
                   }
                 });

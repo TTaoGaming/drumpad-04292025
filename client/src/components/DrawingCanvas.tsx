@@ -49,6 +49,22 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
 
   // Listen for pinch events from MediaPipeHandTracker
   useEffect(() => {
+    // Find the video element to get actual display size
+    const videoElement = document.getElementById('camera-feed') as HTMLVideoElement;
+    let videoDisplayWidth = width;
+    let videoDisplayHeight = height;
+    
+    if (videoElement) {
+      // Get the actual display size of the video element
+      const displayRect = videoElement.getBoundingClientRect();
+      videoDisplayWidth = displayRect.width;
+      videoDisplayHeight = displayRect.height;
+      
+      // Log for debugging
+      console.log(`Video display size: ${videoDisplayWidth}x${videoDisplayHeight}`);
+      console.log(`Canvas size: ${canvasSize.width}x${canvasSize.height}`);
+    }
+    
     const pinchStateListener = addListener(
       EventType.SETTINGS_VALUE_CHANGE,
       (data) => {
@@ -58,9 +74,21 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
           
           // Get the index fingertip position from event bus
           if (data.value.position) {
-            // Position already comes in normalized coordinates (0-1)
-            // No need to convert again
-            handlePinchStateChange(isPinching, data.value.position);
+            // Scale coordinates to match video display size if needed
+            const position = data.value.position;
+            let x = position.x;
+            let y = position.y;
+            
+            // If canvas size differs from video display size, scale coordinates
+            if (canvasSize.width !== videoDisplayWidth || canvasSize.height !== videoDisplayHeight) {
+              const scaleX = canvasSize.width / videoDisplayWidth;
+              const scaleY = canvasSize.height / videoDisplayHeight;
+              x = position.x * scaleX;
+              y = position.y * scaleY;
+              console.log(`Scaling coordinates: (${position.x}, ${position.y}) => (${x}, ${y})`);
+            }
+            
+            handlePinchStateChange(isPinching, { x, y });
           }
         }
       }
@@ -73,11 +101,22 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
         if (data.section === 'tracking' && data.setting === 'indexFingertip' && settings.enabled) {
           const position = data.value;
           if (isDrawing && position) {
-            // No need to multiply by width/height since pinch coordinates are already in screen coordinates
-            addPointToPath(position.x, position.y);
+            // Scale coordinates if needed
+            let x = position.x;
+            let y = position.y;
+            
+            // If canvas size differs from video display size, scale coordinates
+            if (canvasSize.width !== videoDisplayWidth || canvasSize.height !== videoDisplayHeight) {
+              const scaleX = canvasSize.width / videoDisplayWidth;
+              const scaleY = canvasSize.height / videoDisplayHeight;
+              x = position.x * scaleX;
+              y = position.y * scaleY;
+            }
+            
+            addPointToPath(x, y);
             
             // Log for debugging the coordinate conversion
-            console.log('Adding point:', position.x, position.y);
+            console.log('Adding point:', x, y);
           }
         }
       }
@@ -371,25 +410,60 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
     }
   }, [initialPaths]);
   
-  // Update canvas size when width/height props change
+  // Update canvas size when width/height props change or when viewport size changes
   useEffect(() => {
-    if (width !== canvasSize.width || height !== canvasSize.height) {
-      console.log(`Canvas size updated: ${width}x${height}`);
-      setCanvasSize({ width, height });
+    // Function to update canvas size based on video display dimensions
+    const updateCanvasSize = () => {
+      // Find the video element to get actual display size
+      const videoElement = document.getElementById('camera-feed') as HTMLVideoElement;
       
-      // Resize canvas element
-      if (canvasRef.current) {
-        canvasRef.current.width = width;
-        canvasRef.current.height = height;
+      if (videoElement) {
+        // Get the actual display size of the video element
+        const displayRect = videoElement.getBoundingClientRect();
+        const videoDisplayWidth = displayRect.width;
+        const videoDisplayHeight = displayRect.height;
+        
+        // Only update if dimensions have changed
+        if (videoDisplayWidth !== canvasSize.width || videoDisplayHeight !== canvasSize.height) {
+          console.log(`Canvas size updated to match video: ${videoDisplayWidth}x${videoDisplayHeight}`);
+          setCanvasSize({ width: videoDisplayWidth, height: videoDisplayHeight });
+          
+          // Resize canvas element
+          if (canvasRef.current) {
+            canvasRef.current.width = videoDisplayWidth;
+            canvasRef.current.height = videoDisplayHeight;
+          }
+          
+          // Log for debugging
+          dispatch(EventType.LOG, {
+            message: `Drawing canvas resized to ${videoDisplayWidth}x${videoDisplayHeight}`,
+            type: 'info'
+          });
+        }
+      } else if (width !== canvasSize.width || height !== canvasSize.height) {
+        // Fallback to props if video element isn't available
+        console.log(`Canvas size updated from props: ${width}x${height}`);
+        setCanvasSize({ width, height });
+        
+        // Resize canvas element
+        if (canvasRef.current) {
+          canvasRef.current.width = width;
+          canvasRef.current.height = height;
+        }
       }
-      
-      // Log for debugging
-      dispatch(EventType.LOG, {
-        message: `Drawing canvas resized to ${width}x${height}`,
-        type: 'info'
-      });
-    }
-  }, [width, height]);
+    };
+    
+    // Initial update
+    updateCanvasSize();
+    
+    // Also listen for window resize events
+    window.addEventListener('resize', updateCanvasSize);
+    
+    // Cleanup
+    return () => {
+      window.removeEventListener('resize', updateCanvasSize);
+    };
+  }, [width, height, canvasSize.width, canvasSize.height]);
   
   // Create the canvas style - absolute positioning on top of video
   const canvasStyle: React.CSSProperties = {
