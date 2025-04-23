@@ -10,13 +10,13 @@ import orbFeatureDetector from '@/lib/orbFeatureDetector';
 import { getVideoFrame } from '@/lib/cameraManager';
 import { DrawingPath } from '@/lib/types';
 
-// Rainbow colors for different parts of the hand
+// Educational number blocks colors (1-5) for hand parts
 const FINGER_COLORS = [
-  '#FF0000', // red - thumb
-  '#FF7F00', // orange - index
-  '#FFFF00', // yellow - middle
-  '#00FF00', // green - ring
-  '#0000FF', // blue - pinky
+  '#0000FF', // blue - thumb (5)
+  '#FF0000', // red - index (1)
+  '#FF7F00', // orange - middle (2)
+  '#FFFF00', // yellow - ring (3)
+  '#00FF00', // green - pinky (4)
   '#4B0082', // indigo - palm
   '#9400D3'  // violet - wrist
 ];
@@ -49,8 +49,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
   const [settings, setSettings] = useState<DrawingSettings>({
     enabled: enabled,
     mode: 'roi',
-    strokeColor: FINGER_COLORS[0], // Red - thumb color
-    fillColor: FINGER_COLORS[0], // Red - thumb color
+    strokeColor: FINGER_COLORS[0], // Blue - thumb color (5)
+    fillColor: FINGER_COLORS[0], // Blue - thumb color (5)
     strokeWidth: 3,
     fillOpacity: 0.2,
     autoClose: true,
