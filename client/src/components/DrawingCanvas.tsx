@@ -10,6 +10,17 @@ import orbFeatureDetector from '@/lib/orbFeatureDetector';
 import { getVideoFrame } from '@/lib/cameraManager';
 import { DrawingPath } from '@/lib/types';
 
+// Rainbow colors for different parts of the hand
+const FINGER_COLORS = [
+  '#FF0000', // red - thumb
+  '#FF7F00', // orange - index
+  '#FFFF00', // yellow - middle
+  '#00FF00', // green - ring
+  '#0000FF', // blue - pinky
+  '#4B0082', // indigo - palm
+  '#9400D3'  // violet - wrist
+];
+
 interface DrawingCanvasProps {
   width: number;
   height: number;
@@ -38,8 +49,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
   const [settings, setSettings] = useState<DrawingSettings>({
     enabled: enabled,
     mode: 'roi',
-    strokeColor: '#00FFFF', // Cyan
-    fillColor: '#00FFFF', // Cyan
+    strokeColor: FINGER_COLORS[0], // Red - thumb color
+    fillColor: FINGER_COLORS[0], // Red - thumb color
     strokeWidth: 3,
     fillOpacity: 0.2,
     autoClose: true,
