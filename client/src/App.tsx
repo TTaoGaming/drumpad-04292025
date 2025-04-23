@@ -84,14 +84,29 @@ function App() {
         // Update performance metrics
         if (e.data.performance) {
           console.log('Setting performance metrics:', e.data.performance);
+          
+          // Add an FPS measurement if not present
+          const updatedPerformance = {
+            ...e.data.performance
+          };
+          
+          // Calculate fps if not provided
+          if (!updatedPerformance.fps) {
+            const now = performance.now();
+            const fps = 1000 / (now - (window as any).lastFrameTime || now);
+            (window as any).lastFrameTime = now;
+            updatedPerformance.fps = Math.min(60, fps); // Cap at 60fps
+            console.log('Calculated FPS:', updatedPerformance.fps);
+          }
+          
           setPerformanceMetrics(prev => ({
             ...(prev || {}),
-            ...e.data.performance
+            ...updatedPerformance
           }));
           
-          // Dispatch event for PerformanceMonitor
+          // Dispatch event for FPS stats
           dispatch(EventType.FRAME_PROCESSED, {
-            performance: e.data.performance,
+            performance: updatedPerformance,
             timestamp: Date.now()
           });
         }

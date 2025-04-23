@@ -32,11 +32,14 @@ const FpsStats: React.FC = () => {
     const frameProcessedListener = addListener(
       EventType.FRAME_PROCESSED,
       (data) => {
+        console.log('FpsStats received event:', data);
         if (data && data.performance) {
           const now = performance.now();
+          console.log('Performance data:', data.performance);
           
           // Handle FPS data
           if (data.performance.fps) {
+            console.log('Setting FPS:', data.performance.fps);
             setCurrentFps(Math.round(data.performance.fps));
             
             // Add the new reading to history
