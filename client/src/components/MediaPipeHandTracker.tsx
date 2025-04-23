@@ -447,23 +447,76 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
           type: 'info'
         });
         
-        // Check if global MediaPipe libraries are available
-        if (!(window as any).Hands || !(window as any).drawLandmarks || !(window as any).drawConnectors) {
+        // MediaPipe Hands has a different export structure depending on how it's loaded
+        let mpHandsLib: any; 
+        let mpDrawingLib: any;
+        let mpCameraLib: any;
+        
+        // Try different ways the libraries might be exposed
+        // From local files
+        if ((window as any).mp) {
+          // The local version might expose APIs under 'mp' namespace
+          mpHandsLib = (window as any).mp?.hands || (window as any).mp?.Hands;
+          mpDrawingLib = (window as any).mp?.drawing_utils || (window as any).mp?.DrawingUtils;
+          mpCameraLib = (window as any).mp?.camera_utils || (window as any).mp?.CameraUtils;
+        }
+        
+        // From CDN structure
+        if (!mpHandsLib) {
+          mpHandsLib = (window as any).Hands;
+          mpDrawingLib = {
+            drawLandmarks: (window as any).drawLandmarks,
+            drawConnectors: (window as any).drawConnectors
+          };
+          mpCameraLib = {
+            Camera: (window as any).Camera
+          };
+        }
+        
+        // Define our own MediaPipe interfaces with the libraries we found
+        if (!mpHandsLib || !mpDrawingLib) {
           dispatch(EventType.LOG, {
             message: 'MediaPipe libraries not found in window object. Make sure the scripts are loaded properly in index.html.',
             type: 'error'
           });
           console.error('MediaPipe libraries not available in window object:',
-                        'Hands:', (window as any).Hands,
-                        'drawLandmarks:', (window as any).drawLandmarks,
-                        'drawConnectors:', (window as any).drawConnectors);
+                        'Hands:', mpHandsLib,
+                        'drawLandmarks:', mpDrawingLib?.drawLandmarks,
+                        'drawConnectors:', mpDrawingLib?.drawConnectors);
+            
+          // Let's try loading MediaPipe from CDN as fallback to ensure functionality
+          dispatch(EventType.LOG, {
+            message: 'Falling back to CDN version of MediaPipe...',
+            type: 'info'
+          });
+            
+          // Create script elements for MediaPipe libraries
+          const createScript = (src: string): Promise<void> => {
+            return new Promise((resolve) => {
+              const script = document.createElement('script');
+              script.src = src;
+              script.crossOrigin = 'anonymous';
+              script.onload = () => resolve();
+              document.head.appendChild(script);
+            });
+          };
+            
+          // Try to load from CDN
+          Promise.all([
+            createScript('https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js'),
+            createScript('https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js'),
+            createScript('https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js')
+          ]).then(() => {
+            // After loading, retry initialization
+            setTimeout(() => loadDependencies(), 500);
+          });
+            
           return;
         }
-        
-        // Use local MediaPipe libraries instead of dynamic imports
-        // This loads our saved local versions and casts to our interfaces
+            
+        // Use our found MediaPipe libraries
         const mpHands: MediaPipeHands = { 
-          Hands: (window as any).Hands,
+          Hands: mpHandsLib,
           // Define HAND_CONNECTIONS if not available in our local version
           HAND_CONNECTIONS: (window as any).HAND_CONNECTIONS || [
             [0, 1], [1, 2], [2, 3], [3, 4], // thumb
@@ -476,11 +529,11 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
           ]
         };
         const mpCamera: MediaPipeCamera = { 
-          Camera: (window as any).Camera 
+          Camera: mpCameraLib?.Camera
         };
         const mpDrawing: MediaPipeDrawing = {
-          drawLandmarks: (window as any).drawLandmarks,
-          drawConnectors: (window as any).drawConnectors
+          drawLandmarks: mpDrawingLib?.drawLandmarks,
+          drawConnectors: mpDrawingLib?.drawConnectors
         };
         
         // Initialize MediaPipe Hands with local files

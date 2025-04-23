@@ -82,7 +82,8 @@ function cvInitOpenCV(): void {
   
   try {
     // Import the OpenCV.js script
-    importScripts('/assets/libs/opencv/opencv.js');
+    // Using the self.importScripts to avoid TypeScript error
+    (self as any).importScripts('/assets/libs/opencv/opencv.js');
     cvLog('OpenCV.js imported successfully');
   } catch (error) {
     cvLog(`Error loading OpenCV.js: ${error}`);
