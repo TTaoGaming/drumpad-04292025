@@ -238,6 +238,11 @@ const PinchGestureSettings = () => {
                   ? 'bg-green-500/20 text-green-500' 
                   : 'bg-red-500/20 text-red-500'}`}>
                   {pinchState.isPinching ? 'PINCHING' : 'INACTIVE'}
+                  {pinchState.pendingState !== null && (
+                    <span className="ml-1 text-xs">
+                      {pinchState.pendingState ? '(→on)' : '(→off)'}
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="flex items-center space-x-2">
@@ -247,6 +252,26 @@ const PinchGestureSettings = () => {
                 </div>
               </div>
             </div>
+            
+            {/* Stability Information */}
+            {pinchState.pendingState !== null && (
+              <div className="mt-2 border-t border-primary/10 pt-2">
+                <div className="flex justify-between items-center">
+                  <div className="text-xs text-muted-foreground">Stability Counter:</div>
+                  <div className="flex items-center">
+                    <div className="h-1.5 w-full bg-gray-300 dark:bg-gray-700 rounded-full overflow-hidden mr-2">
+                      <div 
+                        className="h-full bg-blue-500 transition-all duration-200"
+                        style={{ width: `${(pinchState.stableCount / pinchState.stabilityFrames) * 100}%` }}
+                      ></div>
+                    </div>
+                    <span className="text-xs font-mono">
+                      {pinchState.stableCount}/{pinchState.stabilityFrames}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
             
             {/* Thresholds Display */}
             <div className="mt-3 pt-3 border-t border-primary/10">

@@ -345,10 +345,16 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
    * @param landmarks Array of landmarks from MediaPipe
    * @returns Object with pinch state and distance
    */
-  const calculatePinchGesture = useCallback((landmarks: HandLandmark[]): {isPinching: boolean, distance: number} => {
+  const calculatePinchGesture = useCallback((landmarks: HandLandmark[]): PinchState => {
     // Ensure we have landmarks
     if (!landmarks || landmarks.length < 21) {
-      return { isPinching: false, distance: 1.0 };
+      return { 
+        isPinching: false, 
+        distance: 1.0,
+        pendingState: null,
+        stableCount: 0,
+        stabilityFrames: pinchGestureSettings.stabilityFrames
+      };
     }
     
     // Get the thumb tip (landmark 4)
@@ -829,7 +835,10 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                   setting: 'pinchState',
                   value: {
                     isPinching,
-                    distance
+                    distance,
+                    pendingState: pinchStateMemoryRef.current.isPinching !== isPinching ? isPinching : null,
+                    stableCount: pinchStateMemoryRef.current.stableCount,
+                    stabilityFrames: pinchGestureSettings.stabilityFrames
                   }
                 });
                 
@@ -952,7 +961,15 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                   
                   // Display pinch state
                   ctx.font = '13px sans-serif';
-                  const stateText = isPinching ? 'ACTIVE' : 'INACTIVE';
+                  let stateText = isPinching ? 'ACTIVE' : 'INACTIVE';
+                  
+                  // Add pending information if state is transitioning
+                  const memory = pinchStateMemoryRef.current;
+                  const pendingState = memory.isPinching !== isPinching ? isPinching : null;
+                  if (pendingState !== null) {
+                    stateText += pendingState ? ' →ON' : ' →OFF';
+                  }
+                  
                   ctx.fillStyle = isPinching ? '#00FF00' : '#FF3333';
                   ctx.fillText(`State: ${stateText}`, stateDisplayX + 10, stateDisplayY + 45);
                   
@@ -960,6 +977,13 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                   ctx.fillStyle = 'white';
                   const thresholdText = `Threshold: ${pinchGestureSettings.threshold.toFixed(2)}`;
                   ctx.fillText(thresholdText, stateDisplayX + 100, stateDisplayY + 45);
+                  
+                  // Display stability counter if state is changing
+                  if (memory.stableCount > 0) {
+                    const stabilityText = `Stability: ${memory.stableCount}/${pinchGestureSettings.stabilityFrames}`;
+                    ctx.fillStyle = '#FFA500'; // Orange
+                    ctx.fillText(stabilityText, stateDisplayX + 10, stateDisplayY + 65);
+                  }
                 }
               }
             }
