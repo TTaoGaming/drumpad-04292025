@@ -8,6 +8,37 @@ export interface Notification {
   type: 'info' | 'error' | 'success' | 'warning';
 }
 
+/**
+ * Drawing related types
+ */
+export interface Point {
+  x: number;
+  y: number;
+}
+
+export interface DrawingPath {
+  points: Point[];
+  isComplete: boolean;
+  isROI: boolean;
+}
+
+export interface DrawingSettings {
+  enabled: boolean;
+  mode: 'free' | 'roi';
+  strokeColor: string;
+  fillColor: string;
+  strokeWidth: number;
+  fillOpacity: number;
+  autoClose: boolean;
+  smoothing: boolean;
+}
+
+export interface RegionOfInterest {
+  points: Point[];
+  id: string;
+  timestamp: number;
+}
+
 export interface FrameData {
   width: number;
   height: number;

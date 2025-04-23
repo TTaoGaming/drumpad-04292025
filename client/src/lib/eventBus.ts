@@ -15,7 +15,16 @@ export enum EventType {
   SETTINGS_PANEL_CLOSE = 'settings-panel-close',
   SETTINGS_TAB_CHANGE = 'settings-tab-change',
   SETTINGS_SUBTAB_CHANGE = 'settings-subtab-change',
-  SETTINGS_VALUE_CHANGE = 'settings-value-change'
+  SETTINGS_VALUE_CHANGE = 'settings-value-change',
+  // Drawing events
+  DRAWING_START = 'drawing-start',
+  DRAWING_UPDATE = 'drawing-update',
+  DRAWING_END = 'drawing-end',
+  DRAWING_CLEAR = 'drawing-clear',
+  DRAWING_MODE_CHANGE = 'drawing-mode-change',
+  ROI_CREATED = 'roi-created',
+  ROI_UPDATED = 'roi-updated',
+  ROI_DELETED = 'roi-deleted'
 }
 
 type EventCallback = (data: any) => void;

@@ -9,6 +9,7 @@ import PerformanceDisplay from "@/components/PerformanceDisplay";
 import PerformanceMonitor from "@/components/PerformanceMonitor";
 import FpsStats from "@/components/PerformanceMetrics";
 import MediaPipeHandTracker from "@/components/MediaPipeHandTracker";
+import DrawingCanvas from "@/components/DrawingCanvas";
 import SettingsPanel from "@/components/settings/SettingsPanel";
 import { EventType, addListener, dispatch } from "@/lib/eventBus";
 import { Notification, HandData, PerformanceMetrics } from "@/lib/types";
@@ -258,6 +259,15 @@ function App() {
       {/* MediaPipe Hand Tracking - tracks your actual hands via webcam */}
       {isCameraRunning && (
         <MediaPipeHandTracker videoRef={videoRef} />
+      )}
+      
+      {/* Drawing Canvas for pinch-based drawing */}
+      {isCameraRunning && (
+        <DrawingCanvas
+          width={resolution.width}
+          height={resolution.height}
+          enabled={true}
+        />
       )}
       
       {/* Legacy hand visualization components (not used) */}
