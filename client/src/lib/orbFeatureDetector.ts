@@ -190,24 +190,31 @@ export class ORBFeatureDetector {
     
     // Process each active ROI
     this.activeROIs.forEach(roi => {
-      // For new ROIs (first detection)
-      if (!this.initialROIFeatures.has(roi.id)) {
-        // Detect features using OpenCV's ORB
-        this.detectORBFeatures(roi, imageData);
-        
-        // Store initial features for tracking
-        this.initialROIFeatures.set(roi.id, [...roi.features]);
-        
-        // Update baseline for occlusion detection
-        this.updateBaselineFeatures(roi);
-      } 
-      // For existing ROIs, track and update position
-      else {
-        // Track ROI position based on feature matching
-        this.trackROI(roi, imageData);
-        
-        // Update baseline counts
-        this.updateBaselineFeatures(roi);
+      try {
+        // For new ROIs (first detection)
+        if (!this.initialROIFeatures.has(roi.id)) {
+          // Detect features using OpenCV's ORB
+          this.detectORBFeatures(roi, imageData);
+          
+          // Store initial features for tracking
+          this.initialROIFeatures.set(roi.id, [...roi.features]);
+          
+          // Update baseline for occlusion detection
+          this.updateBaselineFeatures(roi);
+        } 
+        // For existing ROIs, track and update position
+        else {
+          // Track ROI position based on feature matching
+          this.trackROI(roi, imageData);
+          
+          // Update baseline counts
+          this.updateBaselineFeatures(roi);
+        }
+      } catch (error) {
+        // Log the error but don't crash the main frame processing loop
+        console.error(`Error processing ROI ${roi.id}:`, error);
+        // Make sure the UI shows zero features when detection fails
+        roi.features = [];
       }
     });
     
@@ -506,9 +513,9 @@ export class ORBFeatureDetector {
         maxY = Math.max(maxY, point.y);
       });
       
-      // Add margin to search area (larger margin for tracking)
-      const marginX = (maxX - minX) * 0.3; // 30% margin for tracking
-      const marginY = (maxY - minY) * 0.3;
+      // Add modest margin to search area (keep it small to avoid memory errors)
+      const marginX = (maxX - minX) * 0.1; // Reduced from 30% to 10% margin for tracking
+      const marginY = (maxY - minY) * 0.1;
       
       // Ensure margins are within image bounds
       const expandedMinX = Math.max(0, minX - marginX);
@@ -604,8 +611,9 @@ export class ORBFeatureDetector {
       descriptors.delete();
     } catch (error) {
       console.error('Error in ORB feature detection:', error);
-      // Fall back to placeholder features if OpenCV fails
-      this.generatePlaceholderFeatures(roi, imageData.width, imageData.height);
+      // No fallback to placeholder features - expose the actual error
+      roi.features = []; // Clear any partial features
+      throw new Error(`ORB feature detection failed: ${error}`);
     }
   }
   
@@ -743,7 +751,7 @@ export class ORBFeatureDetector {
       const featurePercentage = Math.min(100, Math.round((featureCount / baselineCount) * 100));
       
       // Semi-transparent background for text
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.fillStyle = featureCount === 0 ? 'rgba(255, 0, 0, 0.5)' : 'rgba(0, 0, 0, 0.5)';
       ctx.fillRect(centroidX - 50, centroidY - 30, 100, 60);
       
       // Text for ID and feature info
@@ -756,8 +764,13 @@ export class ORBFeatureDetector {
       ctx.fillText(`ID:1`, centroidX, centroidY - 15);
       
       // Feature count and percentage
-      ctx.fillText(`${featureCount} features`, centroidX, centroidY + 5);
-      ctx.fillText(`${featurePercentage}${percentageText}`, centroidX, centroidY + 25);
+      if (featureCount === 0) {
+        ctx.fillText(`NO FEATURES`, centroidX, centroidY + 5);
+        ctx.fillText(`DETECTION FAILED`, centroidX, centroidY + 25);
+      } else {
+        ctx.fillText(`${featureCount} features`, centroidX, centroidY + 5);
+        ctx.fillText(`${featurePercentage}${percentageText}`, centroidX, centroidY + 25);
+      }
     });
   }
 }
