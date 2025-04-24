@@ -12,7 +12,7 @@ import { DrawingPath } from '@/lib/types';
 
 // Educational number blocks colors (1-5) for hand parts
 const FINGER_COLORS = [
-  '#0000FF', // blue - thumb (5)
+  '#87CEEB', // light blue - thumb
   '#FF0000', // red - index (1)
   '#FF7F00', // orange - middle (2)
   '#FFFF00', // yellow - ring (3)
@@ -49,8 +49,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
   const [settings, setSettings] = useState<DrawingSettings>({
     enabled: enabled,
     mode: 'roi',
-    strokeColor: FINGER_COLORS[1], // Red - index finger color (1)
-    fillColor: FINGER_COLORS[1], // Red - index finger color (1)
+    strokeColor: FINGER_COLORS[0], // Light blue - thumb color
+    fillColor: FINGER_COLORS[0], // Light blue - thumb color
     strokeWidth: 3,
     fillOpacity: 0.2,
     autoClose: true,
