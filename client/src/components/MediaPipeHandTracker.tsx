@@ -803,7 +803,7 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                   ctx.fillRect(displayX, displayY, boxWidth, boxHeight);
                   
                   // Add a border with the finger color
-                  ctx.strokeStyle = FINGER_COLORS[1]; // Orange (index finger color)
+                  ctx.strokeStyle = FINGER_COLORS[1]; // Red (index finger color)
                   ctx.lineWidth = 2;
                   ctx.strokeRect(displayX, displayY, boxWidth, boxHeight);
                   
@@ -924,11 +924,11 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                   const thumbTip = landmarks[4];
                   
                   // Reuse the active fingertip we already defined above
-                  let fingerColorIndex = 1; // Default to index (orange)
+                  let fingerColorIndex = 1; // Default to index (red)
                   
                   switch (pinchGestureSettings.activeFinger) {
                     case 'index':
-                      fingerColorIndex = 1; // Orange
+                      fingerColorIndex = 1; // Red
                       break;
                     case 'middle':
                       fingerColorIndex = 2; // Yellow
@@ -940,7 +940,7 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                       fingerColorIndex = 4; // Blue
                       break;
                     default:
-                      fingerColorIndex = 1; // Orange
+                      fingerColorIndex = 1; // Red
                   }
                   
                   // Convert to screen coordinates
