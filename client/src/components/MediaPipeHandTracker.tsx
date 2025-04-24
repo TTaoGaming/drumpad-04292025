@@ -735,9 +735,36 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
               // Use filtered landmarks if available
               const landmarks = applyFilter(hand, 0, now);
               
-              // The index fingertip is landmark 8
+              // The index fingertip is landmark 8, thumb tip is landmark 4
               if (landmarks && landmarks.length > 8) {
                 const indexFingertip = landmarks[8];
+                const thumbFingertip = landmarks[4];
+                
+                // Update thumb fingertip coordinates
+                if (thumbFingertip) {
+                  setThumbFingertipCoords(thumbFingertip);
+                  
+                  // Draw a crosshair at the thumb fingertip position
+                  const thumbX = thumbFingertip.x * canvas.width;
+                  const thumbY = thumbFingertip.y * canvas.height;
+                  const crosshairSize = 20;
+                  
+                  // Draw crosshair lines
+                  ctx.beginPath();
+                  ctx.moveTo(thumbX - crosshairSize, thumbY);
+                  ctx.lineTo(thumbX + crosshairSize, thumbY);
+                  ctx.moveTo(thumbX, thumbY - crosshairSize);
+                  ctx.lineTo(thumbX, thumbY + crosshairSize);
+                  ctx.strokeStyle = FINGER_COLORS[0]; // Light blue (thumb color)
+                  ctx.lineWidth = 2;
+                  ctx.stroke();
+                  
+                  // Draw circle around thumb fingertip
+                  ctx.beginPath();
+                  ctx.arc(thumbX, thumbY, crosshairSize / 2, 0, 2 * Math.PI);
+                  ctx.strokeStyle = FINGER_COLORS[0]; // Light blue (thumb color)
+                  ctx.lineWidth = 2;
+                }
                 
                 if (indexFingertip) {
                   // Update the state with the latest coordinates
@@ -754,14 +781,14 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                   ctx.lineTo(tipX + crosshairSize, tipY);
                   ctx.moveTo(tipX, tipY - crosshairSize);
                   ctx.lineTo(tipX, tipY + crosshairSize);
-                  ctx.strokeStyle = FINGER_COLORS[1]; // Orange (index finger color)
+                  ctx.strokeStyle = FINGER_COLORS[1]; // Red (index finger color)
                   ctx.lineWidth = 2;
                   ctx.stroke();
                   
                   // Draw circle around fingertip
                   ctx.beginPath();
                   ctx.arc(tipX, tipY, crosshairSize / 2, 0, 2 * Math.PI);
-                  ctx.strokeStyle = FINGER_COLORS[1]; // Orange (index finger color)
+                  ctx.strokeStyle = FINGER_COLORS[1]; // Red (index finger color)
                   ctx.lineWidth = 2;
                   ctx.stroke();
                   
@@ -875,14 +902,19 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                   }
                 });
                 
-                // Also dispatch the index fingertip position separately for drawing
+                // Get the thumb tip for drawing reference
+                const thumbTip = landmarks[4];
+                const thumbPixelX = Math.round(thumbTip.x * videoWidth);
+                const thumbPixelY = Math.round(thumbTip.y * videoHeight);
+                
+                // Also dispatch the thumb fingertip position for drawing
                 dispatchFn(EventType.SETTINGS_VALUE_CHANGE, {
                   section: 'tracking',
                   setting: 'indexFingertip',
                   value: {
-                    x: pixelX, // Send pixel coordinates based on visible video size
-                    y: pixelY, // Send pixel coordinates based on visible video size
-                    z: activeFingertip.z
+                    x: thumbPixelX, // Send thumb pixel coordinates based on visible video size
+                    y: thumbPixelY, // Send thumb pixel coordinates based on visible video size
+                    z: thumbTip.z
                   }
                 });
                 
@@ -938,7 +970,7 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                   // Thumb tip circle
                   ctx.beginPath();
                   ctx.arc(thumbX, thumbY, tipRadius, 0, 2 * Math.PI);
-                  ctx.fillStyle = FINGER_COLORS[0]; // Red (thumb color)
+                  ctx.fillStyle = FINGER_COLORS[0]; // Light blue (thumb color)
                   ctx.fill();
                   
                   // Active finger tip circle
