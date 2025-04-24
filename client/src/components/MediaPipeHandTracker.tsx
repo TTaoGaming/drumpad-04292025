@@ -11,7 +11,7 @@ interface MediaPipeHandTrackerProps {
 
 // Educational number blocks colors (1-5) for hand parts
 const FINGER_COLORS = [
-  '#0000FF', // blue - thumb (5)
+  '#87CEEB', // light blue - thumb
   '#FF0000', // red - index (1)
   '#FF7F00', // orange - middle (2)
   '#FFFF00', // yellow - ring (3)
@@ -84,8 +84,9 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
     lastDistance: null as number | null
   });
   
-  // State to store the index fingertip coordinates
+  // State to store the fingertip coordinates
   const [indexFingertipCoords, setIndexFingertipCoords] = useState<HandLandmark | null>(null);
+  const [thumbFingertipCoords, setThumbFingertipCoords] = useState<HandLandmark | null>(null);
   
   // Finger flexion settings
   const [fingerFlexionSettings, setFingerFlexionSettings] = useState({
