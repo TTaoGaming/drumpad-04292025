@@ -903,11 +903,10 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                 });
                 
                 // Get the thumb tip for drawing reference
-                const thumbTip = landmarks[4];
-                const thumbPixelX = Math.round(thumbTip.x * videoWidth);
-                const thumbPixelY = Math.round(thumbTip.y * videoHeight);
+                // For our thumb-centered gesture control system, we'll use the thumb position
+                // as the primary reference point for all drawing operations
                 
-                // Determine which finger is the active one for drawing
+                // Determine color index based on which finger is being used with the thumb
                 let activeDrawingFinger = pinchGestureSettings.activeFinger;
                 let activeFingerColorIndex = 1; // Default to index finger (red)
                 
@@ -927,15 +926,15 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                     break;
                 }
                 
-                // Also dispatch the active fingertip position for drawing
+                // Dispatch thumb position as the primary drawing point
                 dispatchFn(EventType.SETTINGS_VALUE_CHANGE, {
                   section: 'tracking',
-                  setting: 'indexFingertip',
+                  setting: 'thumbPosition',
                   value: {
-                    x: activeFingertip.x * videoWidth, // Send active finger pixel coordinates
-                    y: activeFingertip.y * videoHeight, // Send active finger pixel coordinates
-                    z: activeFingertip.z,
-                    colorIndex: activeFingerColorIndex // Send the color index for the active finger
+                    x: Math.round(landmarks[4].x * videoWidth), // Send thumb pixel coordinates
+                    y: Math.round(landmarks[4].y * videoHeight), // Send thumb pixel coordinates
+                    z: landmarks[4].z,
+                    colorIndex: activeFingerColorIndex // Send the color index for the active pinch
                   }
                 });
                 

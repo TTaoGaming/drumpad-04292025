@@ -107,7 +107,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
     const fingerPositionListener = addListener(
       EventType.SETTINGS_VALUE_CHANGE,
       (data) => {
-        if (data.section === 'tracking' && data.setting === 'indexFingertip' && settings.enabled) {
+        if (data.section === 'tracking' && data.setting === 'thumbPosition' && settings.enabled) {
           const position = data.value;
           
           // Update active finger color if available
@@ -133,7 +133,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
             addPointToPath(position.x, position.y);
             
             // Log for debugging
-            console.log(`Continuing drawing with fingertip at (${Math.round(position.x)}, ${Math.round(position.y)})`);
+            console.log(`Continuing drawing with thumb at (${Math.round(position.x)}, ${Math.round(position.y)})`);
           }
         }
       }
