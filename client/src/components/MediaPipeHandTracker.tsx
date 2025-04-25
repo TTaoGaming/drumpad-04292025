@@ -11,12 +11,12 @@ interface MediaPipeHandTrackerProps {
 
 // Educational number blocks colors (1-5) for hand parts
 const FINGER_COLORS = [
-  '#87CEEB', // light blue - thumb
+  '#0000FF', // blue - thumb
   '#FF0000', // red - index (1)
   '#FF7F00', // orange - middle (2)
   '#FFFF00', // yellow - ring (3)
   '#00FF00', // green - pinky (4)
-  '#4B0082', // indigo - palm
+  '#808080', // gray - palm
   '#9400D3'  // violet - wrist
 ];
 
@@ -441,10 +441,10 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
     const h = roi.height * height;
     
     // Draw the ROI with a semi-transparent fill and dashed border
-    ctx.fillStyle = 'rgba(0, 255, 255, 0.1)'; // Cyan with low opacity
+    ctx.fillStyle = 'rgba(255, 0, 0, 0.1)'; // Red with low opacity
     ctx.fillRect(x, y, w, h);
     
-    ctx.strokeStyle = 'rgba(0, 255, 255, 0.7)'; // Cyan with higher opacity
+    ctx.strokeStyle = 'rgba(255, 0, 0, 0.7)'; // Red with higher opacity
     ctx.lineWidth = 2;
     ctx.setLineDash([5, 5]); // Dashed border
     ctx.strokeRect(x, y, w, h);
@@ -454,7 +454,7 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
     ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; // Dark background
     ctx.fillRect(x, y - 20, 140, 20); // Background for text
     
-    ctx.fillStyle = 'rgba(0, 255, 255, 1)'; // Cyan text
+    ctx.fillStyle = 'rgba(255, 0, 0, 1)'; // Red text
     ctx.font = '12px sans-serif';
     ctx.fillText(`ROI: ${w.toFixed(0)}×${h.toFixed(0)}px`, x + 5, y - 7);
   }, [showROI]);
@@ -970,7 +970,7 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                   // Thumb tip circle
                   ctx.beginPath();
                   ctx.arc(thumbX, thumbY, tipRadius, 0, 2 * Math.PI);
-                  ctx.fillStyle = FINGER_COLORS[0]; // Light blue (thumb color)
+                  ctx.fillStyle = FINGER_COLORS[0]; // Blue (thumb color)
                   ctx.fill();
                   
                   // Active finger tip circle
