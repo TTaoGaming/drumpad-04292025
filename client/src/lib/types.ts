@@ -16,6 +16,7 @@ export interface DrawingPath {
   isComplete: boolean;
   isROI: boolean;
   colorIndex?: number; // Index of the color in FINGER_COLORS array
+  fingerId?: number;   // ID of the finger used for drawing (1 = index, 2 = middle, etc.)
 }
 
 // Region of Interest for feature detection
@@ -70,6 +71,8 @@ export interface PinchState {
   isPinching: boolean;
   distance: number;
   position?: Point;
+  activeFinger?: 'index' | 'middle' | 'ring' | 'pinky';
+  fingerId?: number; // 1 = index, 2 = middle, 3 = ring, 4 = pinky
 }
 
 // Notification for user feedback

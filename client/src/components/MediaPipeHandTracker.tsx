@@ -889,6 +889,16 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                 // Log the coordinate conversion for debugging
                 console.log(`Converting coordinates: (${thumbTip.x.toFixed(3)}, ${thumbTip.y.toFixed(3)}) => (${thumbPixelX}, ${thumbPixelY})`);
                 
+                // Determine finger ID based on which finger is active (1=index, 2=middle, etc.)
+                let fingerId: number;
+                switch (pinchGestureSettings.activeFinger) {
+                  case 'index': fingerId = 1; break;
+                  case 'middle': fingerId = 2; break;
+                  case 'ring': fingerId = 3; break;
+                  case 'pinky': fingerId = 4; break;
+                  default: fingerId = 1; // Default to index
+                }
+                
                 dispatchFn(EventType.SETTINGS_VALUE_CHANGE, {
                   section: 'gestures',
                   setting: 'pinchState',
@@ -899,7 +909,9 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                       x: thumbPixelX, // Send thumb position instead of active finger
                       y: thumbPixelY, // Send thumb position instead of active finger
                       z: thumbTip.z
-                    }
+                    },
+                    activeFinger: pinchGestureSettings.activeFinger,
+                    fingerId: fingerId
                   }
                 });
                 

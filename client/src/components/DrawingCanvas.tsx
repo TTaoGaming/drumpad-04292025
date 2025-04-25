@@ -84,11 +84,19 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
       (data) => {
         // Handle pinch gesture state changes
         if (data.section === 'gestures' && data.setting === 'pinchState' && settings.enabled) {
-          const { isPinching, distance } = data.value;
+          const { isPinching, distance, fingerId, activeFinger } = data.value;
           
           console.log(`Received pinch event - isPinching: ${isPinching}, distance: ${distance.toFixed(3)}`);
           
-          // Get the index fingertip position from event bus
+          // Update active finger color based on finger ID
+          if (fingerId !== undefined) {
+            setActiveFingerColorIndex(fingerId);
+            
+            // Debug which finger is being used
+            console.log(`Active finger: ${activeFinger} (ID: ${fingerId})`);
+          }
+          
+          // Get the fingertip position from event bus
           if (data.value.position) {
             // The position already comes in pixel coordinates from MediaPipeHandTracker
             // We don't need to scale - just use directly
@@ -97,7 +105,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
             console.log(`Pinch position: (${position.x}, ${position.y})`);
             
             // Handle the pinch state change with the position
-            handlePinchStateChange(isPinching, { x: position.x, y: position.y });
+            handlePinchStateChange(isPinching, { x: position.x, y: position.y }, fingerId);
           }
         }
       }
@@ -311,7 +319,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
   };
   
   // Handle pinch state changes
-  const handlePinchStateChange = (isPinching: boolean, position: { x: number, y: number }) => {
+  const handlePinchStateChange = (isPinching: boolean, position: { x: number, y: number }, fingerId?: number) => {
     console.log(`Pinch state change: isPinching=${isPinching}, position=(${Math.round(position.x)}, ${Math.round(position.y)}), isDrawing=${isDrawing}`);
     
     // Start drawing when pinching begins
@@ -320,7 +328,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
       console.log('Starting new drawing at:', position);
       
       // Use coordinates directly - they are already in pixel space
-      startDrawing(position.x, position.y);
+      startDrawing(position.x, position.y, fingerId);
     } 
     // Continue drawing when pinching and moving
     else if (isPinching && isDrawing) {
@@ -337,13 +345,17 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
   };
   
   // Start a new drawing path
-  const startDrawing = (x: number, y: number) => {
+  const startDrawing = (x: number, y: number, fingerId?: number) => {
+    // If a specific finger ID was provided, use it; otherwise use activeFingerColorIndex
+    const colorIndex = fingerId || activeFingerColorIndex;
+    
     const newPath: DrawingPath = {
       id: Date.now().toString(), // Add a unique ID based on timestamp
       points: [{ x, y }],
       isComplete: false,
       isROI: settings.mode === 'roi',
-      colorIndex: activeFingerColorIndex // Store the active finger's color index
+      colorIndex: colorIndex, // Store the active finger's color index
+      fingerId: fingerId      // Store which finger was used (1=index, 2=middle, etc.)
     };
     
     setCurrentPath(newPath);
@@ -351,7 +363,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
     
     // Notify that drawing has started
     dispatch(EventType.LOG, {
-      message: `Started ${settings.mode === 'roi' ? 'ROI selection' : 'free drawing'} using finger ${activeFingerColorIndex}`,
+      message: `Started ${settings.mode === 'roi' ? 'ROI selection' : 'free drawing'} using finger ${colorIndex}`,
       type: 'info'
     });
   };
