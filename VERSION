@@ -1,11 +1,12 @@
-v0.1.0-alpha - "Working Pinch Gesture"
+v0.2.0-alpha - "Thumb-Centered Gesture Control"
 
 Features:
-- Reliable pinch gesture detection between thumb and index finger
+- Thumb-centered pinch gesture detection between thumb and index finger
+- Drawing follows thumb position instead of index finger for more stability
 - Customizable thresholds (current: 0.07 for pinch, 0.10 for release)
 - Visual feedback with distance measurement
 - Settings panel for gesture configuration
 - Hysteresis and stabilization to prevent flickering
-- Index fingertip coordinate tracking and visualization
+- Simplified ROI tracking focused on thumb position
 
-Date: April 23, 2025
+Date: April 25, 2025
