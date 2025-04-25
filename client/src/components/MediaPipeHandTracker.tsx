@@ -907,14 +907,35 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                 const thumbPixelX = Math.round(thumbTip.x * videoWidth);
                 const thumbPixelY = Math.round(thumbTip.y * videoHeight);
                 
-                // Also dispatch the thumb fingertip position for drawing
+                // Determine which finger is the active one for drawing
+                let activeDrawingFinger = pinchGestureSettings.activeFinger;
+                let activeFingerColorIndex = 1; // Default to index finger (red)
+                
+                // Set the color index based on which finger is active
+                switch (activeDrawingFinger) {
+                  case 'index': 
+                    activeFingerColorIndex = 1; // Red
+                    break;
+                  case 'middle':
+                    activeFingerColorIndex = 2; // Orange 
+                    break;
+                  case 'ring':
+                    activeFingerColorIndex = 3; // Yellow
+                    break;
+                  case 'pinky':
+                    activeFingerColorIndex = 4; // Green
+                    break;
+                }
+                
+                // Also dispatch the active fingertip position for drawing
                 dispatchFn(EventType.SETTINGS_VALUE_CHANGE, {
                   section: 'tracking',
                   setting: 'indexFingertip',
                   value: {
-                    x: thumbPixelX, // Send thumb pixel coordinates based on visible video size
-                    y: thumbPixelY, // Send thumb pixel coordinates based on visible video size
-                    z: thumbTip.z
+                    x: activeFingertip.x * videoWidth, // Send active finger pixel coordinates
+                    y: activeFingertip.y * videoHeight, // Send active finger pixel coordinates
+                    z: activeFingertip.z,
+                    colorIndex: activeFingerColorIndex // Send the color index for the active finger
                   }
                 });
                 
