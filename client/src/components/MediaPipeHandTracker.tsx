@@ -1375,6 +1375,12 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
         console.log("Received finger flexion settings:", data.value);
         setFingerFlexionSettings(data.value);
       }
+      
+      // Handle pinch gesture settings
+      if (data.section === 'gestures' && data.setting === 'pinchGesture') {
+        console.log("Received pinch gesture settings:", data.value);
+        setPinchGestureSettings(data.value);
+      }
     });
     
     return () => {
