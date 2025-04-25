@@ -881,12 +881,13 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                   videoHeight = videoRect.height;
                 }
                 
-                // Convert normalized coordinates (0-1) to pixel coordinates for the canvas
-                const pixelX = Math.round(activeFingertip.x * videoWidth);
-                const pixelY = Math.round(activeFingertip.y * videoHeight);
+                // Get thumb position for thumb-centered drawing
+                const thumbTip = landmarks[4]; // Thumb tip
+                const thumbPixelX = Math.round(thumbTip.x * videoWidth);
+                const thumbPixelY = Math.round(thumbTip.y * videoHeight);
                 
                 // Log the coordinate conversion for debugging
-                console.log(`Converting coordinates: (${activeFingertip.x.toFixed(3)}, ${activeFingertip.y.toFixed(3)}) => (${pixelX}, ${pixelY})`);
+                console.log(`Converting coordinates: (${thumbTip.x.toFixed(3)}, ${thumbTip.y.toFixed(3)}) => (${thumbPixelX}, ${thumbPixelY})`);
                 
                 dispatchFn(EventType.SETTINGS_VALUE_CHANGE, {
                   section: 'gestures',
@@ -895,9 +896,9 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                     isPinching,
                     distance,
                     position: {
-                      x: pixelX, // Send pixel coordinates based on visible video size
-                      y: pixelY, // Send pixel coordinates based on visible video size
-                      z: activeFingertip.z
+                      x: thumbPixelX, // Send thumb position instead of active finger
+                      y: thumbPixelY, // Send thumb position instead of active finger
+                      z: thumbTip.z
                     }
                   }
                 });

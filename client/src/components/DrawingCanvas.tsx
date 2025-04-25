@@ -325,7 +325,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
     // Continue drawing when pinching and moving
     else if (isPinching && isDrawing) {
       // Add the current point to the path (with more distance info)
-      console.log('Continuing drawing with pinch at:', position);
+      console.log('Continuing drawing with thumb pinch at:', position);
       addPointToPath(position.x, position.y);
     }
     // Stop drawing when pinching ends
