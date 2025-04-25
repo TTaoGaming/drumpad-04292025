@@ -15,6 +15,7 @@ export interface DrawingPath {
   points: Point[];
   isComplete: boolean;
   isROI: boolean;
+  colorIndex?: number; // Index of the color in FINGER_COLORS array
 }
 
 // Region of Interest for feature detection

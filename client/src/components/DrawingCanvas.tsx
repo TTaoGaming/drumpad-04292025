@@ -109,6 +109,22 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
       (data) => {
         if (data.section === 'tracking' && data.setting === 'indexFingertip' && settings.enabled) {
           const position = data.value;
+          
+          // Update active finger color if available
+          if (position && position.colorIndex !== undefined) {
+            const newColorIndex = position.colorIndex;
+            
+            // Update stroke and fill colors based on active finger
+            setSettings(prev => ({
+              ...prev,
+              strokeColor: FINGER_COLORS[newColorIndex],
+              fillColor: FINGER_COLORS[newColorIndex]
+            }));
+            
+            // Store the color index
+            setActiveFingerColorIndex(newColorIndex);
+          }
+          
           if (isDrawing && position && currentPath && currentPath.points.length > 0) {
             // No need to scale - coordinates are already in pixel space from MediaPipeHandTracker
             // Just use them directly
@@ -251,7 +267,42 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
         ctx.fillStyle = `${settings.fillColor}${Math.round(settings.fillOpacity * 255).toString(16).padStart(2, '0')}`;
         ctx.fill();
         
-        // No vertex dots for clean, professional look
+        // Add ID number to the center of the ROI
+        if (path.id) {
+          // Calculate center of the ROI
+          const center = calculateCenter(points);
+          
+          // Extract numerical ID from the ROI ID (which is a timestamp string)
+          let idNumber;
+          
+          if (path.colorIndex !== undefined) {
+            // If a specific color index was saved with the path, use that for the ID number
+            idNumber = path.colorIndex;
+          } else {
+            // Otherwise generate a sequential ID based on the color
+            // Get color from the stroke style and find its index in FINGER_COLORS
+            const pathColor = ctx.strokeStyle.toString();
+            // Find index in FINGER_COLORS (defaults to 1 if not found)
+            const colorIndex = FINGER_COLORS.indexOf(pathColor);
+            idNumber = colorIndex > 0 ? colorIndex : 1;
+          }
+          
+          // Draw ID number
+          ctx.font = 'bold 24px sans-serif';
+          ctx.fillStyle = 'white';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(idNumber.toString(), center.x, center.y);
+          
+          // Add stroke around text for better visibility
+          ctx.strokeStyle = 'black';
+          ctx.lineWidth = 1;
+          ctx.strokeText(idNumber.toString(), center.x, center.y);
+          
+          // Reset text properties
+          ctx.textAlign = 'start';
+          ctx.textBaseline = 'alphabetic';
+        }
       }
     }
     
@@ -291,7 +342,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
       id: Date.now().toString(), // Add a unique ID based on timestamp
       points: [{ x, y }],
       isComplete: false,
-      isROI: settings.mode === 'roi'
+      isROI: settings.mode === 'roi',
+      colorIndex: activeFingerColorIndex // Store the active finger's color index
     };
     
     setCurrentPath(newPath);
@@ -299,7 +351,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
     
     // Notify that drawing has started
     dispatch(EventType.LOG, {
-      message: `Started ${settings.mode === 'roi' ? 'ROI selection' : 'free drawing'}`,
+      message: `Started ${settings.mode === 'roi' ? 'ROI selection' : 'free drawing'} using finger ${activeFingerColorIndex}`,
       type: 'info'
     });
   };
