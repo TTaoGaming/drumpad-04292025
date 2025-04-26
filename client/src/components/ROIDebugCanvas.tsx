@@ -180,11 +180,19 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
       const sourceWidth = Math.min(extractSize, videoElement.videoWidth - sourceX);
       const sourceHeight = Math.min(extractSize, videoElement.videoHeight - sourceY);
       
+      // Log some debug info about extraction sizes and positions
+      console.log(`[ROIDebugCanvas] Extracting region: x=${sourceX.toFixed(0)}, y=${sourceY.toFixed(0)}, w=${sourceWidth.toFixed(0)}, h=${sourceHeight.toFixed(0)}`);
+      
       // Create an ImageData object for the extracted region
       const roiImageData = tempCtx.getImageData(sourceX, sourceY, sourceWidth, sourceHeight);
       
       // Store the current image data for feature extraction
       setCurrentImageData(roiImageData);
+      
+      // Log if we're in tracking mode to help debug issues
+      if (isTracking) {
+        console.log(`[ROIDebugCanvas] Tracking is active for ROI ${roiId}, image data updated: ${roiImageData.width}x${roiImageData.height}`);
+      }
       
       // Draw the extracted region to our debug canvas
       ctx.drawImage(
@@ -239,8 +247,21 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
             const processFeatures = async () => {
               setOrbStatus('Extracting ORB features...');
               try {
+                // More detailed logging for debugging
+                console.log('[ROIDebugCanvas] Starting feature extraction on image data:', {
+                  width: roiImageData.width,
+                  height: roiImageData.height,
+                  maxFeatures: 500,
+                  isOpenCVReady: typeof window !== 'undefined' && !!(window as any).cv
+                });
+                
                 // Extract features
                 const features = await extractORBFeatures(roiImageData, 500);
+                
+                console.log('[ROIDebugCanvas] Feature extraction result:', {
+                  success: !!features,
+                  featureCount: features ? features.keypoints.size() : 0
+                });
                 
                 if (!features) {
                   setOrbStatus('Failed to extract features');

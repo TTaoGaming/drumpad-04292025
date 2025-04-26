@@ -83,6 +83,14 @@ export const referenceFeatures: Map<string, ORBFeature> = new Map();
  */
 export async function extractORBFeatures(imageData: ImageData, maxFeatures: number = 500): Promise<ORBFeature | null> {
   try {
+    // More detailed diagnostics
+    console.log('[orbTracking] Extract ORB features called with image data:', {
+      width: imageData.width,
+      height: imageData.height,
+      maxFeatures: maxFeatures,
+      timestamp: new Date().toISOString()
+    });
+    
     // Make sure OpenCV is available before proceeding
     const ready = await ensureOpenCV();
     if (!ready) {
@@ -103,7 +111,7 @@ export async function extractORBFeatures(imageData: ImageData, maxFeatures: numb
       return null;
     }
     
-    console.log('[orbTracking] Starting feature extraction with image data:', {
+    console.log('[orbTracking] OpenCV checks passed, starting feature extraction with image data:', {
       width: imageData.width,
       height: imageData.height,
       maxFeatures: maxFeatures
