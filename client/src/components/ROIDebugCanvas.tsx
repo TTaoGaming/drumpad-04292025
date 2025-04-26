@@ -2,21 +2,20 @@
  * ROI Debug Canvas
  * 
  * A debug canvas that displays the contents of a specific ROI and implements
- * ORB feature tracking to follow objects as they move or rotate.
+ * template matching to track objects as they move.
  */
 import React, { useRef, useEffect, useState } from 'react';
 import { EventType, addListener } from '@/lib/eventBus';
 import { RegionOfInterest } from '@/lib/types';
 import { getVideoFrame } from '@/lib/cameraManager';
 import { 
-  extractORBFeatures, 
-  saveReferenceFeatures, 
-  matchFeatures,
-  clearReferenceFeatures,
-  referenceFeatures,
-  ORBFeature,
-  TrackingResult
-} from '@/lib/orbTracking';
+  saveTemplate, 
+  clearTemplate, 
+  matchTemplate, 
+  TemplateMatchResult,
+  ensureTemplateMatchingReady,
+  getTemplateImageData
+} from '@/lib/templateMatching';
 
 interface ROIDebugCanvasProps {
   roiId?: string;
@@ -35,49 +34,32 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
   const [roi, setRoi] = useState<RegionOfInterest | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
   const [isTracking, setIsTracking] = useState(false);
-  const [trackingResult, setTrackingResult] = useState<TrackingResult | null>(null);
+  const [trackingResult, setTrackingResult] = useState<TemplateMatchResult | null>(null);
   const [referenceImageData, setReferenceImageData] = useState<ImageData | null>(null);
   const [currentImageData, setCurrentImageData] = useState<ImageData | null>(null);
-  const [showFeatures, setShowFeatures] = useState(true);
-  const [orbStatus, setOrbStatus] = useState<string>('Initializing...');
+  const [showTemplate, setShowTemplate] = useState(true);
+  const [trackingStatus, setTrackingStatus] = useState<string>('Initializing...');
   const [isOpenCVReady, setIsOpenCVReady] = useState<boolean>(false);
+  const [debugInfo, setDebugInfo] = useState<any>(null);
   
-  // Use our improved OpenCV loader
+  // Initialize template matching
   useEffect(() => {
     const initializeOpenCV = async () => {
-      // Import the OpenCV loader dynamically
-      const { isOpenCVReady: checkReady, waitForOpenCV, setupOpenCVEventListener } = await import('../lib/opencvLoader');
-      
-      // Check if OpenCV is already available
-      if (checkReady()) {
-        console.log('OpenCV is already ready in ROIDebugCanvas!');
-        setIsOpenCVReady(true);
-        setOrbStatus('OpenCV loaded and ready');
-        return;
-      }
-      
-      // Set up a listener for when OpenCV becomes ready
-      const cleanupListener = setupOpenCVEventListener(() => {
-        console.log('OpenCV has become ready in ROIDebugCanvas!');
-        setIsOpenCVReady(true);
-        setOrbStatus('OpenCV loaded and ready');
-      });
-      
-      // Also try to wait for OpenCV directly
+      // Check if OpenCV is already available via template matching
       try {
-        await waitForOpenCV();
-        console.log('OpenCV is now ready in ROIDebugCanvas (via waitForOpenCV)');
-        setIsOpenCVReady(true);
-        setOrbStatus('OpenCV loaded and ready');
+        const ready = await ensureTemplateMatchingReady();
+        if (ready) {
+          console.log('Template matching is ready!');
+          setIsOpenCVReady(true);
+          setTrackingStatus('Template matcher ready');
+        } else {
+          console.error('Failed to initialize template matching');
+          setTrackingStatus('Error loading OpenCV for template matching');
+        }
       } catch (err) {
-        console.error('Error waiting for OpenCV:', err);
-        setOrbStatus('Error loading OpenCV');
+        console.error('Error initializing template matching:', err);
+        setTrackingStatus('Error: ' + String(err).slice(0, 50) + '...');
       }
-      
-      // Return cleanup function for the event listener
-      return () => {
-        cleanupListener();
-      };
     };
     
     // Start the initialization process
