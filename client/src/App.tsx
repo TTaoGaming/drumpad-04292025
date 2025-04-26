@@ -10,7 +10,7 @@ import PerformanceMonitor from "@/components/PerformanceMonitor";
 import FpsStats from "@/components/PerformanceMetrics";
 import MediaPipeHandTracker from "@/components/MediaPipeHandTracker";
 import DrawingCanvas from "@/components/DrawingCanvas";
-import SimpleROITracker from "@/components/SimpleROITracker";
+import ROIDebugCanvas from "@/components/ROIDebugCanvas";
 import TrackingVisualization from "@/components/TrackingVisualization";
 import SettingsPanel from "@/components/settings/SettingsPanel";
 import { EventType, addListener, dispatch } from "@/lib/eventBus";
@@ -408,13 +408,13 @@ function App() {
         </button>
       )}
       
-      {/* Simple ROI Tracker */}
+      {/* ROI Debug Canvas */}
       {isCameraRunning && (
-        <SimpleROITracker
-          videoRef={videoRef}
-          width={resolution.width}
-          height={resolution.height}
+        <ROIDebugCanvas
+          width={200}
+          height={200}
           visible={showDebugCanvas}
+          roiId="1"
         />
       )}
       
