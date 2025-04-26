@@ -11,6 +11,7 @@ import FpsStats from "@/components/PerformanceMetrics";
 import MediaPipeHandTracker from "@/components/MediaPipeHandTracker";
 import DrawingCanvas from "@/components/DrawingCanvas";
 import ROIDebugCanvas from "@/components/ROIDebugCanvas";
+import TrackingVisualization from "@/components/TrackingVisualization";
 import SettingsPanel from "@/components/settings/SettingsPanel";
 import { EventType, addListener, dispatch } from "@/lib/eventBus";
 import { Notification, HandData, PerformanceMetrics, DrawingPath } from "@/lib/types";
@@ -429,6 +430,14 @@ function App() {
           height={resolution.height}
           enabled={true}
           initialPaths={drawingPaths}
+        />
+      )}
+      
+      {/* Main Tracking Visualization for large displays */}
+      {isCameraRunning && (
+        <TrackingVisualization
+          width={resolution.width}
+          height={resolution.height}
         />
       )}
       

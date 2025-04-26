@@ -381,6 +381,34 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
                   console.log(`Tracking ROI ${roiId}: ${matchResult.isTracked ? 'TRACKED' : 'LOST'} - Confidence: ${(matchResult.confidence * 100).toFixed(1)}%`);
                 }
                 
+                // Emit a tracking event for the main canvas
+                // This will allow us to display tracking visualization on the main canvas
+                if (matchResult && typeof window !== 'undefined') {
+                  // Add timestamp to help with animation
+                  const trackingData = {
+                    ...matchResult,
+                    roiId,
+                    timestamp: Date.now(),
+                    radius: Math.min(sourceWidth/2, sourceHeight/2),
+                    sourceWidth,
+                    sourceHeight,
+                    centerX,
+                    centerY
+                  };
+                  
+                  // Dispatch tracking data to the event bus
+                  import('@/lib/eventBus').then(({ dispatch, EventType }) => {
+                    dispatch(EventType.ROI_UPDATED, trackingData);
+                    
+                    if (matchResult.isTracked) {
+                      // Only log occasionally to reduce console spam
+                      if (Math.random() < 0.05) {
+                        console.log(`Dispatched tracking data for ROI ${roiId}: Confidence ${(matchResult.confidence * 100).toFixed(0)}%`);
+                      }
+                    }
+                  });
+                }
+                
                 // Re-draw with the new tracking result
                 requestAnimationFrame(() => {
                   const canvas = canvasRef.current;
@@ -390,11 +418,24 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
                   
                   // Draw tracking results if available
                   if (matchResult.isTracked && showFeatures) {
-                    // Draw box around tracked object
-                    ctx.strokeStyle = '#4caf50'; // Green
-                    ctx.lineWidth = 2;
+                    // Draw confidence ring around the ROI
+                    const confidence = matchResult.confidence;
+                    const hue = Math.min(120, confidence * 120); // 0 = red, 120 = green
+                    ctx.strokeStyle = `hsla(${hue}, 100%, 50%, 0.8)`;
+                    ctx.lineWidth = 4;
                     
+                    // Draw the ring with a subtle pulse animation
+                    const pulseOffset = Math.sin(Date.now() / 200) * 3; // Subtle pulsing effect
+                    const ringRadius = width/2 - 8 + pulseOffset;
+                    
+                    ctx.beginPath();
+                    ctx.arc(width/2, height/2, ringRadius, 0, Math.PI * 2);
+                    ctx.stroke();
+                    
+                    // Draw corners with tracer effect
                     if (matchResult.corners && matchResult.corners.length === 4) {
+                      ctx.strokeStyle = `hsla(${hue}, 100%, 60%, 0.8)`;
+                      ctx.lineWidth = 2;
                       ctx.beginPath();
                       ctx.moveTo(matchResult.corners[0].x, matchResult.corners[0].y);
                       ctx.lineTo(matchResult.corners[1].x, matchResult.corners[1].y);
@@ -404,18 +445,26 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
                       ctx.stroke();
                     }
                     
-                    // Draw rotation indicator if available
+                    // Draw rotation indicator with subtle glow effect
                     if (matchResult.center && matchResult.rotation) {
                       const rotationLength = 30;
                       const endX = matchResult.center.x + Math.cos(matchResult.rotation) * rotationLength;
                       const endY = matchResult.center.y + Math.sin(matchResult.rotation) * rotationLength;
                       
-                      ctx.strokeStyle = '#ffeb3b'; // Yellow
+                      // Glow effect
+                      ctx.shadowColor = `hsla(${hue}, 100%, 50%, 0.8)`;
+                      ctx.shadowBlur = 10;
+                      
+                      ctx.strokeStyle = `hsla(${hue + 60}, 100%, 60%, 0.9)`; // Complementary color
                       ctx.lineWidth = 2;
                       ctx.beginPath();
                       ctx.moveTo(matchResult.center.x, matchResult.center.y);
                       ctx.lineTo(endX, endY);
                       ctx.stroke();
+                      
+                      // Reset shadow
+                      ctx.shadowColor = 'transparent';
+                      ctx.shadowBlur = 0;
                     }
                   }
                 });
