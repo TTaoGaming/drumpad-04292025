@@ -5,7 +5,8 @@
  * It enables markers to be tracked as they move or rotate within the camera view.
  */
 
-import * as cv from '@opencv/core';
+// OpenCV.js is loaded globally in index.html
+declare const cv: any;
 
 export interface ORBFeature {
   keypoints: any; // KeyPointVector

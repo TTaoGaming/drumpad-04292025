@@ -1,13 +1,21 @@
 /**
  * ROI Debug Canvas
  * 
- * A simple debug canvas that displays the contents of a specific ROI
- * Used for development and debugging purposes
+ * A debug canvas that displays the contents of a specific ROI and implements
+ * ORB feature tracking to follow objects as they move or rotate.
  */
 import React, { useRef, useEffect, useState } from 'react';
 import { EventType, addListener } from '@/lib/eventBus';
 import { RegionOfInterest } from '@/lib/types';
 import { getVideoFrame } from '@/lib/cameraManager';
+import { 
+  extractORBFeatures, 
+  saveReferenceFeatures, 
+  matchFeatures,
+  clearReferenceFeatures,
+  ORBFeature,
+  TrackingResult
+} from '@/lib/orbTracking';
 
 interface ROIDebugCanvasProps {
   roiId?: string;
@@ -25,6 +33,11 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [roi, setRoi] = useState<RegionOfInterest | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [isTracking, setIsTracking] = useState(false);
+  const [trackingResult, setTrackingResult] = useState<TrackingResult | null>(null);
+  const [referenceImageData, setReferenceImageData] = useState<ImageData | null>(null);
+  const [currentImageData, setCurrentImageData] = useState<ImageData | null>(null);
+  const [showFeatures, setShowFeatures] = useState(true);
 
   // Listen for ROI updates
   useEffect(() => {
@@ -39,13 +52,29 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
           if (targetRoi) {
             setRoi(targetRoi);
             setIsExtracting(true);
+            
+            // Reset tracking when ROI is updated
+            setIsTracking(false);
+            setTrackingResult(null);
+            setReferenceImageData(null);
+            
+            // Clear any existing reference features
+            if (roiId) {
+              clearReferenceFeatures(roiId);
+            }
           }
         }
       }
     );
     
+    // Clean up when component unmounts
     return () => {
       roisListener.remove();
+      
+      // Clean up tracking resources
+      if (roiId) {
+        clearReferenceFeatures(roiId);
+      }
     };
   }, [roiId]);
 
@@ -64,6 +93,40 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
       clearInterval(extractInterval);
     };
   }, [roi, isExtracting, visible]);
+
+  // Capture ORB reference features when the "Track" button is clicked
+  const captureReferenceFeatures = () => {
+    if (!roiId || !currentImageData) return;
+    
+    if (isTracking) {
+      // If already tracking, clear tracking data
+      setIsTracking(false);
+      setTrackingResult(null);
+      setReferenceImageData(null);
+      clearReferenceFeatures(roiId);
+      console.log(`Tracking reset for ROI ${roiId}`);
+      return;
+    }
+    
+    // Extract ORB features from current frame
+    try {
+      const features = extractORBFeatures(currentImageData, 500);
+      
+      if (features && features.keypoints.size() > 10) {
+        // Save reference features and image
+        saveReferenceFeatures(roiId, features);
+        setReferenceImageData(currentImageData);
+        setIsTracking(true);
+        
+        // Log success
+        console.log(`Captured reference for tracking ROI ${roiId} with ${features.keypoints.size()} features`);
+      } else {
+        console.warn(`Failed to extract enough features from ROI ${roiId} for tracking`);
+      }
+    } catch (error) {
+      console.error("Error capturing reference features:", error);
+    }
+  };
 
   // Extract ROI content from video frame
   const extractROIContent = () => {
@@ -161,6 +224,12 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
       const sourceWidth = Math.min(extractSize, videoElement.videoWidth - sourceX);
       const sourceHeight = Math.min(extractSize, videoElement.videoHeight - sourceY);
       
+      // Create an ImageData object for the extracted region
+      const roiImageData = tempCtx.getImageData(sourceX, sourceY, sourceWidth, sourceHeight);
+      
+      // Store the current image data for feature extraction
+      setCurrentImageData(roiImageData);
+      
       // Draw the extracted region to our debug canvas
       ctx.drawImage(
         tempCanvas,
@@ -168,14 +237,111 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
         0, 0, width, height
       );
       
+      // If tracking is enabled, perform feature extraction and matching
+      let result: TrackingResult | null = null;
+      
+      if (isTracking && roiId && currentImageData) {
+        try {
+          const features = extractORBFeatures(roiImageData, 500);
+          
+          if (features && features.keypoints.size() > 0) {
+            // Match features with reference
+            result = matchFeatures(roiId, features);
+            setTrackingResult(result);
+            
+            // Only log occasionally to reduce console spam
+            if (Math.random() < 0.1) {
+              console.log(`Tracking ROI ${roiId}: ${result.isTracked ? 'TRACKED' : 'LOST'} - Confidence: ${(result.confidence * 100).toFixed(1)}%`);
+            }
+            
+            // Draw tracking results
+            if (result.isTracked && showFeatures) {
+              // Draw box around tracked object
+              ctx.strokeStyle = '#4caf50'; // Green
+              ctx.lineWidth = 2;
+              
+              if (result.corners && result.corners.length === 4) {
+                ctx.beginPath();
+                ctx.moveTo(result.corners[0].x, result.corners[0].y);
+                ctx.lineTo(result.corners[1].x, result.corners[1].y);
+                ctx.lineTo(result.corners[2].x, result.corners[2].y);
+                ctx.lineTo(result.corners[3].x, result.corners[3].y);
+                ctx.closePath();
+                ctx.stroke();
+              }
+              
+              // Draw rotation indicator if available
+              if (result.center && result.rotation) {
+                const rotationLength = 30;
+                const endX = result.center.x + Math.cos(result.rotation) * rotationLength;
+                const endY = result.center.y + Math.sin(result.rotation) * rotationLength;
+                
+                ctx.strokeStyle = '#ffeb3b'; // Yellow
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(result.center.x, result.center.y);
+                ctx.lineTo(endX, endY);
+                ctx.stroke();
+                
+                // Add arrow head
+                ctx.beginPath();
+                ctx.moveTo(endX, endY);
+                ctx.lineTo(
+                  endX - 10 * Math.cos(result.rotation - Math.PI/6),
+                  endY - 10 * Math.sin(result.rotation - Math.PI/6)
+                );
+                ctx.lineTo(
+                  endX - 10 * Math.cos(result.rotation + Math.PI/6),
+                  endY - 10 * Math.sin(result.rotation + Math.PI/6)
+                );
+                ctx.closePath();
+                ctx.fillStyle = '#ffeb3b';
+                ctx.fill();
+              }
+            }
+            
+            // Clean up feature resources
+            features.keypoints.delete();
+            features.descriptors.delete();
+          }
+        } catch (error) {
+          console.error("Error during feature tracking:", error);
+        }
+      }
+      
       // Add ROI ID label and radius info
       ctx.fillStyle = 'white';
       ctx.font = 'bold 16px sans-serif';
       ctx.textAlign = 'left';
       ctx.fillText(`ROI ID: ${roi.id}`, 10, 20);
       
+      // Add tracking status if tracking is enabled
+      if (isTracking) {
+        const statusX = width - 65;
+        if (result && result.isTracked) {
+          ctx.fillStyle = '#4caf50'; // Green
+          ctx.fillText('TRACKED', statusX, 20);
+          
+          // Show confidence and match count
+          ctx.font = '12px sans-serif';
+          ctx.fillStyle = 'white';
+          ctx.fillText(`Confidence: ${(result.confidence * 100).toFixed(0)}%`, 10, 40);
+          ctx.fillText(`Matches: ${result.inlierCount}/${result.matchCount}`, 10, 55);
+          
+          // Show rotation if available
+          if (result.rotation) {
+            const degrees = ((result.rotation * 180 / Math.PI) % 360).toFixed(0);
+            ctx.fillText(`Rotation: ${degrees}°`, 10, 70);
+          }
+        } else {
+          ctx.fillStyle = '#f44336'; // Red
+          ctx.fillText('LOST', statusX, 20);
+        }
+      }
+      
       // Add small text with radius and center info
       ctx.font = '10px sans-serif';
+      ctx.fillStyle = 'white';
       ctx.fillText(`Radius: ${radius.toFixed(1)}px`, 10, height - 25);
       ctx.fillText(`Center: (${centerX.toFixed(0)},${centerY.toFixed(0)})`, 10, height - 10);
       
@@ -202,6 +368,11 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
       ctx.lineTo(width/2, height);
       ctx.stroke();
     }
+  };
+
+  // Toggle feature display
+  const toggleFeatures = () => {
+    setShowFeatures(!showFeatures);
   };
 
   if (!visible) return null;
@@ -231,6 +402,72 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
           backgroundColor: '#222'
         }}
       />
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        marginTop: '8px',
+        gap: '5px' 
+      }}>
+        <button
+          onClick={captureReferenceFeatures}
+          style={{
+            backgroundColor: isTracking ? '#f44336' : '#4caf50',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            padding: '5px 10px',
+            fontSize: '12px',
+            cursor: 'pointer',
+            flex: 1
+          }}
+        >
+          {isTracking ? 'Reset Tracking' : 'Start Tracking'}
+        </button>
+        <button
+          onClick={toggleFeatures}
+          style={{
+            backgroundColor: '#2196f3',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            padding: '5px 10px',
+            fontSize: '12px',
+            cursor: 'pointer',
+            flex: 1
+          }}
+        >
+          {showFeatures ? 'Hide Features' : 'Show Features'}
+        </button>
+      </div>
+      {trackingResult && isTracking && (
+        <div style={{
+          marginTop: '5px',
+          fontSize: '11px',
+          backgroundColor: 'rgba(0, 0, 0, 0.3)',
+          padding: '5px',
+          borderRadius: '4px'
+        }}>
+          <div style={{ 
+            height: '6px', 
+            width: '100%', 
+            backgroundColor: '#333',
+            borderRadius: '3px',
+            marginBottom: '5px'
+          }}>
+            <div style={{ 
+              height: '100%', 
+              width: `${trackingResult.confidence * 100}%`,
+              backgroundColor: trackingResult.isTracked ? '#4caf50' : '#f44336',
+              borderRadius: '3px',
+              transition: 'width 0.2s'
+            }} />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span>Status: {trackingResult.isTracked ? 'Tracked' : 'Lost'}</span>
+            <span>Confidence: {(trackingResult.confidence * 100).toFixed(1)}%</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
