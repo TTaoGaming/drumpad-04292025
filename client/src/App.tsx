@@ -10,6 +10,7 @@ import PerformanceMonitor from "@/components/PerformanceMonitor";
 import FpsStats from "@/components/PerformanceMetrics";
 import MediaPipeHandTracker from "@/components/MediaPipeHandTracker";
 import DrawingCanvas from "@/components/DrawingCanvas";
+import ROIDebugCanvas from "@/components/ROIDebugCanvas";
 import SettingsPanel from "@/components/settings/SettingsPanel";
 import { EventType, addListener, dispatch } from "@/lib/eventBus";
 import { Notification, HandData, PerformanceMetrics, DrawingPath } from "@/lib/types";
@@ -26,6 +27,7 @@ function App() {
   const [performanceMetrics, setPerformanceMetrics] = useState<PerformanceMetrics | undefined>(undefined);
   const [resolution, setResolution] = useState({ width: 640, height: 480 });
   const [drawingPaths, setDrawingPaths] = useState<DrawingPath[]>([]);
+  const [showDebugCanvas, setShowDebugCanvas] = useState(true);
 
   // References to workers
   const opencvWorkerRef = useRef<Worker | null>(null);
@@ -352,6 +354,38 @@ function App() {
         isCameraRunning={isCameraRunning}
         videoRef={videoRef}
       />
+      
+      {/* Debug Canvas Toggle Button */}
+      {isCameraRunning && (
+        <button
+          onClick={() => setShowDebugCanvas(prev => !prev)}
+          style={{
+            position: 'fixed',
+            top: '20px',
+            left: '20px',
+            zIndex: 1001,
+            backgroundColor: showDebugCanvas ? 'rgba(0, 128, 0, 0.7)' : 'rgba(128, 128, 128, 0.7)',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            padding: '5px 10px',
+            fontSize: '12px',
+            cursor: 'pointer'
+          }}
+        >
+          {showDebugCanvas ? 'Hide ROI Debug' : 'Show ROI Debug'}
+        </button>
+      )}
+      
+      {/* ROI Debug Canvas */}
+      {isCameraRunning && (
+        <ROIDebugCanvas
+          width={200}
+          height={200}
+          visible={showDebugCanvas}
+          roiId="1"
+        />
+      )}
       
       {/* MediaPipe Hand Tracking - tracks your actual hands via webcam */}
       {isCameraRunning && (
