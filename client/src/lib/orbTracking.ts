@@ -5,11 +5,32 @@
  * It enables markers to be tracked as they move or rotate within the camera view.
  */
 
-// OpenCV.js is loaded globally
+// OpenCV.js is loaded globally via the opencvLoader module
+// This declares the global type but actual loading is done via opencvLoader
 declare const cv: any;
 
+// Import OpenCV loader for initialization
+import { isOpenCVReady, loadOpenCV } from './opencvLoader';
+
+// Helper to ensure OpenCV is available before using it
+async function ensureOpenCV(): Promise<boolean> {
+  if (isOpenCVReady()) {
+    return true;
+  }
+  
+  console.log('[orbTracking] OpenCV not ready, loading...');
+  try {
+    await loadOpenCV();
+    console.log('[orbTracking] OpenCV loaded successfully');
+    return true;
+  } catch (err) {
+    console.error('[orbTracking] Failed to load OpenCV:', err);
+    return false;
+  }
+}
+
 // Debug helper to check OpenCV availability
-function checkOpenCVStatus() {
+function checkOpenCVStatus(): boolean {
   const cvObject = typeof window !== 'undefined' ? (window as any).cv : undefined;
   
   console.log('[orbTracking] OpenCV availability check:', {
@@ -24,8 +45,14 @@ function checkOpenCVStatus() {
   return !!cvObject && typeof cvObject.ORB === 'function';
 }
 
-// Check OpenCV on module load
-checkOpenCVStatus();
+// Trigger OpenCV loading on module load
+ensureOpenCV().then(ready => {
+  if (ready) {
+    console.log('[orbTracking] OpenCV is ready for feature tracking');
+  } else {
+    console.warn('[orbTracking] OpenCV not available for feature tracking');
+  }
+});
 
 export interface ORBFeature {
   keypoints: any; // KeyPointVector
@@ -54,8 +81,15 @@ export const referenceFeatures: Map<string, ORBFeature> = new Map();
  * @param maxFeatures Maximum number of features to extract
  * @returns Object containing keypoints and descriptors
  */
-export function extractORBFeatures(imageData: ImageData, maxFeatures: number = 500): ORBFeature | null {
+export async function extractORBFeatures(imageData: ImageData, maxFeatures: number = 500): Promise<ORBFeature | null> {
   try {
+    // Make sure OpenCV is available before proceeding
+    const ready = await ensureOpenCV();
+    if (!ready) {
+      console.warn('[orbTracking] OpenCV could not be loaded. Cannot extract features.');
+      return null;
+    }
+    
     // Check if OpenCV is loaded before proceeding
     const isOpenCVAvailable = checkOpenCVStatus();
     if (!isOpenCVAvailable) {
@@ -162,8 +196,20 @@ export function clearReferenceFeatures(roiId: string): void {
  * @param currentFeatures Features from the current frame
  * @returns Tracking result with transformation details
  */
-export function matchFeatures(roiId: string, currentFeatures: ORBFeature): TrackingResult {
+export async function matchFeatures(roiId: string, currentFeatures: ORBFeature): Promise<TrackingResult> {
   try {
+    // Make sure OpenCV is available before proceeding
+    const ready = await ensureOpenCV();
+    if (!ready) {
+      console.warn('[orbTracking] OpenCV could not be loaded. Cannot match features.');
+      return {
+        isTracked: false,
+        matchCount: 0,
+        inlierCount: 0,
+        confidence: 0
+      };
+    }
+    
     // Check if OpenCV is loaded before proceeding
     if (typeof cv === 'undefined' || !cv.BFMatcher) {
       console.warn('OpenCV is not fully loaded yet. Skipping feature matching.');

@@ -42,25 +42,46 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
   const [orbStatus, setOrbStatus] = useState<string>('Initializing...');
   const [isOpenCVReady, setIsOpenCVReady] = useState<boolean>(false);
   
-  // Listen for OpenCV ready event
+  // Use our improved OpenCV loader
   useEffect(() => {
-    const handleOpenCVReady = () => {
-      console.log('OpenCV is ready in ROIDebugCanvas!');
-      setIsOpenCVReady(true);
-      setOrbStatus('OpenCV loaded and ready');
+    const initializeOpenCV = async () => {
+      // Import the OpenCV loader dynamically
+      const { isOpenCVReady: checkReady, waitForOpenCV, setupOpenCVEventListener } = await import('../lib/opencvLoader');
+      
+      // Check if OpenCV is already available
+      if (checkReady()) {
+        console.log('OpenCV is already ready in ROIDebugCanvas!');
+        setIsOpenCVReady(true);
+        setOrbStatus('OpenCV loaded and ready');
+        return;
+      }
+      
+      // Set up a listener for when OpenCV becomes ready
+      const cleanupListener = setupOpenCVEventListener(() => {
+        console.log('OpenCV has become ready in ROIDebugCanvas!');
+        setIsOpenCVReady(true);
+        setOrbStatus('OpenCV loaded and ready');
+      });
+      
+      // Also try to wait for OpenCV directly
+      try {
+        await waitForOpenCV();
+        console.log('OpenCV is now ready in ROIDebugCanvas (via waitForOpenCV)');
+        setIsOpenCVReady(true);
+        setOrbStatus('OpenCV loaded and ready');
+      } catch (err) {
+        console.error('Error waiting for OpenCV:', err);
+        setOrbStatus('Error loading OpenCV');
+      }
+      
+      // Return cleanup function for the event listener
+      return () => {
+        cleanupListener();
+      };
     };
     
-    // Check if OpenCV is already available
-    if (window.cv && typeof window.cv.ORB === 'function') {
-      handleOpenCVReady();
-    } else {
-      // Otherwise listen for the ready event
-      document.addEventListener('opencv-ready', handleOpenCVReady);
-    }
-    
-    return () => {
-      document.removeEventListener('opencv-ready', handleOpenCVReady);
-    };
+    // Start the initialization process
+    initializeOpenCV();
   }, []);
 
   // Extract ROI content from video frame
@@ -214,52 +235,80 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
               }
             }
           } else {
-            setOrbStatus('Extracting ORB features...');
-            let features = null;
-            try {
-              features = extractORBFeatures(roiImageData, 500);
-            } catch (err) {
-              console.error('Error extracting features:', err);
-              setOrbStatus('Error extracting features');
-            }
-            
-            if (!features) {
-              setOrbStatus('Failed to extract features');
-            } else if (features.keypoints.size() > 0) {
-              // If we don't have reference features yet, set them now
-              // This happens automatically the first time tracking is enabled for a new ROI
-              const hasReference = referenceFeatures.has(roiId);
-              if (!hasReference && features.keypoints.size() > 10) {
-                saveReferenceFeatures(roiId, features);
-                setReferenceImageData(roiImageData);
-                setOrbStatus(`Captured ${features.keypoints.size()} reference features`);
-                console.log(`Auto-captured reference for tracking ROI ${roiId} with ${features.keypoints.size()} features`);
+            // Use async/await with OpenCV feature extraction and matching
+            const processFeatures = async () => {
+              setOrbStatus('Extracting ORB features...');
+              try {
+                // Extract features
+                const features = await extractORBFeatures(roiImageData, 500);
                 
-                // Create a new feature set for matching (since we just used this one as reference)
-                let newFeatures = null;
-                try {
-                  newFeatures = extractORBFeatures(roiImageData, 500);
-                  if (newFeatures) {
-                    result = matchFeatures(roiId, newFeatures);
-                    newFeatures.keypoints.delete();
-                    newFeatures.descriptors.delete();
+                if (!features) {
+                  setOrbStatus('Failed to extract features');
+                  return null;
+                }
+                
+                if (features.keypoints.size() > 0) {
+                  // If we don't have reference features yet, set them now
+                  // This happens automatically the first time tracking is enabled for a new ROI
+                  const hasReference = referenceFeatures.has(roiId);
+                  
+                  if (!hasReference && features.keypoints.size() > 10) {
+                    // First time - save as reference
+                    saveReferenceFeatures(roiId, features);
+                    setReferenceImageData(roiImageData);
+                    setOrbStatus(`Captured ${features.keypoints.size()} reference features`);
+                    console.log(`Auto-captured reference for tracking ROI ${roiId} with ${features.keypoints.size()} features`);
+                    
+                    // Create a new feature set for matching (since we just used this one as reference)
+                    try {
+                      const newFeatures = await extractORBFeatures(roiImageData, 500);
+                      if (newFeatures) {
+                        const matchResult = await matchFeatures(roiId, newFeatures);
+                        newFeatures.keypoints.delete();
+                        newFeatures.descriptors.delete();
+                        return matchResult;
+                      }
+                    } catch (err) {
+                      console.error('Error extracting features for matching:', err);
+                      setOrbStatus('Error extracting matching features');
+                    }
+                  } else {
+                    // Match features with reference
+                    setOrbStatus('Matching features...');
+                    const matchResult = await matchFeatures(roiId, features);
+                    
+                    if (matchResult && matchResult.isTracked) {
+                      setOrbStatus(`Tracking: ${matchResult.inlierCount} matches (${(matchResult.confidence * 100).toFixed(0)}%)`);
+                    } else {
+                      setOrbStatus('Object lost - move slower');
+                    }
+                    
+                    return matchResult;
                   }
-                } catch (err) {
-                  console.error('Error extracting features for matching:', err);
-                  setOrbStatus('Error extracting matching features');
                 }
-              } else {
-                // Match features with reference
-                setOrbStatus('Matching features...');
-                result = matchFeatures(roiId, features);
                 
-                if (result && result.isTracked) {
-                  setOrbStatus(`Tracking: ${result.inlierCount} matches (${(result.confidence * 100).toFixed(0)}%)`);
-                } else {
-                  setOrbStatus('Object lost - move slower');
+                // Clean up OpenCV resources
+                if (features) {
+                  features.keypoints.delete();
+                  features.descriptors.delete();
                 }
+              } catch (err) {
+                console.error('Error in feature processing:', err);
+                setOrbStatus('Error processing features');
               }
-            }
+              
+              return null;
+            };
+            
+            // Execute async processing and update result when done
+            processFeatures().then(matchResult => {
+              if (matchResult) {
+                result = matchResult;
+                setTrackingResult(matchResult);
+              }
+            }).catch(err => {
+              console.error('Async feature processing error:', err);
+            });
             
             setTrackingResult(result);
             
