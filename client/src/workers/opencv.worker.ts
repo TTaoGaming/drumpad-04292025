@@ -123,78 +123,115 @@ function cvInitOpenCV(): void {
   cvStartTiming('cvInit');
   cvLog('Loading OpenCV.js...');
   
-  try {
-    // Set up the Module for when OpenCV would be loaded
-    cvLog('Setting up Module object for OpenCV initialization');
-    (self as any).Module = {
-      onRuntimeInitialized: function() {
-        cvLog('OpenCV runtime initialized callback triggered');
-        cvOnOpenCVReady();
+  // Create a new approach - load through script tag creation
+  const loadOpenCVScript = (url: string): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      // We'll use a dynamic script approach since importScripts() has issues in some contexts
+      cvLog(`Creating script tag to load OpenCV from: ${url}`);
+      
+      const script = (self as any).document ? (self as any).document.createElement('script') : null;
+      
+      // If we can't create a script element (in pure worker context), fall back to importScripts
+      if (!script) {
+        cvLog('No document available, falling back to importScripts');
+        try {
+          // @ts-ignore
+          self.importScripts(url);
+          cvLog(`Successfully loaded OpenCV via importScripts from ${url}`);
+          resolve();
+        } catch (err) {
+          reject(new Error(`ImportScripts failed for ${url}: ${(err as Error).message}`));
+        }
+        return;
       }
-    };
-    
-    // Try different OpenCV versions if one fails
-    const tryLoadOpenCV = (url: string) => {
+      
+      script.async = true;
+      script.src = url;
+      script.onload = () => {
+        cvLog(`Successfully loaded OpenCV via script tag from ${url}`);
+        resolve();
+      };
+      script.onerror = (err: any) => {
+        reject(new Error(`Script loading failed for ${url}: ${err}`));
+      };
+      
+      (self as any).document.head.appendChild(script);
+    });
+  };
+  
+  // Setup Module for OpenCV initialization
+  (self as any).Module = {
+    onRuntimeInitialized: function() {
+      cvLog('OpenCV runtime initialized callback triggered');
+      cvOnOpenCVReady();
+    }
+  };
+  
+  // List of OpenCV URLs to try
+  const urls = [
+    'https://docs.opencv.org/4.7.0/opencv.js',
+    'https://docs.opencv.org/4.5.5/opencv.js',
+    'https://docs.opencv.org/4.8.0/opencv.js',
+    'https://docs.opencv.org/master/opencv.js'
+  ];
+  
+  // Try loading each URL sequentially
+  const tryURLs = async () => {
+    for (const url of urls) {
       try {
-        cvLog(`Attempting to load OpenCV.js from: ${url}`);
-        // @ts-ignore - importScripts is available in Worker context
-        self.importScripts(url);
-        cvLog(`Successfully imported script from ${url}, waiting for initialization...`);
+        await loadOpenCVScript(url);
+        cvLog(`Successfully loaded OpenCV from ${url}`);
         return true;
       } catch (err) {
         cvLog(`Failed to load from ${url}: ${(err as Error).message}`);
-        return false;
-      }
-    };
-    
-    // Try loading from different CDNs, starting with latest and falling back to stable
-    const urls = [
-      'https://docs.opencv.org/master/opencv.js',
-      'https://docs.opencv.org/4.8.0/opencv.js',
-      'https://docs.opencv.org/4.7.0/opencv.js'
-    ];
-    
-    let loaded = false;
-    for (const url of urls) {
-      if (tryLoadOpenCV(url)) {
-        loaded = true;
-        break;
       }
     }
-    
-    if (!loaded) {
-      throw new Error('Failed to load OpenCV.js from any source');
-    }
-    
-    // Check if OpenCV is already loaded (might happen if onRuntimeInitialized doesn't fire)
-    setTimeout(() => {
-      if (!opencvLoaded) {
-        cvLog('OpenCV initialization timeout reached, checking manual initialization');
+    return false;
+  };
+  
+  // Execute the loading process
+  tryURLs()
+    .then(success => {
+      if (!success) {
+        throw new Error('Failed to load OpenCV from any source');
+      }
+      
+      // Set a timeout to check if OpenCV is loaded properly
+      setTimeout(() => {
+        if (!opencvLoaded) {
+          cvLog('OpenCV initialization timeout reached, checking manual initialization');
+          
+          if ((self as any).cv && typeof (self as any).cv.ORB === 'function') {
+            cvLog('OpenCV appears to be loaded but the callback never fired, manually initializing');
+            cvOnOpenCVReady();
+          } else {
+            cvLog('OpenCV still not available after timeout');
+            
+            // As a last resort, use simulated OpenCV for testing
+            cvLog('Using simulated OpenCV environment as last resort');
+            (self as any).cv = createMockCV();
+            cvOnOpenCVReady();
+          }
+        }
+      }, 5000);
+    })
+    .catch(error => {
+      cvLog('Error in OpenCV.js loading process: ' + error.message);
+      
+      // Set timeout to check if OpenCV is loaded despite errors
+      setTimeout(() => {
         if ((self as any).cv && typeof (self as any).cv.ORB === 'function') {
-          cvLog('OpenCV appears to be loaded but the callback never fired, manually initializing');
+          cvLog('OpenCV appears to be available despite errors, manually initializing');
           cvOnOpenCVReady();
         } else {
-          cvLog('OpenCV still not available after timeout');
+          // Fall back to simulated OpenCV
+          cvLog('Using simulated OpenCV as fallback');
+          (self as any).cv = createMockCV();
+          cvOnOpenCVReady();
         }
-      }
-    }, 5000);
-  } catch (error) {
-    cvLog('Error in OpenCV.js loading process: ' + (error as Error).message);
-    
-    // Even with the error, check if OpenCV is available
-    setTimeout(() => {
-      if ((self as any).cv && typeof (self as any).cv.ORB === 'function') {
-        cvLog('OpenCV appears to be available despite error, manually initializing');
-        cvOnOpenCVReady();
-      } else {
-        // As a last resort, use simulated OpenCV for testing
-        cvLog('Using simulated OpenCV environment as last resort');
-        (self as any).cv = createMockCV();
-        cvOnOpenCVReady();
-      }
-      cvEndTiming('cvInit');
-    }, 2000);
-  }
+        cvEndTiming('cvInit');
+      }, 2000);
+    });
 }
 
 // Process a frame using OpenCV

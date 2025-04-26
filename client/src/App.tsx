@@ -15,6 +15,7 @@ import SettingsPanel from "@/components/settings/SettingsPanel";
 import { EventType, addListener, dispatch } from "@/lib/eventBus";
 import { Notification, HandData, PerformanceMetrics, DrawingPath } from "@/lib/types";
 import { getVideoFrame } from "@/lib/cameraManager";
+import { loadOpenCV, setupOpenCVEventListener } from "./lib/opencvLoader";
 
 function App() {
   const [isOpenCVReady, setIsOpenCVReady] = useState(false);
@@ -37,23 +38,24 @@ function App() {
   const animationFrameRef = useRef<number | null>(null);
   const resolutionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Start OpenCV loading process
+
   useEffect(() => {
-    // Load OpenCV.js in main thread for components to use directly
-    const loadMainThreadOpenCV = () => {
-      if (typeof window !== 'undefined' && !(window as any).cv) {
-        const script = document.createElement('script');
-        script.async = true;
-        script.src = 'https://docs.opencv.org/4.7.0/opencv.js';
-        script.onload = () => {
-          console.log('OpenCV.js loaded directly in main thread');
-          document.dispatchEvent(new Event('opencv-ready'));
-        };
-        document.head.appendChild(script);
-      }
-    };
+    // Start loading OpenCV in main thread and set up an event listener for when it's ready
+    loadOpenCV().then(() => {
+      console.log('OpenCV.js loaded and ready in main thread');
+      setIsOpenCVReady(true);
+      dispatch(EventType.OPENCV_STATUS, { ready: true });
+    }).catch(err => {
+      console.error('Failed to load OpenCV in main thread:', err);
+    });
     
-    // Start loading OpenCV in main thread
-    loadMainThreadOpenCV();
+    // Also set up an event listener for components that might need it
+    const cleanupOpenCVListener = setupOpenCVEventListener(() => {
+      console.log('OpenCV ready event fired');
+      setIsOpenCVReady(true);
+      dispatch(EventType.OPENCV_STATUS, { ready: true });
+    });
     
     // Initialize workers when component mounts
     // IMPORTANT: For OpenCV worker, don't use module type so it can use importScripts()
