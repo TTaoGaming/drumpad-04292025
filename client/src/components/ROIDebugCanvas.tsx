@@ -658,6 +658,28 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
   const toggleFeatures = () => {
     setShowFeatures(!showFeatures);
   };
+  
+  // Force transition from "Auto-starting tracking" state after timeout
+  useEffect(() => {
+    if (orbStatus === 'Auto-starting tracking...' && isTracking) {
+      const timer = setTimeout(() => {
+        console.log('[ROIDebugCanvas] Forcing status update from auto-starting state');
+        if (orbStatus === 'Auto-starting tracking...') {
+          setOrbStatus('Waiting for features...');
+          
+          // Force feature extraction after another short delay
+          setTimeout(() => {
+            if (!referenceFeatures.has(roiId || '') && currentImageData) {
+              console.log('[ROIDebugCanvas] Forcing manual feature extraction');
+              captureReferenceFeatures();
+            }
+          }, 1000);
+        }
+      }, 3000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [orbStatus, isTracking, roiId, currentImageData]);
 
   if (!visible) return null;
   
