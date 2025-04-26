@@ -303,21 +303,60 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
             // Execute async processing and update result when done
             processFeatures().then(matchResult => {
               if (matchResult) {
+                // Update the local result variable
                 result = matchResult;
                 setTrackingResult(matchResult);
+                
+                // Only log occasionally to reduce console spam
+                if (Math.random() < 0.05 && matchResult && typeof matchResult.confidence === 'number') {
+                  console.log(`Tracking ROI ${roiId}: ${matchResult.isTracked ? 'TRACKED' : 'LOST'} - Confidence: ${(matchResult.confidence * 100).toFixed(1)}%`);
+                }
+                
+                // Re-draw with the new tracking result
+                requestAnimationFrame(() => {
+                  const canvas = canvasRef.current;
+                  if (!canvas) return;
+                  const ctx = canvas.getContext('2d');
+                  if (!ctx) return;
+                  
+                  // Draw tracking results if available
+                  if (matchResult.isTracked && showFeatures) {
+                    // Draw box around tracked object
+                    ctx.strokeStyle = '#4caf50'; // Green
+                    ctx.lineWidth = 2;
+                    
+                    if (matchResult.corners && matchResult.corners.length === 4) {
+                      ctx.beginPath();
+                      ctx.moveTo(matchResult.corners[0].x, matchResult.corners[0].y);
+                      ctx.lineTo(matchResult.corners[1].x, matchResult.corners[1].y);
+                      ctx.lineTo(matchResult.corners[2].x, matchResult.corners[2].y);
+                      ctx.lineTo(matchResult.corners[3].x, matchResult.corners[3].y);
+                      ctx.closePath();
+                      ctx.stroke();
+                    }
+                    
+                    // Draw rotation indicator if available
+                    if (matchResult.center && matchResult.rotation) {
+                      const rotationLength = 30;
+                      const endX = matchResult.center.x + Math.cos(matchResult.rotation) * rotationLength;
+                      const endY = matchResult.center.y + Math.sin(matchResult.rotation) * rotationLength;
+                      
+                      ctx.strokeStyle = '#ffeb3b'; // Yellow
+                      ctx.lineWidth = 2;
+                      ctx.beginPath();
+                      ctx.moveTo(matchResult.center.x, matchResult.center.y);
+                      ctx.lineTo(endX, endY);
+                      ctx.stroke();
+                    }
+                  }
+                });
               }
             }).catch(err => {
               console.error('Async feature processing error:', err);
             });
             
-            setTrackingResult(result);
-            
-            // Only log occasionally to reduce console spam
-            if (Math.random() < 0.05 && result && typeof result.confidence === 'number') {
-              console.log(`Tracking ROI ${roiId}: ${result.isTracked ? 'TRACKED' : 'LOST'} - Confidence: ${(result.confidence * 100).toFixed(1)}%`);
-            }
-            
-            // Draw tracking results
+            // Draw tracking results with any existing result data
+            // (this will be updated later when async processing completes)
             if (result?.isTracked && showFeatures) {
               // Draw box around tracked object
               ctx.strokeStyle = '#4caf50'; // Green
@@ -363,11 +402,7 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
               }
             }
             
-            // Clean up feature resources
-            if (features) {
-              features.keypoints.delete();
-              features.descriptors.delete();
-            }
+            // Note: The features are cleaned up in the async function now
           }
         } catch (error) {
           setOrbStatus('Error during tracking');
@@ -547,42 +582,55 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
       return;
     }
     
-    // Check OpenCV availability
-    const cv = typeof window !== 'undefined' ? (window as any).cv : undefined;
-    if (!cv || typeof cv.ORB !== 'function') {
-      setOrbStatus('OpenCV not loaded - please wait');
-      console.log('OpenCV not fully loaded yet, waiting...');
-      // We'll set tracking to true anyway, and the extraction loop will keep checking OpenCV
-      setIsTracking(true);
-      return;
-    }
+    // Update the status immediately
+    setOrbStatus('Starting capture...');
     
-    // Extract ORB features from current frame
-    try {
-      setOrbStatus('Starting capture...');
-      const features = extractORBFeatures(currentImageData, 500);
-      
-      if (features && features.keypoints.size() > 10) {
-        // Save reference features and image
-        saveReferenceFeatures(roiId, features);
-        setReferenceImageData(currentImageData);
-        setIsTracking(true);
-        setOrbStatus(`Captured ${features.keypoints.size()} reference features`);
+    // Use async IIFE to properly handle async operations
+    (async () => {
+      try {
+        // Check OpenCV availability using our loader
+        const { isOpenCVReady, loadOpenCV } = await import('../lib/opencvLoader');
         
-        // Log success
-        console.log(`Captured reference for tracking ROI ${roiId} with ${features.keypoints.size()} features`);
-      } else {
-        setOrbStatus('Failed to extract enough features - trying again');
-        console.warn(`Failed to extract enough features from ROI ${roiId} for tracking`);
+        if (!isOpenCVReady()) {
+          setOrbStatus('OpenCV not loaded - loading now...');
+          console.log('OpenCV not fully loaded yet, trying to load...');
+          
+          // Try to load OpenCV
+          try {
+            await loadOpenCV();
+            setOrbStatus('OpenCV loaded, extracting features...');
+          } catch (err) {
+            console.error('Failed to load OpenCV:', err);
+            // Continue anyway, as the extraction might still work if OpenCV loads later
+          }
+        }
+        
+        // Extract ORB features from current frame (using async version)
+        setOrbStatus('Extracting features...');
+        const features = await extractORBFeatures(currentImageData, 500);
+        
+        if (features && features.keypoints.size() > 10) {
+          // Save reference features and image
+          saveReferenceFeatures(roiId, features);
+          setReferenceImageData(currentImageData);
+          setIsTracking(true);
+          setOrbStatus(`Captured ${features.keypoints.size()} reference features`);
+          
+          // Log success
+          console.log(`Captured reference for tracking ROI ${roiId} with ${features.keypoints.size()} features`);
+        } else {
+          setOrbStatus('Failed to extract enough features - trying again');
+          console.warn(`Failed to extract enough features from ROI ${roiId} for tracking`);
+          // We'll set tracking to true anyway, and let the extraction loop keep trying
+          setIsTracking(true);
+        }
+      } catch (error) {
+        setOrbStatus('Error capturing features - will retry');
+        console.error("Error capturing reference features:", error);
         // We'll set tracking to true anyway, and let the extraction loop keep trying
         setIsTracking(true);
       }
-    } catch (error) {
-      setOrbStatus('Error capturing features - will retry');
-      console.error("Error capturing reference features:", error);
-      // We'll set tracking to true anyway, and let the extraction loop keep trying
-      setIsTracking(true);
-    }
+    })();
   };
 
   // Toggle feature display
