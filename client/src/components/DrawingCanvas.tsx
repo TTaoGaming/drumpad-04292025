@@ -10,15 +10,15 @@ import orbFeatureDetector from '@/lib/orbFeatureDetector';
 import { getVideoFrame } from '@/lib/cameraManager';
 import { DrawingPath } from '@/lib/types';
 
-// Numberblocks-inspired color scheme for hand parts
+// Educational number blocks colors (1-5) for hand parts
 const FINGER_COLORS = [
-  '#0066CC', // blue - thumb (Numberblocks 0)
-  '#FF0000', // red - index (Numberblocks 1)
-  '#FFA500', // orange - middle (Numberblocks 2)
-  '#FFFF00', // yellow - ring (Numberblocks 3)
-  '#008000', // green - pinky (Numberblocks 4)
-  '#777777', // gray - palm
-  '#444444'  // dark gray - wrist
+  '#0000FF', // blue - thumb
+  '#FF0000', // red - index (1)
+  '#FF7F00', // orange - middle (2)
+  '#FFFF00', // yellow - ring (3)
+  '#00FF00', // green - pinky (4)
+  '#808080', // gray - palm
+  '#9400D3'  // violet - wrist
 ];
 
 interface DrawingCanvasProps {
