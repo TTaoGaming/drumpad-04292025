@@ -2,6 +2,9 @@
  * Web Worker for OpenCV.js initialization and processing
  */
 
+// Declare importScripts for TypeScript
+declare function importScripts(...urls: string[]): void;
+
 // Use self as the worker context
 const cvCtx: Worker = self as any;
 
@@ -75,23 +78,29 @@ function cvInitOpenCV(): void {
   cvStartTiming('cvInit');
   cvLog('Loading OpenCV.js...');
   
-  // For this MVP, we'll simulate the OpenCV initialization
-  // In a real implementation, we would use importScripts to load OpenCV.js
-  // but for now we'll simulate the loading process
-  
-  // Set up the Module for when OpenCV would be loaded
-  (self as any).Module = {
-    onRuntimeInitialized: cvOnOpenCVReady
-  };
-  
-  // Simulate loading time
-  setTimeout(() => {
-    cvLog('OpenCV.js loaded successfully');
+  try {
+    // Set up the Module for when OpenCV would be loaded
+    (self as any).Module = {
+      onRuntimeInitialized: cvOnOpenCVReady
+    };
+    
+    // Actually load OpenCV.js from CDN
+    // @ts-ignore - importScripts is available in Worker context
+    self.importScripts('https://docs.opencv.org/master/opencv.js');
+    
+    // Note: onRuntimeInitialized callback will be called automatically
+    // when OpenCV.js is fully loaded
+    cvLog('OpenCV.js script loaded, waiting for initialization...');
+  } catch (error) {
+    cvLog('Error loading OpenCV.js: ' + (error as Error).message);
+    
+    // Fallback to simulate for testing
+    cvLog('Using simulated OpenCV environment for testing');
     setTimeout(() => {
       cvOnOpenCVReady();
       cvEndTiming('cvInit');
-    }, 1000);
-  }, 2000);
+    }, 2000);
+  }
 }
 
 // Called when OpenCV is fully loaded and ready
