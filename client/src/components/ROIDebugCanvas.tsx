@@ -53,9 +53,12 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
   useEffect(() => {
     if (!roi || !isExtracting || !visible) return;
     
+    // Initial extraction
+    extractROIContent();
+    
     const extractInterval = setInterval(() => {
       extractROIContent();
-    }, 100); // Extract every 100ms
+    }, 33); // Extract at ~30fps for smoother updates
     
     return () => {
       clearInterval(extractInterval);
@@ -91,30 +94,57 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
     // Draw the video frame to temp canvas
     tempCtx.putImageData(frameData, 0, 0);
 
+    // Calculate scaling factors between display size and actual video size
+    // This is critical for correctly mapping ROI coordinates to video frame coordinates
+    const displayElement = document.querySelector('.camera-view') as HTMLElement;
+    if (!displayElement) {
+      console.warn("Could not find camera display element for scaling calculation");
+      return;
+    }
+    
+    const displayWidth = displayElement.clientWidth;
+    const displayHeight = displayElement.clientHeight;
+    
+    const scaleX = videoElement.videoWidth / displayWidth;
+    const scaleY = videoElement.videoHeight / displayHeight;
+    
+    // Only log scaling info occasionally to avoid console spam
+    if (Math.random() < 0.01) { // Log ~1% of the time
+      console.log(`Coordinate scaling: display(${displayWidth}x${displayHeight}) to video(${videoElement.videoWidth}x${videoElement.videoHeight})`);
+      console.log(`Scale factors: x=${scaleX.toFixed(2)}, y=${scaleY.toFixed(2)}`);
+    }
+
     // Calculate ROI center and radius
     if (roi.points.length > 2) {
       // Calculate center of the ROI (assuming it's a circle)
       let sumX = 0, sumY = 0;
       for (const point of roi.points) {
-        sumX += point.x;
-        sumY += point.y;
+        // Scale the point coordinates from display size to video frame size
+        sumX += point.x * scaleX;
+        sumY += point.y * scaleY;
       }
       const centerX = sumX / roi.points.length;
       const centerY = sumY / roi.points.length;
       
-      // Calculate average radius from all points
+      // Calculate average radius from all points - scale this too
       let totalRadius = 0;
       for (const point of roi.points) {
+        const scaledX = point.x * scaleX;
+        const scaledY = point.y * scaleY;
+        
         const distToCenter = Math.sqrt(
-          Math.pow(point.x - centerX, 2) + 
-          Math.pow(point.y - centerY, 2)
+          Math.pow(scaledX - centerX, 2) + 
+          Math.pow(scaledY - centerY, 2)
         );
         totalRadius += distToCenter;
       }
       const radius = totalRadius / roi.points.length;
       
-      // Log radius calculation for debugging
-      console.log(`ROI Debug: Average radius calculated from ${roi.points.length} points = ${radius.toFixed(2)}px`);
+      // Log radius calculation for debugging (limit frequency to reduce console spam)
+      if (Math.random() < 0.05) { // Log ~5% of the time
+        console.log(`ROI Debug: Average radius calculated from ${roi.points.length} points = ${radius.toFixed(2)}px`);
+        console.log(`Scaled center coordinates: (${centerX.toFixed(0)}, ${centerY.toFixed(0)})`);
+      }
       
       // Draw a red circle on the temp canvas to show what we're extracting
       tempCtx.strokeStyle = 'red';
