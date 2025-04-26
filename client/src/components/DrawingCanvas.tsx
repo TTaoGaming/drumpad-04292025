@@ -58,8 +58,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
     showFeatures: true
   });
   
-  // State to track which finger's color to use for ROI
-  const [activeFingerColorIndex, setActiveFingerColorIndex] = useState<number>(1); // Default to index finger (red)
+  // Always use index finger (red) for ROI
+  // We removed the ability to change fingers and now always use index finger
 
   // Listen for pinch events from MediaPipeHandTracker
   useEffect(() => {
@@ -88,11 +88,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
           
           console.log(`Received pinch event - isPinching: ${isPinching}, distance: ${distance.toFixed(3)}`);
           
-          // Update active finger color based on finger ID
+          // Debug which finger is being used (always index finger now)
           if (fingerId !== undefined) {
-            setActiveFingerColorIndex(fingerId);
-            
-            // Debug which finger is being used
             console.log(`Active finger: ${activeFinger} (ID: ${fingerId})`);
           }
           
@@ -118,19 +115,14 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
         if (data.section === 'tracking' && data.setting === 'thumbPosition' && settings.enabled) {
           const position = data.value;
           
-          // Update active finger color if available
-          if (position && position.colorIndex !== undefined) {
-            const newColorIndex = position.colorIndex;
-            
-            // Update stroke and fill colors based on active finger
+          // Always use index finger color (red)
+          if (position) {
+            // Update stroke and fill colors to always use index finger color
             setSettings(prev => ({
               ...prev,
-              strokeColor: FINGER_COLORS[newColorIndex],
-              fillColor: FINGER_COLORS[newColorIndex]
+              strokeColor: FINGER_COLORS[1], // Index finger color (red)
+              fillColor: FINGER_COLORS[1]    // Index finger color (red) 
             }));
-            
-            // Store the color index
-            setActiveFingerColorIndex(newColorIndex);
           }
           
           if (isDrawing && position && currentPath && currentPath.points.length > 0) {
@@ -346,16 +338,16 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
   
   // Start a new drawing path
   const startDrawing = (x: number, y: number, fingerId?: number) => {
-    // If a specific finger ID was provided, use it; otherwise use activeFingerColorIndex
-    const colorIndex = fingerId || activeFingerColorIndex;
+    // Always use index finger (color index 1)
+    const colorIndex = 1;
     
     const newPath: DrawingPath = {
       id: Date.now().toString(), // Add a unique ID based on timestamp
       points: [{ x, y }],
       isComplete: false,
       isROI: settings.mode === 'roi',
-      colorIndex: colorIndex, // Store the active finger's color index
-      fingerId: fingerId      // Store which finger was used (1=index, 2=middle, etc.)
+      colorIndex: colorIndex, // Always use index finger color (red)
+      fingerId: 1            // Always use index finger (fingerId = 1)
     };
     
     setCurrentPath(newPath);
