@@ -102,11 +102,19 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
       const centerX = sumX / roi.points.length;
       const centerY = sumY / roi.points.length;
       
-      // Calculate radius (distance from center to first point)
-      const radius = Math.sqrt(
-        Math.pow(roi.points[0].x - centerX, 2) + 
-        Math.pow(roi.points[0].y - centerY, 2)
-      );
+      // Calculate average radius from all points
+      let totalRadius = 0;
+      for (const point of roi.points) {
+        const distToCenter = Math.sqrt(
+          Math.pow(point.x - centerX, 2) + 
+          Math.pow(point.y - centerY, 2)
+        );
+        totalRadius += distToCenter;
+      }
+      const radius = totalRadius / roi.points.length;
+      
+      // Log radius calculation for debugging
+      console.log(`ROI Debug: Average radius calculated from ${roi.points.length} points = ${radius.toFixed(2)}px`);
       
       // Draw a red circle on the temp canvas to show what we're extracting
       tempCtx.strokeStyle = 'red';
@@ -130,17 +138,38 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
         0, 0, width, height
       );
       
-      // Add ROI ID label
+      // Add ROI ID label and radius info
       ctx.fillStyle = 'white';
       ctx.font = 'bold 16px sans-serif';
       ctx.textAlign = 'left';
       ctx.fillText(`ROI ID: ${roi.id}`, 10, 20);
+      
+      // Add small text with radius and center info
+      ctx.font = '10px sans-serif';
+      ctx.fillText(`Radius: ${radius.toFixed(1)}px`, 10, height - 25);
+      ctx.fillText(`Center: (${centerX.toFixed(0)},${centerY.toFixed(0)})`, 10, height - 10);
       
       // Add circle to show the ROI extraction outline
       ctx.strokeStyle = 'red';
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(width/2, height/2, width/2 - 5, 0, Math.PI * 2);
+      ctx.stroke();
+      
+      // Draw crosshairs at center for alignment reference
+      ctx.strokeStyle = 'rgba(255, 255, 0, 0.5)';
+      ctx.lineWidth = 1;
+      
+      // Horizontal line
+      ctx.beginPath();
+      ctx.moveTo(0, height/2);
+      ctx.lineTo(width, height/2);
+      ctx.stroke();
+      
+      // Vertical line
+      ctx.beginPath();
+      ctx.moveTo(width/2, 0);
+      ctx.lineTo(width/2, height);
       ctx.stroke();
     }
   };
