@@ -285,25 +285,69 @@ export class ROIManager {
       
       // Get the video element to capture ROI from
       const videoElement = document.getElementById('camera-feed') as HTMLVideoElement;
-      if (!videoElement || !videoElement.videoWidth) continue;
+      if (!videoElement || !videoElement.videoWidth) {
+        console.warn('[ROIManager] No video element found or video not started');
+        continue;
+      }
+      
+      // Verbose logging to help debug the issue
+      console.log(`[ROIManager] Processing ROI ${roi.id} with ${roi.points.length} points`);
       
       // Extract the ROI image data
       const roiImageData = this.extractROIImageData(roi, videoElement);
-      if (!roiImageData) continue;
+      if (!roiImageData) {
+        console.warn('[ROIManager] Failed to extract ROI image data');
+        continue;
+      }
+      
+      console.log(`[ROIManager] Extracted ROI image data: ${roiImageData.width}x${roiImageData.height}`);
       
       try {
         // Check if we have reference features for this ROI
         if (!referenceFeatures.has(roi.id)) {
           console.log(`[ROIManager] No reference features for ROI ${roi.id}, extracting...`);
+          
           // Extract features and save as reference
+          console.log('[ROIManager] Calling extractORBFeatures...');
           const features = await extractORBFeatures(roiImageData, 500);
+          
+          if (features) {
+            console.log(`[ROIManager] Feature extraction result for ROI ${roi.id}:`, {
+              success: true,
+              keypoints: features.keypoints.size(),
+              descriptorSize: features.descriptors.rows
+            });
+          } else {
+            console.warn('[ROIManager] Feature extraction returned null');
+          }
+          
           if (features && features.keypoints.size() > 10) {
             saveReferenceFeatures(roi.id, features);
             roi.features = features;
             roi.lastProcessed = now;
+            
+            // Create a public event to notify other components
+            dispatch(EventType.ROI_UPDATED, {
+              id: roi.id,
+              status: 'reference-captured',
+              featureCount: features.keypoints.size(),
+              timestamp: now
+            });
+            
             console.log(`[ROIManager] Extracted ${features.keypoints.size()} reference features for ROI ${roi.id}`);
           } else {
-            console.warn(`[ROIManager] Failed to extract enough features for ROI ${roi.id}`);
+            console.warn(`[ROIManager] Failed to extract enough features for ROI ${roi.id}. Found: ${features?.keypoints.size() || 0}, needed: 10`);
+            
+            // Update lastProcessed to avoid hammering with extraction attempts
+            roi.lastProcessed = now;
+            
+            // Create a public event to notify other components
+            dispatch(EventType.ROI_UPDATED, {
+              id: roi.id,
+              status: 'extraction-failed',
+              featureCount: features?.keypoints.size() || 0,
+              timestamp: now
+            });
           }
           continue;
         }
@@ -311,25 +355,49 @@ export class ROIManager {
         // Extract current features to match against reference
         const currentFeatures = await extractORBFeatures(roiImageData, 500);
         if (!currentFeatures || currentFeatures.keypoints.size() < 10) {
-          console.warn(`[ROIManager] Not enough features in current frame for ROI ${roi.id}`);
+          console.warn(`[ROIManager] Not enough features in current frame for ROI ${roi.id}. Found: ${currentFeatures?.keypoints.size() || 0}, needed: 10`);
           roi.lastProcessed = now;
+          
+          // Create a public event to notify other components
+          dispatch(EventType.ROI_UPDATED, {
+            id: roi.id,
+            status: 'tracking-insufficient-features',
+            featureCount: currentFeatures?.keypoints.size() || 0,
+            timestamp: now
+          });
+          
           continue;
         }
         
         // Match current features with reference features
+        console.log(`[ROIManager] Matching ${currentFeatures.keypoints.size()} features against reference for ROI ${roi.id}`);
         const trackingResult = await matchFeatures(roi.id, currentFeatures);
+        
+        console.log(`[ROIManager] Matching result for ROI ${roi.id}:`, {
+          isTracked: trackingResult.isTracked,
+          matchCount: trackingResult.matchCount,
+          inlierCount: trackingResult.inlierCount,
+          confidence: trackingResult.confidence
+        });
         
         // Update tracking result
         roi.trackingResult = trackingResult;
         roi.lastProcessed = now;
         
-        // Log tracking status (only occasionally to avoid spam)
-        if (Math.random() < 0.05) { // Only log ~5% of frames
-          console.log(`[ROIManager] ROI ${roi.id} tracking:`, 
-            trackingResult.isTracked ? 
-              `Success (${trackingResult.inlierCount}/${trackingResult.matchCount} matches, ${(trackingResult.confidence * 100).toFixed(0)}%)` : 
-              'Failed');
-        }
+        // Create a public event to notify other components like ROIDebugCanvas
+        dispatch(EventType.ROI_UPDATED, {
+          id: roi.id,
+          status: trackingResult.isTracked ? 'tracking-success' : 'tracking-lost',
+          trackingResult: {
+            isTracked: trackingResult.isTracked,
+            matchCount: trackingResult.matchCount,
+            inlierCount: trackingResult.inlierCount,
+            confidence: trackingResult.confidence,
+            center: trackingResult.center,
+            rotation: trackingResult.rotation,
+          },
+          timestamp: now
+        });
         
         // Clean up OpenCV resources
         currentFeatures.keypoints.delete();
@@ -338,6 +406,14 @@ export class ROIManager {
       } catch (error) {
         console.error(`[ROIManager] Error processing ROI ${roi.id}:`, error);
         roi.lastProcessed = now; // Mark as processed even if there was an error
+        
+        // Create a public event to notify other components
+        dispatch(EventType.ROI_UPDATED, {
+          id: roi.id,
+          status: 'processing-error',
+          error: error instanceof Error ? error.message : String(error),
+          timestamp: now
+        });
       }
     }
   }
