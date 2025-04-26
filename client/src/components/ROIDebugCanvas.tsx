@@ -173,7 +173,7 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
       tempCtx.stroke();
 
       // Extract the ROI region
-      // We'll extract a square region that contains the circle
+      // We'll extract a square region that contains the circle, but apply a circular mask
       const extractSize = radius * 2;
       const sourceX = Math.max(0, centerX - radius);
       const sourceY = Math.max(0, centerY - radius);
@@ -183,10 +183,38 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
       // Log some debug info about extraction sizes and positions
       console.log(`[ROIDebugCanvas] Extracting region: x=${sourceX.toFixed(0)}, y=${sourceY.toFixed(0)}, w=${sourceWidth.toFixed(0)}, h=${sourceHeight.toFixed(0)}`);
       
-      // Create an ImageData object for the extracted region
-      const roiImageData = tempCtx.getImageData(sourceX, sourceY, sourceWidth, sourceHeight);
+      // Create a circular masked version of the ROI
+      // 1. Get the square region containing our circle
+      const squareROI = tempCtx.getImageData(sourceX, sourceY, sourceWidth, sourceHeight);
       
-      // Store the current image data for feature extraction
+      // 2. Create a new canvas to apply the circular mask
+      const maskCanvas = document.createElement('canvas');
+      maskCanvas.width = sourceWidth;
+      maskCanvas.height = sourceHeight;
+      const maskCtx = maskCanvas.getContext('2d');
+      
+      if (!maskCtx) {
+        console.error('[ROIDebugCanvas] Failed to get mask canvas context');
+        return;
+      }
+      
+      // 3. Put the square image data on the mask canvas
+      maskCtx.putImageData(squareROI, 0, 0);
+      
+      // 4. Create circular clipping path
+      maskCtx.globalCompositeOperation = 'destination-in';
+      maskCtx.fillStyle = 'white';
+      maskCtx.beginPath();
+      maskCtx.arc(sourceWidth/2, sourceHeight/2, Math.min(sourceWidth/2, sourceHeight/2) - 2, 0, Math.PI * 2);
+      maskCtx.fill();
+      
+      // 5. Get the circular masked image data
+      const roiImageData = maskCtx.getImageData(0, 0, sourceWidth, sourceHeight);
+      
+      // Debug: Show the masking operation worked
+      console.log(`[ROIDebugCanvas] Applied circular mask to ROI with radius: ${Math.min(sourceWidth/2, sourceHeight/2)}px`);
+      
+      // Store the masked image data for feature extraction
       setCurrentImageData(roiImageData);
       
       // Log if we're in tracking mode to help debug issues
@@ -194,12 +222,32 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
         console.log(`[ROIDebugCanvas] Tracking is active for ROI ${roiId}, image data updated: ${roiImageData.width}x${roiImageData.height}`);
       }
       
-      // Draw the extracted region to our debug canvas
-      ctx.drawImage(
-        tempCanvas,
-        sourceX, sourceY, sourceWidth, sourceHeight,
-        0, 0, width, height
-      );
+      // Draw the masked version on our debug canvas
+      // First clear our canvas
+      ctx.clearRect(0, 0, width, height);
+      
+      // Draw a checkerboard background to show the circular mask
+      const squareSize = 10;
+      ctx.fillStyle = '#f0f0f0';
+      ctx.fillRect(0, 0, width, height);
+      
+      ctx.fillStyle = '#e0e0e0';
+      for (let x = 0; x < width; x += squareSize * 2) {
+        for (let y = 0; y < height; y += squareSize * 2) {
+          ctx.fillRect(x, y, squareSize, squareSize);
+          ctx.fillRect(x + squareSize, y + squareSize, squareSize, squareSize);
+        }
+      }
+      
+      // Use mask canvas to show the actual masked region
+      ctx.drawImage(maskCanvas, 0, 0, width, height);
+      
+      // Draw the circular border to highlight the ROI edge
+      ctx.strokeStyle = 'rgba(255, 0, 0, 0.7)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(width/2, height/2, width/2 - 4, 0, Math.PI * 2);
+      ctx.stroke();
       
       // If tracking is enabled, perform feature extraction and matching
       let result: TrackingResult | null = null;
