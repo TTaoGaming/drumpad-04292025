@@ -5,8 +5,27 @@
  * It enables markers to be tracked as they move or rotate within the camera view.
  */
 
-// OpenCV.js is loaded globally in index.html
+// OpenCV.js is loaded globally
 declare const cv: any;
+
+// Debug helper to check OpenCV availability
+function checkOpenCVStatus() {
+  const cvObject = typeof window !== 'undefined' ? (window as any).cv : undefined;
+  
+  console.log('[orbTracking] OpenCV availability check:', {
+    time: new Date().toISOString(),
+    exists: !!cvObject,
+    orb: cvObject ? typeof cvObject.ORB : 'not available',
+    mat: cvObject ? typeof cvObject.Mat : 'not available',
+    matFromImageData: cvObject ? typeof cvObject.matFromImageData : 'not available',
+    source: 'window.cv access'
+  });
+  
+  return !!cvObject && typeof cvObject.ORB === 'function';
+}
+
+// Check OpenCV on module load
+checkOpenCVStatus();
 
 export interface ORBFeature {
   keypoints: any; // KeyPointVector
@@ -38,28 +57,46 @@ export const referenceFeatures: Map<string, ORBFeature> = new Map();
 export function extractORBFeatures(imageData: ImageData, maxFeatures: number = 500): ORBFeature | null {
   try {
     // Check if OpenCV is loaded before proceeding
-    if (typeof cv === 'undefined' || !cv.matFromImageData) {
-      console.warn('OpenCV is not fully loaded yet. Skipping feature extraction.');
+    const isOpenCVAvailable = checkOpenCVStatus();
+    if (!isOpenCVAvailable) {
+      console.warn('[orbTracking] OpenCV not fully loaded yet. Cannot extract features.');
       return null;
     }
     
+    // Double-check cv object has needed methods before continuing
+    if (typeof cv === 'undefined' || !cv.matFromImageData) {
+      console.warn('[orbTracking] OpenCV exists but matFromImageData is missing. Cannot extract features.');
+      return null;
+    }
+    
+    console.log('[orbTracking] Starting feature extraction with image data:', {
+      width: imageData.width,
+      height: imageData.height,
+      maxFeatures: maxFeatures
+    });
+    
     // Create OpenCV matrices
     const imgMat = cv.matFromImageData(imageData);
+    console.log('[orbTracking] Successfully created Mat from ImageData');
+    
     const grayMat = new cv.Mat();
     
     // Convert to grayscale for feature detection
     cv.cvtColor(imgMat, grayMat, cv.COLOR_RGBA2GRAY);
+    console.log('[orbTracking] Converted to grayscale');
     
     // Create ORB detector
+    console.log('[orbTracking] Creating ORB detector...');
     const orb = new cv.ORB(maxFeatures, 1.2, 8, 31, 0, 2, cv.ORB_HARRIS_SCORE, 31, 20);
     const keypoints = new cv.KeyPointVector();
     const descriptors = new cv.Mat();
     
     // Detect keypoints and compute descriptors
+    console.log('[orbTracking] Detecting and computing features...');
     const mask = new cv.Mat(); // No mask
     orb.detectAndCompute(grayMat, mask, keypoints, descriptors);
     
-    console.log(`Extracted ${keypoints.size()} ORB features`);
+    console.log(`[orbTracking] Successfully extracted ${keypoints.size()} ORB features`);
     
     // Clean up
     imgMat.delete();
@@ -73,7 +110,12 @@ export function extractORBFeatures(imageData: ImageData, maxFeatures: number = 5
       timestamp: Date.now()
     };
   } catch (error) {
-    console.error('Error extracting ORB features:', error);
+    console.error('[orbTracking] Error extracting ORB features:', error);
+    
+    // Log OpenCV availability again if there was an error
+    console.log('[orbTracking] OpenCV status check after error:');
+    checkOpenCVStatus();
+    
     return null;
   }
 }

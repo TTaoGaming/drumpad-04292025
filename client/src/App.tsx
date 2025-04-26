@@ -38,10 +38,27 @@ function App() {
   const resolutionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    // Load OpenCV.js in main thread for components to use directly
+    const loadMainThreadOpenCV = () => {
+      if (typeof window !== 'undefined' && !(window as any).cv) {
+        const script = document.createElement('script');
+        script.async = true;
+        script.src = 'https://docs.opencv.org/4.7.0/opencv.js';
+        script.onload = () => {
+          console.log('OpenCV.js loaded directly in main thread');
+          document.dispatchEvent(new Event('opencv-ready'));
+        };
+        document.head.appendChild(script);
+      }
+    };
+    
+    // Start loading OpenCV in main thread
+    loadMainThreadOpenCV();
+    
     // Initialize workers when component mounts
+    // IMPORTANT: For OpenCV worker, don't use module type so it can use importScripts()
     const opencvWorker = new Worker(
-      new URL('./workers/opencv.worker.ts', import.meta.url),
-      { type: 'module' }
+      new URL('./workers/opencv.worker.ts', import.meta.url)
     );
 
     const mediaPipelineWorker = new Worker(
@@ -55,10 +72,21 @@ function App() {
 
     // Set up event listeners for worker messages
     opencvWorker.onmessage = (e) => {
+      console.log('[OpenCV Worker]:', e.data);
+      
       if (e.data.type === 'log') {
         addLog(e.data.message);
       } else if (e.data.type === 'status') {
+        console.log('OpenCV status update:', e.data.ready);
         setIsOpenCVReady(e.data.ready);
+        dispatch(EventType.OPENCV_STATUS, { ready: e.data.ready });
+        if (e.data.ready) {
+          addLog('OpenCV.js ready in worker', 'success');
+        }
+      } else if (e.data.type === 'opencv-ready') {
+        console.log('OpenCV initialized in worker with features:', e.data.opencvFeatures);
+        dispatch(EventType.OPENCV_STATUS, { ready: true, features: e.data.opencvFeatures });
+        addLog('OpenCV.js ready with features: ' + e.data.opencvFeatures.join(', '), 'success');
       } else if (e.data.type === 'processed-frame') {
         // Handle OpenCV processed frame here
         // For now we'll just update any performance metrics

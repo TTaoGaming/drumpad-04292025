@@ -177,25 +177,41 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
       
       if (isTracking && roiId && currentImageData) {
         try {
-          // Check if OpenCV is available before trying to extract features
+          // Check if OpenCV is available in the worker
+          console.log('[ROIDebugCanvas] Worker-based OpenCV status check:', {
+            isOpenCVReady: isOpenCVReady,
+            trackingStatus: isTracking ? 'active' : 'inactive',
+            roiId,
+            referenceExists: referenceFeatures.has(roiId),
+            imageDataSize: currentImageData ? `${currentImageData.width}x${currentImageData.height}` : 'none',
+            orbFeaturesCount: referenceFeatures.get(roiId)?.keypoints?.size() || 0
+          });
+        
+          // Try getting OpenCV from window context as fallback
           const cv = typeof window !== 'undefined' ? (window as any).cv : undefined;
-          console.log('OpenCV availability check:', {
+          console.log('[ROIDebugCanvas] Direct OpenCV availability check:', {
             cvExists: !!cv,
             cvORB: cv ? typeof cv.ORB : 'cv not loaded',
             cvMatExists: cv ? typeof cv.Mat : 'cv not loaded',
             windowCV: typeof window !== 'undefined' ? !!(window as any).cv : 'no window'
           });
           
+          // If we need to use the fallback (direct window.cv) approach
           if (!cv || typeof cv.ORB !== 'function') {
             setOrbStatus('OpenCV not loaded - waiting...');
-            console.log('OpenCV not fully loaded yet, waiting...');
+            console.log('[ROIDebugCanvas] OpenCV not available in main thread');
             
-            // Force check for manual tracking after 5 seconds if still stuck
+            // Force capture reference features after timeout if needed
             if (!referenceFeatures.has(roiId) && currentImageData) {
-              setTimeout(() => {
-                console.log('Forcing tracking initialization after timeout');
-                captureReferenceFeatures();
-              }, 5000);
+              if (!window._tracking_timeout_set) {
+                window._tracking_timeout_set = true;
+                console.log('[ROIDebugCanvas] Setting up force capture timeout');
+                setTimeout(() => {
+                  console.log('[ROIDebugCanvas] Force timeout triggered - attempting manual capture');
+                  captureReferenceFeatures();
+                  window._tracking_timeout_set = false;
+                }, 5000);
+              }
             }
           } else {
             setOrbStatus('Extracting ORB features...');
@@ -397,9 +413,40 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
             
             // We'll auto-start tracking after a short delay to allow the ROI to stabilize
             setTimeout(() => {
-              console.log("Auto-starting tracking for new ROI");
+              console.log("[ROIDebugCanvas] Auto-starting tracking for new ROI");
               setOrbStatus('Auto-starting tracking...');
-              setIsTracking(true);
+              
+              // Check if OpenCV.js is available before starting tracking
+              const cvObject = typeof window !== 'undefined' ? (window as any).cv : undefined;
+              if (!cvObject || typeof cvObject.ORB !== 'function') {
+                console.log('[ROIDebugCanvas] OpenCV.js not fully loaded yet, will continue checking...');
+                setOrbStatus('Waiting for OpenCV...');
+                
+                // Poll for OpenCV availability
+                const checkInterval = setInterval(() => {
+                  const cv = typeof window !== 'undefined' ? (window as any).cv : undefined;
+                  console.log('[ROIDebugCanvas] Checking OpenCV availability:', !!cv, 
+                    cv ? typeof cv.ORB : 'undefined');
+                  
+                  if (cv && typeof cv.ORB === 'function') {
+                    console.log('[ROIDebugCanvas] OpenCV now ready, starting tracking');
+                    clearInterval(checkInterval);
+                    setOrbStatus('OpenCV ready, starting tracking');
+                    setIsTracking(true);
+                  }
+                }, 1000);
+                
+                // Safety timeout after 10 seconds
+                setTimeout(() => {
+                  clearInterval(checkInterval);
+                  console.log('[ROIDebugCanvas] Forcing tracking start after timeout');
+                  setOrbStatus('Starting tracking (loading status uncertain)');
+                  setIsTracking(true);
+                }, 10000);
+              } else {
+                console.log('[ROIDebugCanvas] OpenCV available, starting tracking immediately');
+                setIsTracking(true);
+              }
             }, 500);
           }
         }

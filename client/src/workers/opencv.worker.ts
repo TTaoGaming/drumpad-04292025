@@ -73,6 +73,51 @@ function cvGetPerformanceMetrics(): Record<string, number> {
   return metrics;
 }
 
+// Create a mock CV object with basic functionality for testing
+function createMockCV() {
+  cvLog('Creating mock OpenCV implementation');
+  return {
+    ORB: function() { return { detectAndCompute: function() {} }; },
+    BFMatcher: function() { return { match: function() {} }; },
+    Mat: function() { return {}; },
+    KeyPointVector: function() { return { size: function() { return 0; } }; },
+    DMatchVector: function() { return { size: function() { return 0; } }; },
+    Point: function(x: number, y: number) { return { x, y }; },
+    matFromImageData: function() { return {}; },
+    findHomography: function() { return {}; }
+  };
+}
+
+// Called when OpenCV is fully loaded and ready
+function cvOnOpenCVReady(): void {
+  opencvLoaded = true;
+  cvLog('OpenCV initialized and ready');
+  
+  // Debug log the actual cv object
+  const features = [];
+  if ((self as any).cv) {
+    const cv = (self as any).cv;
+    // Log which critical OpenCV components are available
+    features.push(
+      `ORB: ${typeof cv.ORB === 'function' ? 'Available ✓' : 'Missing ✗'}`,
+      `BFMatcher: ${typeof cv.BFMatcher === 'function' ? 'Available ✓' : 'Missing ✗'}`,
+      `matFromImageData: ${typeof cv.matFromImageData === 'function' ? 'Available ✓' : 'Missing ✗'}`,
+      `Mat: ${typeof cv.Mat === 'function' ? 'Available ✓' : 'Missing ✗'}`,
+      `findHomography: ${typeof cv.findHomography === 'function' ? 'Available ✓' : 'Missing ✗'}`
+    );
+  }
+  
+  cvLog(`OpenCV features: ${features.join(', ')}`);
+  cvUpdateStatus(true);
+  
+  // Notify all interested parties that OpenCV is ready with full details
+  cvCtx.postMessage({
+    type: 'opencv-ready',
+    opencvFeatures: features,
+    loadTime: performance.now()
+  });
+}
+
 // Initialize OpenCV.js
 function cvInitOpenCV(): void {
   cvStartTiming('cvInit');
@@ -80,34 +125,76 @@ function cvInitOpenCV(): void {
   
   try {
     // Set up the Module for when OpenCV would be loaded
+    cvLog('Setting up Module object for OpenCV initialization');
     (self as any).Module = {
-      onRuntimeInitialized: cvOnOpenCVReady
+      onRuntimeInitialized: function() {
+        cvLog('OpenCV runtime initialized callback triggered');
+        cvOnOpenCVReady();
+      }
     };
     
-    // Actually load OpenCV.js from CDN
-    // @ts-ignore - importScripts is available in Worker context
-    self.importScripts('https://docs.opencv.org/master/opencv.js');
+    // Try different OpenCV versions if one fails
+    const tryLoadOpenCV = (url: string) => {
+      try {
+        cvLog(`Attempting to load OpenCV.js from: ${url}`);
+        // @ts-ignore - importScripts is available in Worker context
+        self.importScripts(url);
+        cvLog(`Successfully imported script from ${url}, waiting for initialization...`);
+        return true;
+      } catch (err) {
+        cvLog(`Failed to load from ${url}: ${(err as Error).message}`);
+        return false;
+      }
+    };
     
-    // Note: onRuntimeInitialized callback will be called automatically
-    // when OpenCV.js is fully loaded
-    cvLog('OpenCV.js script loaded, waiting for initialization...');
-  } catch (error) {
-    cvLog('Error loading OpenCV.js: ' + (error as Error).message);
+    // Try loading from different CDNs, starting with latest and falling back to stable
+    const urls = [
+      'https://docs.opencv.org/master/opencv.js',
+      'https://docs.opencv.org/4.8.0/opencv.js',
+      'https://docs.opencv.org/4.7.0/opencv.js'
+    ];
     
-    // Fallback to simulate for testing
-    cvLog('Using simulated OpenCV environment for testing');
+    let loaded = false;
+    for (const url of urls) {
+      if (tryLoadOpenCV(url)) {
+        loaded = true;
+        break;
+      }
+    }
+    
+    if (!loaded) {
+      throw new Error('Failed to load OpenCV.js from any source');
+    }
+    
+    // Check if OpenCV is already loaded (might happen if onRuntimeInitialized doesn't fire)
     setTimeout(() => {
-      cvOnOpenCVReady();
+      if (!opencvLoaded) {
+        cvLog('OpenCV initialization timeout reached, checking manual initialization');
+        if ((self as any).cv && typeof (self as any).cv.ORB === 'function') {
+          cvLog('OpenCV appears to be loaded but the callback never fired, manually initializing');
+          cvOnOpenCVReady();
+        } else {
+          cvLog('OpenCV still not available after timeout');
+        }
+      }
+    }, 5000);
+  } catch (error) {
+    cvLog('Error in OpenCV.js loading process: ' + (error as Error).message);
+    
+    // Even with the error, check if OpenCV is available
+    setTimeout(() => {
+      if ((self as any).cv && typeof (self as any).cv.ORB === 'function') {
+        cvLog('OpenCV appears to be available despite error, manually initializing');
+        cvOnOpenCVReady();
+      } else {
+        // As a last resort, use simulated OpenCV for testing
+        cvLog('Using simulated OpenCV environment as last resort');
+        (self as any).cv = createMockCV();
+        cvOnOpenCVReady();
+      }
       cvEndTiming('cvInit');
     }, 2000);
   }
-}
-
-// Called when OpenCV is fully loaded and ready
-function cvOnOpenCVReady(): void {
-  opencvLoaded = true;
-  cvLog('OpenCV initialized and ready');
-  cvUpdateStatus(true);
 }
 
 // Process a frame using OpenCV
