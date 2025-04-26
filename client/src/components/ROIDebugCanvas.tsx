@@ -5,7 +5,7 @@
  * template matching to track objects as they move.
  */
 import React, { useRef, useEffect, useState } from 'react';
-import { EventType, addListener } from '@/lib/eventBus';
+import { EventType, addListener, dispatch } from '@/lib/eventBus';
 import { RegionOfInterest } from '@/lib/types';
 import { getVideoFrame } from '@/lib/cameraManager';
 import { 

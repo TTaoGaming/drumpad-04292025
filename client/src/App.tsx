@@ -11,6 +11,7 @@ import FpsStats from "@/components/PerformanceMetrics";
 import MediaPipeHandTracker from "@/components/MediaPipeHandTracker";
 import DrawingCanvas from "@/components/DrawingCanvas";
 import ROIDebugCanvas from "@/components/ROIDebugCanvas";
+import TemplateMatchingCanvas from "@/components/TemplateMatchingCanvas";
 import TrackingVisualization from "@/components/TrackingVisualization";
 import SettingsPanel from "@/components/settings/SettingsPanel";
 import { EventType, addListener, dispatch } from "@/lib/eventBus";
@@ -424,13 +425,13 @@ function App() {
             cursor: 'pointer'
           }}
         >
-          {showDebugCanvas ? 'Hide ROI Debug' : 'Show ROI Debug'}
+          {showDebugCanvas ? 'Hide Template Matching' : 'Show Template Matching'}
         </button>
       )}
       
-      {/* ROI Debug Canvas */}
+      {/* Template Matching Debug Canvas */}
       {isCameraRunning && (
-        <ROIDebugCanvas
+        <TemplateMatchingCanvas
           width={200}
           height={200}
           visible={showDebugCanvas}
