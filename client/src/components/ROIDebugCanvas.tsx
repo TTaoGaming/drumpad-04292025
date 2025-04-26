@@ -13,6 +13,7 @@ import {
   saveReferenceFeatures, 
   matchFeatures,
   clearReferenceFeatures,
+  referenceFeatures,
   ORBFeature,
   TrackingResult
 } from '@/lib/orbTracking';
@@ -53,7 +54,7 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
             setRoi(targetRoi);
             setIsExtracting(true);
             
-            // Reset tracking when ROI is updated
+            // Reset tracking initially when ROI is updated
             setIsTracking(false);
             setTrackingResult(null);
             setReferenceImageData(null);
@@ -62,6 +63,12 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
             if (roiId) {
               clearReferenceFeatures(roiId);
             }
+            
+            // We'll auto-start tracking after a short delay to allow the ROI to stabilize
+            setTimeout(() => {
+              console.log("Auto-starting tracking for new ROI");
+              setIsTracking(true);
+            }, 500);
           }
         }
       }
@@ -245,17 +252,35 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
           const features = extractORBFeatures(roiImageData, 500);
           
           if (features && features.keypoints.size() > 0) {
-            // Match features with reference
-            result = matchFeatures(roiId, features);
+            // If we don't have reference features yet, set them now
+            // This happens automatically the first time tracking is enabled for a new ROI
+            const hasReference = referenceFeatures.has(roiId);
+            if (!hasReference && features.keypoints.size() > 10) {
+              saveReferenceFeatures(roiId, features);
+              setReferenceImageData(roiImageData);
+              console.log(`Auto-captured reference for tracking ROI ${roiId} with ${features.keypoints.size()} features`);
+              
+              // Create a new feature set for matching (since we just used this one as reference)
+              const newFeatures = extractORBFeatures(roiImageData, 500);
+              if (newFeatures) {
+                result = matchFeatures(roiId, newFeatures);
+                newFeatures.keypoints.delete();
+                newFeatures.descriptors.delete();
+              }
+            } else {
+              // Match features with reference
+              result = matchFeatures(roiId, features);
+            }
+            
             setTrackingResult(result);
             
             // Only log occasionally to reduce console spam
-            if (Math.random() < 0.1) {
-              console.log(`Tracking ROI ${roiId}: ${result.isTracked ? 'TRACKED' : 'LOST'} - Confidence: ${(result.confidence * 100).toFixed(1)}%`);
+            if (Math.random() < 0.05) {
+              console.log(`Tracking ROI ${roiId}: ${result?.isTracked ? 'TRACKED' : 'LOST'} - Confidence: ${(result?.confidence * 100 || 0).toFixed(1)}%`);
             }
             
             // Draw tracking results
-            if (result.isTracked && showFeatures) {
+            if (result?.isTracked && showFeatures) {
               // Draw box around tracked object
               ctx.strokeStyle = '#4caf50'; // Green
               ctx.lineWidth = 2;

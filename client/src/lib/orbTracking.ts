@@ -27,7 +27,7 @@ export interface TrackingResult {
 }
 
 // Cache for reference features
-const referenceFeatures: Map<string, ORBFeature> = new Map();
+export const referenceFeatures: Map<string, ORBFeature> = new Map();
 
 /**
  * Extract ORB features from an image
