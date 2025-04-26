@@ -72,7 +72,7 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
     threshold: 0.07, // Normalized distance threshold for pinch detection (0-1)
     releaseThreshold: 0.10, // Higher threshold to prevent flickering (hysteresis)
     stabilityFrames: 3, // Number of frames to confirm a pinch state change (prevents flickering)
-    activeFinger: 'index' as 'index' | 'middle' | 'ring' | 'pinky' // Which finger to use for pinching with thumb
+    activeFinger: 'index' // Always use index finger for pinching with thumb
   });
   
   // Pinch state
@@ -355,27 +355,11 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
     // Get the thumb tip (landmark 4)
     const thumbTip = landmarks[4];
     
-    // Get the active finger tip based on settings
-    let activeFingertip: HandLandmark;
-    switch (pinchGestureSettings.activeFinger) {
-      case 'index':
-        activeFingertip = landmarks[8]; // Index fingertip
-        break;
-      case 'middle':
-        activeFingertip = landmarks[12]; // Middle fingertip
-        break;
-      case 'ring':
-        activeFingertip = landmarks[16]; // Ring fingertip
-        break;
-      case 'pinky':
-        activeFingertip = landmarks[20]; // Pinky fingertip
-        break;
-      default:
-        activeFingertip = landmarks[8]; // Default to index
-    }
+    // Always use index finger (landmark 8)
+    const indexFingertip = landmarks[8];
     
-    // Calculate distance between thumb tip and selected finger tip
-    const distance = calculateDistance(thumbTip, activeFingertip);
+    // Calculate distance between thumb tip and index finger tip
+    const distance = calculateDistance(thumbTip, indexFingertip);
     
     // Get current pinch state and memory
     const memory = pinchStateMemoryRef.current;
@@ -889,15 +873,8 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                 // Log the coordinate conversion for debugging
                 console.log(`Converting coordinates: (${thumbTip.x.toFixed(3)}, ${thumbTip.y.toFixed(3)}) => (${thumbPixelX}, ${thumbPixelY})`);
                 
-                // Determine finger ID based on which finger is active (1=index, 2=middle, etc.)
-                let fingerId: number;
-                switch (pinchGestureSettings.activeFinger) {
-                  case 'index': fingerId = 1; break;
-                  case 'middle': fingerId = 2; break;
-                  case 'ring': fingerId = 3; break;
-                  case 'pinky': fingerId = 4; break;
-                  default: fingerId = 1; // Default to index
-                }
+                // Always use index finger (fingerId = 1)
+                const fingerId = 1;
                 
                 dispatchFn(EventType.SETTINGS_VALUE_CHANGE, {
                   section: 'gestures',
@@ -910,7 +887,7 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                       y: thumbPixelY, // Send thumb position instead of active finger
                       z: thumbTip.z
                     },
-                    activeFinger: pinchGestureSettings.activeFinger,
+                    activeFinger: 'index',
                     fingerId: fingerId
                   }
                 });
@@ -919,25 +896,8 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                 // For our thumb-centered gesture control system, we'll use the thumb position
                 // as the primary reference point for all drawing operations
                 
-                // Determine color index based on which finger is being used with the thumb
-                let activeDrawingFinger = pinchGestureSettings.activeFinger;
-                let activeFingerColorIndex = 1; // Default to index finger (red)
-                
-                // Set the color index based on which finger is active
-                switch (activeDrawingFinger) {
-                  case 'index': 
-                    activeFingerColorIndex = 1; // Red
-                    break;
-                  case 'middle':
-                    activeFingerColorIndex = 2; // Orange 
-                    break;
-                  case 'ring':
-                    activeFingerColorIndex = 3; // Yellow
-                    break;
-                  case 'pinky':
-                    activeFingerColorIndex = 4; // Green
-                    break;
-                }
+                // Always use index finger color (red)
+                const activeFingerColorIndex = 1;
                 
                 // Dispatch thumb position as the primary drawing point
                 dispatchFn(EventType.SETTINGS_VALUE_CHANGE, {
@@ -956,25 +916,8 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                   // Get thumb tip landmark
                   const thumbTip = landmarks[4];
                   
-                  // Reuse the active fingertip we already defined above
-                  let fingerColorIndex = 1; // Default to index (red)
-                  
-                  switch (pinchGestureSettings.activeFinger) {
-                    case 'index':
-                      fingerColorIndex = 1; // Red
-                      break;
-                    case 'middle':
-                      fingerColorIndex = 2; // Yellow
-                      break;
-                    case 'ring':
-                      fingerColorIndex = 3; // Green
-                      break;
-                    case 'pinky':
-                      fingerColorIndex = 4; // Blue
-                      break;
-                    default:
-                      fingerColorIndex = 1; // Red
-                  }
+                  // Always use index finger (red)
+                  const fingerColorIndex = 1;
                   
                   // Convert to screen coordinates
                   const thumbX = thumbTip.x * canvas.width;
