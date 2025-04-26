@@ -73,19 +73,22 @@ function cvGetPerformanceMetrics(): Record<string, number> {
   return metrics;
 }
 
-// Create a mock CV object with basic functionality for testing
-function createMockCV() {
-  cvLog('Creating mock OpenCV implementation');
-  return {
-    ORB: function() { return { detectAndCompute: function() {} }; },
-    BFMatcher: function() { return { match: function() {} }; },
-    Mat: function() { return {}; },
-    KeyPointVector: function() { return { size: function() { return 0; } }; },
-    DMatchVector: function() { return { size: function() { return 0; } }; },
-    Point: function(x: number, y: number) { return { x, y }; },
-    matFromImageData: function() { return {}; },
-    findHomography: function() { return {}; }
-  };
+// Load the actual OpenCV library instead of using mocks
+function loadActualOpenCV(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    cvLog('Trying to load real OpenCV.js instead of mock');
+    
+    try {
+      // Attempt to load directly from CDN
+      importScripts('https://docs.opencv.org/4.7.0/opencv.js');
+      cvLog('Successfully loaded OpenCV.js directly via importScripts');
+      resolve();
+    } catch (err) {
+      cvLog(`Failed to load OpenCV directly: ${err}`);
+      // If import fails, try alternative loading methods here
+      reject(new Error(`Failed to load OpenCV: ${err}`));
+    }
+  });
 }
 
 // Called when OpenCV is fully loaded and ready
@@ -207,10 +210,17 @@ function cvInitOpenCV(): void {
           } else {
             cvLog('OpenCV still not available after timeout');
             
-            // As a last resort, use simulated OpenCV for testing
-            cvLog('Using simulated OpenCV environment as last resort');
-            (self as any).cv = createMockCV();
-            cvOnOpenCVReady();
+            // Try one more time with direct loading approach
+            cvLog('Attempting to load OpenCV directly as last resort');
+            loadActualOpenCV()
+              .then(() => {
+                cvLog('Successfully loaded OpenCV via direct approach');
+                cvOnOpenCVReady();
+              })
+              .catch(err => {
+                cvLog(`Failed to load OpenCV via any method: ${err}`);
+                // We'll leave cv as undefined rather than using a mock
+              });
           }
         }
       }, 5000);
@@ -224,10 +234,17 @@ function cvInitOpenCV(): void {
           cvLog('OpenCV appears to be available despite errors, manually initializing');
           cvOnOpenCVReady();
         } else {
-          // Fall back to simulated OpenCV
-          cvLog('Using simulated OpenCV as fallback');
-          (self as any).cv = createMockCV();
-          cvOnOpenCVReady();
+          // Try one more time with direct loading approach
+          cvLog('Attempting direct OpenCV load as final fallback');
+          loadActualOpenCV()
+            .then(() => {
+              cvLog('Successfully loaded OpenCV via direct approach (fallback)');
+              cvOnOpenCVReady();
+            })
+            .catch(err => {
+              cvLog(`Failed to load OpenCV via any method: ${err}`);
+              // We won't proceed without real OpenCV
+            });
         }
         cvEndTiming('cvInit');
       }, 2000);
@@ -247,43 +264,73 @@ function cvProcessFrame(frame: ImageData): void {
   // Start timing feature detection
   cvStartTiming('cvFeatureDetection');
   
-  // In a real implementation, we would use cv.Mat to process the frame
-  // This is a placeholder for the actual OpenCV processing
-  
-  // Example processing workflow:
-  // 1. Convert ImageData to cv.Mat
-  // 2. Apply image processing operations
-  // 3. Convert result back to ImageData
-  // 4. Send processed data back to main thread
-  
-  // Simulate some processing time for feature detection
-  setTimeout(() => {
+  try {
+    // Get OpenCV instance
+    const cv = (self as any).cv;
+    
+    // 1. Convert ImageData to cv.Mat
+    const sourceMat = cv.matFromImageData(frame);
+    
+    // Create a matrix for grayscale conversion
+    const grayMat = new cv.Mat();
+    
+    // 2. Convert to grayscale for easier processing
+    cv.cvtColor(sourceMat, grayMat, cv.COLOR_RGBA2GRAY);
+    
+    // 3. Apply a simple Gaussian blur as an example of OpenCV processing
+    const blurredMat = new cv.Mat();
+    const ksize = new cv.Size(5, 5);
+    cv.GaussianBlur(grayMat, blurredMat, ksize, 0, 0, cv.BORDER_DEFAULT);
+    
     // End timing feature detection
     const featureDetectionTime = cvEndTiming('cvFeatureDetection');
     
     // Start timing additional processing
     cvStartTiming('cvAdditionalProcessing');
     
-    // Simulate additional processing time
-    setTimeout(() => {
-      // End timing additional processing
-      const additionalProcessingTime = cvEndTiming('cvAdditionalProcessing');
-      
-      // End timing overall OpenCV processing
-      const totalProcessingTime = cvEndTiming('cvTotalProcessing');
-      
-      // Get complete performance metrics
-      const performanceData = cvGetPerformanceMetrics();
-      
-      // Send processed result back
-      cvCtx.postMessage({
-        type: 'processed-frame',
-        timestamp: Date.now(),
-        processingTimeMs: totalProcessingTime,
-        performance: performanceData
-      });
-    }, 2);
-  }, 8);
+    // 4. Optional: Find edges using Canny
+    const edgesMat = new cv.Mat();
+    cv.Canny(blurredMat, edgesMat, 50, 150, 3, false);
+    
+    // End timing additional processing
+    const additionalProcessingTime = cvEndTiming('cvAdditionalProcessing');
+    
+    // Cleanup matrices
+    sourceMat.delete();
+    grayMat.delete();
+    blurredMat.delete();
+    edgesMat.delete();
+    
+    // End timing overall OpenCV processing
+    const totalProcessingTime = cvEndTiming('cvTotalProcessing');
+    
+    // Get complete performance metrics
+    const performanceData = cvGetPerformanceMetrics();
+    
+    // Send processed result back
+    cvCtx.postMessage({
+      type: 'processed-frame',
+      timestamp: Date.now(),
+      processingTimeMs: totalProcessingTime,
+      performance: performanceData
+    });
+  } catch (error) {
+    cvLog(`Error processing frame with OpenCV: ${error}`);
+    
+    // End timing on error
+    cvEndTiming('cvFeatureDetection');
+    cvEndTiming('cvAdditionalProcessing');
+    const totalProcessingTime = cvEndTiming('cvTotalProcessing');
+    
+    // Send error result
+    cvCtx.postMessage({
+      type: 'processed-frame',
+      timestamp: Date.now(),
+      processingTimeMs: totalProcessingTime,
+      error: `${error}`,
+      performance: cvGetPerformanceMetrics()
+    });
+  }
 }
 
 // Handle messages from the main thread
