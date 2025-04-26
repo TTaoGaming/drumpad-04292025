@@ -4,6 +4,8 @@ import { HandData, HandLandmark } from '@/lib/types';
 import { OneEuroFilterArray, DEFAULT_FILTER_OPTIONS } from '@/lib/oneEuroFilter';
 import { HandTrackingOptimizer, OptimizationSettings, DEFAULT_OPTIMIZATION_SETTINGS } from '@/lib/handTrackingOptimizer';
 import { debounce, throttle } from '@/lib/utils';
+import orbFeatureDetector from '@/lib/orbFeatureDetector';
+import { getVideoFrame } from '@/lib/cameraManager';
 
 interface MediaPipeHandTrackerProps {
   videoRef: React.RefObject<HTMLVideoElement>;
@@ -1038,6 +1040,25 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
               // If ROI optimization is disabled, use frame skipping logic
               frameCountRef.current = (frameCountRef.current + 1) % performanceSettings.frameProcessing.processEveryNth;
               shouldProcessFullFrame = frameCountRef.current === 0;
+            }
+            
+            // Process ORB feature tracking for ROIs
+            // This happens on every frame for smoother tracking
+            const videoElement = videoRef.current;
+            if (videoElement && videoElement.videoWidth) {
+              try {
+                // Get the current frame for feature tracking
+                const frameData = getVideoFrame(videoElement);
+                if (frameData) {
+                  // Process frame with our updated ORB feature detector 
+                  orbFeatureDetector.processFrame(frameData);
+                  
+                  // Draw the features and tracking results
+                  orbFeatureDetector.drawFeatures(ctx, canvas.width, canvas.height);
+                }
+              } catch (error) {
+                console.error('[MediaPipeHandTracker] Error processing ORB features:', error);
+              }
             }
             
             // Only process frames based on optimization strategy
