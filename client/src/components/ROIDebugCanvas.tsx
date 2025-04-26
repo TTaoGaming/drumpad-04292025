@@ -41,106 +41,6 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
   const [showFeatures, setShowFeatures] = useState(true);
   const [orbStatus, setOrbStatus] = useState<string>('Initializing...');
 
-  // Listen for ROI updates
-  useEffect(() => {
-    const roisListener = addListener(
-      EventType.SETTINGS_VALUE_CHANGE,
-      (data) => {
-        if (data.section === 'drawing' && data.setting === 'activeROIs') {
-          const rois = data.value as RegionOfInterest[];
-          // Find ROI with ID 1 (we'll just use the first one if nothing matches)
-          const targetRoi = rois.find(r => r.id === roiId) || rois[0];
-          
-          if (targetRoi) {
-            setRoi(targetRoi);
-            setIsExtracting(true);
-            
-            // Reset tracking initially when ROI is updated
-            setIsTracking(false);
-            setTrackingResult(null);
-            setReferenceImageData(null);
-            
-            // Clear any existing reference features
-            if (roiId) {
-              clearReferenceFeatures(roiId);
-            }
-            
-            // We'll auto-start tracking after a short delay to allow the ROI to stabilize
-            setTimeout(() => {
-              console.log("Auto-starting tracking for new ROI");
-              setIsTracking(true);
-            }, 500);
-          }
-        }
-      }
-    );
-    
-    // Clean up when component unmounts
-    return () => {
-      roisListener.remove();
-      
-      // Clean up tracking resources
-      if (roiId) {
-        clearReferenceFeatures(roiId);
-      }
-    };
-  }, [roiId]);
-
-  // Extract ROI content
-  useEffect(() => {
-    if (!roi || !isExtracting || !visible) return;
-    
-    // Initial extraction
-    extractROIContent();
-    
-    const extractInterval = setInterval(() => {
-      extractROIContent();
-    }, 33); // Extract at ~30fps for smoother updates
-    
-    return () => {
-      clearInterval(extractInterval);
-    };
-  }, [roi, isExtracting, visible]);
-
-  // Capture ORB reference features when the "Track" button is clicked
-  const captureReferenceFeatures = () => {
-    if (!roiId || !currentImageData) return;
-    
-    if (isTracking) {
-      // If already tracking, clear tracking data
-      setIsTracking(false);
-      setTrackingResult(null);
-      setReferenceImageData(null);
-      clearReferenceFeatures(roiId);
-      setOrbStatus('Tracking stopped');
-      console.log(`Tracking reset for ROI ${roiId}`);
-      return;
-    }
-    
-    // Extract ORB features from current frame
-    try {
-      setOrbStatus('Starting capture...');
-      const features = extractORBFeatures(currentImageData, 500);
-      
-      if (features && features.keypoints.size() > 10) {
-        // Save reference features and image
-        saveReferenceFeatures(roiId, features);
-        setReferenceImageData(currentImageData);
-        setIsTracking(true);
-        setOrbStatus(`Captured ${features.keypoints.size()} reference features`);
-        
-        // Log success
-        console.log(`Captured reference for tracking ROI ${roiId} with ${features.keypoints.size()} features`);
-      } else {
-        setOrbStatus('Failed to extract enough features');
-        console.warn(`Failed to extract enough features from ROI ${roiId} for tracking`);
-      }
-    } catch (error) {
-      setOrbStatus('Error capturing features');
-      console.error("Error capturing reference features:", error);
-    }
-  };
-
   // Extract ROI content from video frame
   const extractROIContent = () => {
     const canvas = canvasRef.current;
@@ -256,10 +156,10 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
       if (isTracking && roiId && currentImageData) {
         try {
           // Check if OpenCV is available before trying to extract features
-          if (typeof window === 'undefined' || 
-              !window.hasOwnProperty('cv') || 
-              !(window as any).cv) {
+          const cv = typeof window !== 'undefined' ? (window as any).cv : undefined;
+          if (!cv || typeof cv.ORB !== 'function') {
             setOrbStatus('OpenCV not loaded - waiting...');
+            console.log('OpenCV not fully loaded yet, waiting...');
           } else {
             setOrbStatus('Extracting ORB features...');
             let features = null;
@@ -431,6 +331,124 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
       ctx.moveTo(width/2, 0);
       ctx.lineTo(width/2, height);
       ctx.stroke();
+    }
+  };
+  
+  // Listen for ROI updates
+  useEffect(() => {
+    const roisListener = addListener(
+      EventType.SETTINGS_VALUE_CHANGE,
+      (data) => {
+        if (data.section === 'drawing' && data.setting === 'activeROIs') {
+          const rois = data.value as RegionOfInterest[];
+          // Find ROI with ID 1 (we'll just use the first one if nothing matches)
+          const targetRoi = rois.find(r => r.id === roiId) || rois[0];
+          
+          if (targetRoi) {
+            setRoi(targetRoi);
+            setIsExtracting(true);
+            
+            // Reset tracking initially when ROI is updated
+            setIsTracking(false);
+            setTrackingResult(null);
+            setReferenceImageData(null);
+            
+            // Clear any existing reference features
+            if (roiId) {
+              clearReferenceFeatures(roiId);
+            }
+            
+            // We'll auto-start tracking after a short delay to allow the ROI to stabilize
+            setTimeout(() => {
+              console.log("Auto-starting tracking for new ROI");
+              setOrbStatus('Auto-starting tracking...');
+              setIsTracking(true);
+            }, 500);
+          }
+        }
+      }
+    );
+    
+    // Clean up when component unmounts
+    return () => {
+      roisListener.remove();
+      
+      // Clean up tracking resources
+      if (roiId) {
+        clearReferenceFeatures(roiId);
+      }
+    };
+  }, [roiId]);
+
+  // Set up ROI extraction interval
+  useEffect(() => {
+    if (!roi || !isExtracting || !visible) return;
+    
+    // Initial extraction
+    extractROIContent();
+    
+    const extractInterval = setInterval(() => {
+      extractROIContent();
+    }, 33); // Extract at ~30fps for smoother updates
+    
+    return () => {
+      clearInterval(extractInterval);
+    };
+  }, [roi, isExtracting, visible]);
+
+  // Capture ORB reference features when the "Track" button is clicked
+  const captureReferenceFeatures = () => {
+    if (!roiId || !currentImageData) {
+      setOrbStatus('No ROI or image data available');
+      return;
+    }
+    
+    if (isTracking) {
+      // If already tracking, clear tracking data
+      setIsTracking(false);
+      setTrackingResult(null);
+      setReferenceImageData(null);
+      clearReferenceFeatures(roiId);
+      setOrbStatus('Tracking stopped');
+      console.log(`Tracking reset for ROI ${roiId}`);
+      return;
+    }
+    
+    // Check OpenCV availability
+    const cv = typeof window !== 'undefined' ? (window as any).cv : undefined;
+    if (!cv || typeof cv.ORB !== 'function') {
+      setOrbStatus('OpenCV not loaded - please wait');
+      console.log('OpenCV not fully loaded yet, waiting...');
+      // We'll set tracking to true anyway, and the extraction loop will keep checking OpenCV
+      setIsTracking(true);
+      return;
+    }
+    
+    // Extract ORB features from current frame
+    try {
+      setOrbStatus('Starting capture...');
+      const features = extractORBFeatures(currentImageData, 500);
+      
+      if (features && features.keypoints.size() > 10) {
+        // Save reference features and image
+        saveReferenceFeatures(roiId, features);
+        setReferenceImageData(currentImageData);
+        setIsTracking(true);
+        setOrbStatus(`Captured ${features.keypoints.size()} reference features`);
+        
+        // Log success
+        console.log(`Captured reference for tracking ROI ${roiId} with ${features.keypoints.size()} features`);
+      } else {
+        setOrbStatus('Failed to extract enough features - trying again');
+        console.warn(`Failed to extract enough features from ROI ${roiId} for tracking`);
+        // We'll set tracking to true anyway, and let the extraction loop keep trying
+        setIsTracking(true);
+      }
+    } catch (error) {
+      setOrbStatus('Error capturing features - will retry');
+      console.error("Error capturing reference features:", error);
+      // We'll set tracking to true anyway, and let the extraction loop keep trying
+      setIsTracking(true);
     }
   };
 
