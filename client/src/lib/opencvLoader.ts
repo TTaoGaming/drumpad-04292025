@@ -86,13 +86,26 @@ export function loadOpenCV(): Promise<void> {
         if (isOpenCVReady()) {
           console.log('OpenCV appears to be available but onRuntimeInitialized never fired');
           _opencvReady = true;
+          // Dispatch event in case listeners were set up
+          document.dispatchEvent(new Event('opencv-ready'));
           resolve();
         } else {
-          _opencvLoadPromise = null;
-          reject(new Error('OpenCV initialization timed out'));
+          // Check one more time with a broader definition of "ready"
+          const cv = (window as any).cv;
+          if (cv && typeof cv.Mat === 'function') {
+            console.log('OpenCV partially available, proceeding with limited functionality');
+            _opencvReady = true;
+            // Dispatch event in case listeners were set up
+            document.dispatchEvent(new Event('opencv-ready'));
+            resolve();
+          } else {
+            console.error('OpenCV initialization failed completely after timeout');
+            _opencvLoadPromise = null;
+            reject(new Error('OpenCV initialization timed out'));
+          }
         }
       }
-    }, 20000); // 20-second timeout
+    }, 5000); // 5-second timeout - faster feedback for users
   });
   
   return _opencvLoadPromise;

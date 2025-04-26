@@ -33,16 +33,39 @@ async function ensureOpenCV(): Promise<boolean> {
 function checkOpenCVStatus(): boolean {
   const cvObject = typeof window !== 'undefined' ? (window as any).cv : undefined;
   
+  // List of required CV features for our application
+  const requiredFeatures = ['ORB', 'Mat', 'matFromImageData', 'BFMatcher', 'KeyPointVector'];
+  const optionalFeatures = ['FAST', 'findHomography', 'perspectiveTransform', 'RANSAC'];
+  
+  // Check each feature and log its availability
+  const requiredResults = requiredFeatures.map(feature => ({
+    feature,
+    available: cvObject ? typeof cvObject[feature] === 'function' : false
+  }));
+  
+  const optionalResults = optionalFeatures.map(feature => ({
+    feature,
+    available: cvObject ? typeof cvObject[feature] === 'function' : false
+  }));
+  
   console.log('[orbTracking] OpenCV availability check:', {
     time: new Date().toISOString(),
     exists: !!cvObject,
-    orb: cvObject ? typeof cvObject.ORB : 'not available',
-    mat: cvObject ? typeof cvObject.Mat : 'not available',
-    matFromImageData: cvObject ? typeof cvObject.matFromImageData : 'not available',
+    requiredFeatures: requiredResults,
+    optionalFeatures: optionalResults,
     source: 'window.cv access'
   });
   
-  return !!cvObject && typeof cvObject.ORB === 'function';
+  // Check if all required features are available
+  const allRequiredAvailable = requiredResults.every(r => r.available);
+  
+  // If we're missing required features but OpenCV exists, report details
+  if (!allRequiredAvailable && cvObject) {
+    console.warn('[orbTracking] OpenCV is loaded but missing required features:', 
+      requiredResults.filter(r => !r.available).map(r => r.feature).join(', '));
+  }
+  
+  return !!cvObject && allRequiredAvailable;
 }
 
 // Trigger OpenCV loading on module load
