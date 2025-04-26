@@ -275,8 +275,8 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
             setTrackingResult(result);
             
             // Only log occasionally to reduce console spam
-            if (Math.random() < 0.05) {
-              console.log(`Tracking ROI ${roiId}: ${result?.isTracked ? 'TRACKED' : 'LOST'} - Confidence: ${(result?.confidence * 100 || 0).toFixed(1)}%`);
+            if (Math.random() < 0.05 && result && typeof result.confidence === 'number') {
+              console.log(`Tracking ROI ${roiId}: ${result.isTracked ? 'TRACKED' : 'LOST'} - Confidence: ${(result.confidence * 100).toFixed(1)}%`);
             }
             
             // Draw tracking results
@@ -343,7 +343,7 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
       // Add tracking status if tracking is enabled
       if (isTracking) {
         const statusX = width - 65;
-        if (result && result.isTracked) {
+        if (result && result.isTracked && typeof result.confidence === 'number') {
           ctx.fillStyle = '#4caf50'; // Green
           ctx.fillText('TRACKED', statusX, 20);
           
@@ -464,7 +464,7 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
           {showFeatures ? 'Hide Features' : 'Show Features'}
         </button>
       </div>
-      {trackingResult && isTracking && (
+      {trackingResult && isTracking && typeof trackingResult.confidence === 'number' && (
         <div style={{
           marginTop: '5px',
           fontSize: '11px',

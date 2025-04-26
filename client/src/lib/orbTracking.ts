@@ -37,6 +37,12 @@ export const referenceFeatures: Map<string, ORBFeature> = new Map();
  */
 export function extractORBFeatures(imageData: ImageData, maxFeatures: number = 500): ORBFeature | null {
   try {
+    // Check if OpenCV is loaded before proceeding
+    if (typeof cv === 'undefined' || !cv.matFromImageData) {
+      console.warn('OpenCV is not fully loaded yet. Skipping feature extraction.');
+      return null;
+    }
+    
     // Create OpenCV matrices
     const imgMat = cv.matFromImageData(imageData);
     const grayMat = new cv.Mat();
@@ -116,6 +122,17 @@ export function clearReferenceFeatures(roiId: string): void {
  */
 export function matchFeatures(roiId: string, currentFeatures: ORBFeature): TrackingResult {
   try {
+    // Check if OpenCV is loaded before proceeding
+    if (typeof cv === 'undefined' || !cv.BFMatcher) {
+      console.warn('OpenCV is not fully loaded yet. Skipping feature matching.');
+      return {
+        isTracked: false,
+        matchCount: 0,
+        inlierCount: 0,
+        confidence: 0
+      };
+    }
+    
     // Get reference features
     const referenceFeature = referenceFeatures.get(roiId);
     if (!referenceFeature || currentFeatures.keypoints.size() < 10) {
