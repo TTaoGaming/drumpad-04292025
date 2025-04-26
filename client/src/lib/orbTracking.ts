@@ -133,21 +133,96 @@ export async function extractORBFeatures(imageData: ImageData, maxFeatures: numb
     
     try {
       // Try to use the most compatible functions for feature detection
-      console.log('[orbTracking] Using FAST feature detection as fallback...');
+      console.log('[orbTracking] Starting enhanced feature detection...');
       
-      // Use FAST feature detection which is more reliable across versions
-      const threshold = 10;
+      // First attempt: Use FAST feature detection which is more reliable across versions
+      const threshold = 5; // Lower threshold for better detection in low-contrast areas like text
       const nonmaxSuppression = true;
       cv.FAST(grayMat, keypoints, threshold, nonmaxSuppression);
       
-      // Limit the number of keypoints if we have too many
-      if (keypoints.size() > maxFeatures) {
-        console.log(`[orbTracking] Found ${keypoints.size()} keypoints, computing on all`);
-        // We can't easily sort and limit keypoints in this version of OpenCV.js
-        // so we'll just compute on all and let the matching stage handle prioritization
+      console.log(`[orbTracking] Initial FAST detection found ${keypoints.size()} keypoints`);
+      
+      // If FAST didn't find enough keypoints, try improving the image first
+      if (keypoints.size() < 15) {
+        console.log('[orbTracking] Few keypoints detected, trying image enhancement');
+        
+        // Save and remove the initial keypoints
+        const initialKeypoints = keypoints.clone();
+        keypoints.delete();
+        keypoints = new cv.KeyPointVector();
+        
+        // Create enhanced versions of the image for better feature detection
+        // 1. Try contrast enhancement
+        const enhancedMat = new cv.Mat();
+        cv.convertScaleAbs(grayMat, enhancedMat, 1.5, 0); // Increase contrast
+        
+        // Apply slight blur to reduce noise while keeping edges
+        const blurredMat = new cv.Mat();
+        cv.GaussianBlur(enhancedMat, blurredMat, new cv.Size(3, 3), 0.8, 0.8);
+        
+        // Apply adaptive threshold to make text/edges more prominent
+        const thresholdMat = new cv.Mat();
+        cv.adaptiveThreshold(
+          blurredMat,
+          thresholdMat,
+          255,
+          cv.ADAPTIVE_THRESH_GAUSSIAN_C,
+          cv.THRESH_BINARY,
+          11,
+          2
+        );
+        
+        // Try edge detection for even better feature points
+        const edgeMat = new cv.Mat();
+        cv.Canny(blurredMat, edgeMat, 20, 50);
+        
+        // Log all our attempts
+        console.log('[orbTracking] Trying multiple detection methods on enhanced images');
+        
+        // Detect on enhanced image using a lower threshold
+        cv.FAST(enhancedMat, keypoints, 3, nonmaxSuppression);
+        console.log(`[orbTracking] Enhanced contrast FAST: ${keypoints.size()} keypoints`);
+        
+        // If contrast enhancement didn't help, try the threshold version
+        if (keypoints.size() < 15) {
+          keypoints.delete();
+          keypoints = new cv.KeyPointVector();
+          cv.FAST(thresholdMat, keypoints, 3, nonmaxSuppression);
+          console.log(`[orbTracking] Adaptive threshold FAST: ${keypoints.size()} keypoints`);
+        }
+        
+        // If threshold didn't help, try edge detection
+        if (keypoints.size() < 15) {
+          keypoints.delete();
+          keypoints = new cv.KeyPointVector();
+          cv.FAST(edgeMat, keypoints, 3, nonmaxSuppression);
+          console.log(`[orbTracking] Edge detection FAST: ${keypoints.size()} keypoints`);
+        }
+        
+        // Combine all detected keypoints from initial and enhanced detections
+        if (keypoints.size() < 10 && initialKeypoints.size() > 0) {
+          console.log('[orbTracking] Combining results from multiple detection attempts');
+          
+          // Add the initial keypoints back in
+          for (let i = 0; i < initialKeypoints.size(); i++) {
+            keypoints.push_back(initialKeypoints.get(i));
+          }
+        }
+        
+        // Clean up
+        initialKeypoints.delete();
+        enhancedMat.delete();
+        blurredMat.delete();
+        thresholdMat.delete();
+        edgeMat.delete();
       }
       
-      console.log(`[orbTracking] Detected ${keypoints.size()} keypoints`);
+      // Limit the number of keypoints if we have too many
+      if (keypoints.size() > maxFeatures) {
+        console.log(`[orbTracking] Found ${keypoints.size()} keypoints, limiting to ${maxFeatures}`);
+      }
+      
+      console.log(`[orbTracking] Final detection: ${keypoints.size()} keypoints`);
       
       // Try to use BRIEF descriptor extractor which is more reliable
       // If this fails, we'll try a simpler fallback
@@ -288,7 +363,13 @@ export async function matchFeatures(roiId: string, currentFeatures: ORBFeature):
     
     // Get reference features
     const referenceFeature = referenceFeatures.get(roiId);
-    if (!referenceFeature || currentFeatures.keypoints.size() < 10) {
+    
+    // Debug logging to help understand tracking issues
+    console.log(`[orbTracking] Match attempt - Reference keypoints: ${referenceFeature?.keypoints?.size() || 0}, Current keypoints: ${currentFeatures.keypoints.size()}`);
+    
+    // More forgiving keypoint threshold for simple text/objects (lowered from 10 to 5)
+    if (!referenceFeature || currentFeatures.keypoints.size() < 5) {
+      console.log(`[orbTracking] Not enough features to track - need at least 5, found ${currentFeatures.keypoints.size()}`);
       return {
         isTracked: false,
         matchCount: 0,
@@ -305,8 +386,12 @@ export async function matchFeatures(roiId: string, currentFeatures: ORBFeature):
     matcher.match(referenceFeature.descriptors, currentFeatures.descriptors, matches);
     console.log(`Found ${matches.size()} matches for ROI ${roiId}`);
     
-    if (matches.size() < 8) {
-      // Need at least 8 matches for homography
+    // For text and simple objects, we can work with fewer matches
+    // The absolute minimum for homography is 4, but 6+ gives better results
+    const minMatches = 6; // Reduced from 8
+    
+    if (matches.size() < minMatches) {
+      console.log(`[orbTracking] Not enough matches for homography - need at least ${minMatches}, found ${matches.size()}`);
       matcher.delete();
       matches.delete();
       return {
@@ -316,6 +401,8 @@ export async function matchFeatures(roiId: string, currentFeatures: ORBFeature):
         confidence: 0
       };
     }
+    
+    console.log(`[orbTracking] Found ${matches.size()} matches, proceeding with homography calculation`);
     
     // Convert keypoints to points for homography calculation
     const refPoints = [];
@@ -400,8 +487,14 @@ export async function matchFeatures(roiId: string, currentFeatures: ORBFeature):
     cornersMat.delete();
     transformedCorners.delete();
     
+    // For text or simple objects with few features, we use a lower confidence threshold
+    const minConfidence = 0.3; // Reduced from 0.4 (30% vs 40%)
+    const isTracked = confidence > minConfidence;
+    
+    console.log(`[orbTracking] Confidence: ${(confidence * 100).toFixed(1)}%, threshold: ${(minConfidence * 100).toFixed(1)}%, tracking: ${isTracked ? 'YES' : 'NO'}`);
+    
     return {
-      isTracked: confidence > 0.4, // At least 40% inliers
+      isTracked,
       homography,
       matchCount: matches.size(),
       inlierCount: inlierCount,
