@@ -39,6 +39,7 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
   const [referenceImageData, setReferenceImageData] = useState<ImageData | null>(null);
   const [currentImageData, setCurrentImageData] = useState<ImageData | null>(null);
   const [showFeatures, setShowFeatures] = useState(true);
+  const [orbStatus, setOrbStatus] = useState<string>('Initializing...');
 
   // Listen for ROI updates
   useEffect(() => {
@@ -111,12 +112,14 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
       setTrackingResult(null);
       setReferenceImageData(null);
       clearReferenceFeatures(roiId);
+      setOrbStatus('Tracking stopped');
       console.log(`Tracking reset for ROI ${roiId}`);
       return;
     }
     
     // Extract ORB features from current frame
     try {
+      setOrbStatus('Starting capture...');
       const features = extractORBFeatures(currentImageData, 500);
       
       if (features && features.keypoints.size() > 10) {
@@ -124,13 +127,16 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
         saveReferenceFeatures(roiId, features);
         setReferenceImageData(currentImageData);
         setIsTracking(true);
+        setOrbStatus(`Captured ${features.keypoints.size()} reference features`);
         
         // Log success
         console.log(`Captured reference for tracking ROI ${roiId} with ${features.keypoints.size()} features`);
       } else {
+        setOrbStatus('Failed to extract enough features');
         console.warn(`Failed to extract enough features from ROI ${roiId} for tracking`);
       }
     } catch (error) {
+      setOrbStatus('Error capturing features');
       console.error("Error capturing reference features:", error);
     }
   };
@@ -249,27 +255,57 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
       
       if (isTracking && roiId && currentImageData) {
         try {
-          const features = extractORBFeatures(roiImageData, 500);
-          
-          if (features && features.keypoints.size() > 0) {
-            // If we don't have reference features yet, set them now
-            // This happens automatically the first time tracking is enabled for a new ROI
-            const hasReference = referenceFeatures.has(roiId);
-            if (!hasReference && features.keypoints.size() > 10) {
-              saveReferenceFeatures(roiId, features);
-              setReferenceImageData(roiImageData);
-              console.log(`Auto-captured reference for tracking ROI ${roiId} with ${features.keypoints.size()} features`);
-              
-              // Create a new feature set for matching (since we just used this one as reference)
-              const newFeatures = extractORBFeatures(roiImageData, 500);
-              if (newFeatures) {
-                result = matchFeatures(roiId, newFeatures);
-                newFeatures.keypoints.delete();
-                newFeatures.descriptors.delete();
+          // Check if OpenCV is available before trying to extract features
+          if (typeof window === 'undefined' || 
+              !window.hasOwnProperty('cv') || 
+              !(window as any).cv) {
+            setOrbStatus('OpenCV not loaded - waiting...');
+          } else {
+            setOrbStatus('Extracting ORB features...');
+            let features = null;
+            try {
+              features = extractORBFeatures(roiImageData, 500);
+            } catch (err) {
+              console.error('Error extracting features:', err);
+              setOrbStatus('Error extracting features');
+            }
+            
+            if (!features) {
+              setOrbStatus('Failed to extract features');
+            } else if (features.keypoints.size() > 0) {
+              // If we don't have reference features yet, set them now
+              // This happens automatically the first time tracking is enabled for a new ROI
+              const hasReference = referenceFeatures.has(roiId);
+              if (!hasReference && features.keypoints.size() > 10) {
+                saveReferenceFeatures(roiId, features);
+                setReferenceImageData(roiImageData);
+                setOrbStatus(`Captured ${features.keypoints.size()} reference features`);
+                console.log(`Auto-captured reference for tracking ROI ${roiId} with ${features.keypoints.size()} features`);
+                
+                // Create a new feature set for matching (since we just used this one as reference)
+                let newFeatures = null;
+                try {
+                  newFeatures = extractORBFeatures(roiImageData, 500);
+                  if (newFeatures) {
+                    result = matchFeatures(roiId, newFeatures);
+                    newFeatures.keypoints.delete();
+                    newFeatures.descriptors.delete();
+                  }
+                } catch (err) {
+                  console.error('Error extracting features for matching:', err);
+                  setOrbStatus('Error extracting matching features');
+                }
+              } else {
+                // Match features with reference
+                setOrbStatus('Matching features...');
+                result = matchFeatures(roiId, features);
+                
+                if (result && result.isTracked) {
+                  setOrbStatus(`Tracking: ${result.inlierCount} matches (${(result.confidence * 100).toFixed(0)}%)`);
+                } else {
+                  setOrbStatus('Object lost - move slower');
+                }
               }
-            } else {
-              // Match features with reference
-              result = matchFeatures(roiId, features);
             }
             
             setTrackingResult(result);
@@ -326,10 +362,13 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
             }
             
             // Clean up feature resources
-            features.keypoints.delete();
-            features.descriptors.delete();
+            if (features) {
+              features.keypoints.delete();
+              features.descriptors.delete();
+            }
           }
         } catch (error) {
+          setOrbStatus('Error during tracking');
           console.error("Error during feature tracking:", error);
         }
       }
@@ -464,6 +503,27 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
           {showFeatures ? 'Hide Features' : 'Show Features'}
         </button>
       </div>
+      
+      {/* ORB Status */}
+      <div style={{
+        marginTop: '5px',
+        fontSize: '11px',
+        backgroundColor: 'rgba(0, 0, 0, 0.3)',
+        padding: '5px',
+        borderRadius: '4px'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <div style={{
+            width: '8px',
+            height: '8px',
+            borderRadius: '50%',
+            backgroundColor: isTracking ? '#4caf50' : '#f44336',
+            marginRight: '5px'
+          }} />
+          <span>Status: {orbStatus}</span>
+        </div>
+      </div>
+      
       {trackingResult && isTracking && typeof trackingResult.confidence === 'number' && (
         <div style={{
           marginTop: '5px',
