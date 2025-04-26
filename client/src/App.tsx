@@ -175,6 +175,25 @@ function App() {
       addNotification(data.message, data.type);
     });
     
+    // Listen for frame processing events from MediaPipeHandTracking
+    const frameProcessedListener = addListener(EventType.FRAME_PROCESSED, (data) => {
+      if (data.handData) {
+        // Update the hand data in App state
+        setHandData(data.handData);
+        
+        // If we have a media pipeline worker, send the hand data to it as well
+        if (mediaPipelineWorkerRef.current) {
+          mediaPipelineWorkerRef.current.postMessage({
+            command: 'process-frame',
+            data: {
+              handLandmarks: data.handData.landmarks,
+              handData: data.handData
+            }
+          });
+        }
+      }
+    });
+    
     // Listen for new drawing paths from DrawingCanvas
     const drawingListener = addListener(EventType.SETTINGS_VALUE_CHANGE, (data) => {
       if (data.section === 'drawing' && data.setting === 'newPath' && data.value) {
@@ -224,6 +243,7 @@ function App() {
       fullscreenListener.remove();
       logListener.remove();
       notificationListener.remove();
+      frameProcessedListener.remove();
       drawingListener.remove();
     };
   }, []);
