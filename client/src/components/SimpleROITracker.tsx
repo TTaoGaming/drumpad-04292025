@@ -125,7 +125,7 @@ const SimpleROITracker: React.FC<SimpleROITrackerProps> = ({
     
     // Handle drawing completion
     const handleDrawingEnd = (data: { path: DrawingPath }) => {
-      if (data.path.mode === 'roi' && data.path.points.length > 5) {
+      if (data.path.isROI && data.path.points.length > 5) {
         // Automatically create an ROI when a circular path is completed
         simpleFeatureTracker.addROI(data.path);
         

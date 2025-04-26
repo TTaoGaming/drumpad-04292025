@@ -170,7 +170,9 @@ class SimpleFeatureTracker {
     // Process each ROI that needs updating
     const now = Date.now();
     
-    for (const [id, roi] of this.activeROIs.entries()) {
+    // Convert Map entries to array for safer iteration
+    // Process each ROI sequentially (avoiding async in forEach)
+    for (const [id, roi] of Array.from(this.activeROIs.entries())) {
       // Skip if processed recently to avoid excessive CPU usage
       if (now - roi.lastUpdated < this.processingInterval) {
         continue;
@@ -189,36 +191,45 @@ class SimpleFeatureTracker {
         if (!roi.referenceFeatures) {
           console.log(`[SimpleFeatureTracker] Extracting reference features for ROI ${id}...`);
           
-          const features = await this.extractFeatures(roiImageData);
-          
-          if (features && features.keypoints.size() > 10) {
-            roi.referenceFeatures = features;
-            roi.referenceImage = roiImageData;
-            roi.lastUpdated = now;
+          // Make sure roiImageData is not null
+          if (roiImageData) {
+            const features = await this.extractFeatures(roiImageData);
             
-            console.log(`[SimpleFeatureTracker] Extracted ${features.keypoints.size()} reference features for ROI ${id}`);
-            
-            // Notify that we have reference features
-            dispatch(EventType.ROI_UPDATED, {
-              id,
-              status: 'reference-captured',
-              featureCount: features.keypoints.size()
-            });
-          } else {
-            const count = features ? features.keypoints.size() : 0;
-            console.warn(`[SimpleFeatureTracker] Not enough features for ROI ${id}: ${count}/10 needed`);
-            
-            roi.lastUpdated = now;
-            
-            // Notify about insufficient features
-            dispatch(EventType.ROI_UPDATED, {
-              id,
-              status: 'extraction-failed',
-              message: `Not enough distinctive features (${count}/10)`,
-              featureCount: count
-            });
+            if (features && features.keypoints.size() > 10) {
+              roi.referenceFeatures = features;
+              roi.referenceImage = roiImageData;
+              roi.lastUpdated = now;
+              
+              console.log(`[SimpleFeatureTracker] Extracted ${features.keypoints.size()} reference features for ROI ${id}`);
+              
+              // Notify that we have reference features
+              dispatch(EventType.ROI_UPDATED, {
+                id,
+                status: 'reference-captured',
+                featureCount: features.keypoints.size()
+              });
+            } else {
+              const count = features ? features.keypoints.size() : 0;
+              console.warn(`[SimpleFeatureTracker] Not enough features for ROI ${id}: ${count}/10 needed`);
+              
+              roi.lastUpdated = now;
+              
+              // Notify about insufficient features
+              dispatch(EventType.ROI_UPDATED, {
+                id,
+                status: 'extraction-failed',
+                message: `Not enough distinctive features (${count}/10)`,
+                featureCount: count
+              });
+            }
           }
           
+          continue;
+        }
+        
+        // Skip if no image data is available
+        if (!roiImageData) {
+          console.warn(`[SimpleFeatureTracker] No ROI image data available for tracking ROI ${id}`);
           continue;
         }
         
