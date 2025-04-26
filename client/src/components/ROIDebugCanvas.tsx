@@ -165,8 +165,8 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
         console.log(`Scaled center coordinates: (${centerX.toFixed(0)}, ${centerY.toFixed(0)})`);
       }
       
-      // Draw a red circle on the temp canvas to show what we're extracting
-      tempCtx.strokeStyle = 'red';
+      // Draw a red circle (Numberblocks 1 color) on the temp canvas to show what we're extracting
+      tempCtx.strokeStyle = '#FF0000'; // Red - Numberblocks 1 color
       tempCtx.lineWidth = 2;
       tempCtx.beginPath();
       tempCtx.arc(centerX, centerY, radius, 0, Math.PI * 2);

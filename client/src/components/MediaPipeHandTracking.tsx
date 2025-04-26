@@ -11,15 +11,15 @@ interface MediaPipeHandTrackingProps {
   videoRef: React.RefObject<HTMLVideoElement>;
 }
 
-// Rainbow colors for different parts of the hand
+// Numberblocks-inspired color scheme for hand landmarks
 const FINGER_COLORS = [
-  '#FF0000', // red - thumb
-  '#FF7F00', // orange - index
-  '#FFFF00', // yellow - middle
-  '#00FF00', // green - ring
-  '#0000FF', // blue - pinky
-  '#4B0082', // indigo - palm
-  '#9400D3'  // violet - wrist
+  '#0066CC', // blue - thumb (Numberblocks 0)
+  '#FF0000', // red - index (Numberblocks 1)
+  '#FFA500', // orange - middle (Numberblocks 2)
+  '#FFFF00', // yellow - ring (Numberblocks 3)
+  '#008000', // green - pinky (Numberblocks 4)
+  '#777777', // gray - palm
+  '#444444'  // dark gray - wrist
 ];
 
 // Define finger indices for coloring
@@ -36,22 +36,22 @@ const assignConnectionColors = () => {
   // Create an array of connections with color assignments
   const coloredConnections: HandConnection[] = [];
   
-  // Add connections for each finger with its color
-  // Thumb (red)
+  // Add connections for each finger with its color (Numberblocks inspired)
+  // Thumb (blue - like Numberblocks 0)
   for (let i = 0; i < FINGER_INDICES.THUMB.length - 1; i++) {
     coloredConnections.push({
       start: FINGER_INDICES.THUMB[i],
       end: FINGER_INDICES.THUMB[i + 1],
-      colorIndex: 0 // red
+      colorIndex: 0 // blue
     });
   }
   
-  // Index finger (orange)
+  // Index finger (red - like Numberblocks 1)
   for (let i = 0; i < FINGER_INDICES.INDEX.length - 1; i++) {
     coloredConnections.push({
       start: FINGER_INDICES.INDEX[i],
       end: FINGER_INDICES.INDEX[i + 1],
-      colorIndex: 1 // orange
+      colorIndex: 1 // red
     });
   }
   
@@ -203,15 +203,15 @@ const MediaPipeHandTracking: React.FC<MediaPipeHandTrackingProps> = ({ videoRef 
                 
                 // Check each finger
                 if (FINGER_INDICES.THUMB.includes(connection[0]) && FINGER_INDICES.THUMB.includes(connection[1])) {
-                  colorIndex = 0; // Thumb - red
+                  colorIndex = 0; // Thumb - blue (Numberblocks 0)
                 } else if (FINGER_INDICES.INDEX.includes(connection[0]) && FINGER_INDICES.INDEX.includes(connection[1])) {
-                  colorIndex = 1; // Index - orange
+                  colorIndex = 1; // Index - red (Numberblocks 1)
                 } else if (FINGER_INDICES.MIDDLE.includes(connection[0]) && FINGER_INDICES.MIDDLE.includes(connection[1])) {
-                  colorIndex = 2; // Middle - yellow
+                  colorIndex = 2; // Middle - orange (Numberblocks 2)
                 } else if (FINGER_INDICES.RING.includes(connection[0]) && FINGER_INDICES.RING.includes(connection[1])) {
-                  colorIndex = 3; // Ring - green
+                  colorIndex = 3; // Ring - yellow (Numberblocks 3)
                 } else if (FINGER_INDICES.PINKY.includes(connection[0]) && FINGER_INDICES.PINKY.includes(connection[1])) {
-                  colorIndex = 4; // Pinky - blue
+                  colorIndex = 4; // Pinky - green (Numberblocks 4)
                 }
                 
                 // Draw with the appropriate color

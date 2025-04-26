@@ -80,15 +80,15 @@ function mpGetPerformanceMetrics(): Record<string, number> {
   return metrics;
 }
 
-// Rainbow colors for hand landmarks
+// Numberblocks-inspired color scheme for hand landmarks
 const RAINBOW_COLORS = [
-  'red',         // Thumb
-  'orange',      // Index finger
-  'yellow',      // Middle finger
-  'green',       // Ring finger
-  'blue',        // Pinky
-  'indigo',      // Palm connections
-  'violet'       // Wrist
+  '#0066CC',     // Thumb - deep blue (Numberblocks 0)
+  '#FF0000',     // Index finger - red (Numberblocks 1)
+  '#FFA500',     // Middle finger - orange (Numberblocks 2)
+  '#FFFF00',     // Ring finger - yellow (Numberblocks 3)
+  '#008000',     // Pinky - green (Numberblocks 4)
+  '#777777',     // Palm connections - gray
+  '#444444'      // Wrist - dark gray
 ];
 
 // Define hand connections with their color indices
