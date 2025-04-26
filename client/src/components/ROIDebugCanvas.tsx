@@ -40,6 +40,28 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
   const [currentImageData, setCurrentImageData] = useState<ImageData | null>(null);
   const [showFeatures, setShowFeatures] = useState(true);
   const [orbStatus, setOrbStatus] = useState<string>('Initializing...');
+  const [isOpenCVReady, setIsOpenCVReady] = useState<boolean>(false);
+  
+  // Listen for OpenCV ready event
+  useEffect(() => {
+    const handleOpenCVReady = () => {
+      console.log('OpenCV is ready in ROIDebugCanvas!');
+      setIsOpenCVReady(true);
+      setOrbStatus('OpenCV loaded and ready');
+    };
+    
+    // Check if OpenCV is already available
+    if (window.cv && typeof window.cv.ORB === 'function') {
+      handleOpenCVReady();
+    } else {
+      // Otherwise listen for the ready event
+      document.addEventListener('opencv-ready', handleOpenCVReady);
+    }
+    
+    return () => {
+      document.removeEventListener('opencv-ready', handleOpenCVReady);
+    };
+  }, []);
 
   // Extract ROI content from video frame
   const extractROIContent = () => {
@@ -157,9 +179,24 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
         try {
           // Check if OpenCV is available before trying to extract features
           const cv = typeof window !== 'undefined' ? (window as any).cv : undefined;
+          console.log('OpenCV availability check:', {
+            cvExists: !!cv,
+            cvORB: cv ? typeof cv.ORB : 'cv not loaded',
+            cvMatExists: cv ? typeof cv.Mat : 'cv not loaded',
+            windowCV: typeof window !== 'undefined' ? !!(window as any).cv : 'no window'
+          });
+          
           if (!cv || typeof cv.ORB !== 'function') {
             setOrbStatus('OpenCV not loaded - waiting...');
             console.log('OpenCV not fully loaded yet, waiting...');
+            
+            // Force check for manual tracking after 5 seconds if still stuck
+            if (!referenceFeatures.has(roiId) && currentImageData) {
+              setTimeout(() => {
+                console.log('Forcing tracking initialization after timeout');
+                captureReferenceFeatures();
+              }, 5000);
+            }
           } else {
             setOrbStatus('Extracting ORB features...');
             let features = null;
