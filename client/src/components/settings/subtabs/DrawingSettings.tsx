@@ -38,6 +38,9 @@ const DrawingSettings: React.FC = () => {
   
   // Long press delay in milliseconds (default: 500ms)
   const [longPressDelay, setLongPressDelay] = useState(500);
+  
+  // Auto-end drawing timeout in milliseconds (default: 5000ms = 5 seconds)
+  const [maxDrawingDuration, setMaxDrawingDuration] = useState(5000);
 
   // Update global state when settings change
   useEffect(() => {
@@ -56,6 +59,15 @@ const DrawingSettings: React.FC = () => {
       value: longPressDelay
     });
   }, [longPressDelay]);
+  
+  // Update max drawing duration when it changes
+  useEffect(() => {
+    dispatch(EventType.SETTINGS_VALUE_CHANGE, {
+      section: 'drawing',
+      setting: 'maxDrawingDuration',
+      value: maxDrawingDuration
+    });
+  }, [maxDrawingDuration]);
   
   // No longer need to track feature count since we removed the feature detection
   useEffect(() => {
