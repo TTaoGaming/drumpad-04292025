@@ -47,11 +47,12 @@ export interface FeatureMatch {
 export interface TrackingResult {
   isTracked: boolean;
   confidence: number;
-  inlierCount?: number;
-  matchCount?: number;
+  inlierCount: number;
+  matchCount: number;
   center?: Point;
   rotation?: number;
   homography?: any;
+  corners?: Point[];  // The four corner points of the transformed region
   keypoints?: FeaturePoint[];
   matches?: FeatureMatch[];
 }

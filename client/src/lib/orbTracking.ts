@@ -396,8 +396,8 @@ export async function matchFeatures(roiId: string, currentFeatures: ORBFeature):
     matcher.match(referenceFeature.descriptors, currentFeatures.descriptors, matches);
     console.log(`Found ${matches.size()} matches for ROI ${roiId}`);
     
-    if (matches.size() < 8) {
-      // Need at least 8 matches for homography
+    if (matches.size() < 5) {
+      // Need at least 5 matches for homography (lowered from 8 for more forgiving matching)
       return {
         isTracked: false,
         matchCount: matches.size(),
@@ -535,12 +535,13 @@ export async function matchFeatures(roiId: string, currentFeatures: ORBFeature):
     const rotationValue = calculateRotationFromHomography(homography);
     
     return {
-      isTracked: confidence > 0.4, // At least 40% inliers
+      isTracked: confidence > 0.25, // Lowered from 40% to 25% for more forgiving tracking
       matchCount: matchCountValue,
       inlierCount: inlierCount,
       confidence,
       center,
       rotation: rotationValue,
+      corners,
       // Add keypoints and matches for visualization
       keypoints: keypointsForVisualization,
       matches: matchesForVisualization
