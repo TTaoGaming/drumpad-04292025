@@ -40,7 +40,7 @@ export class ROIManager {
   private activeCircleROIs: CircleROIWithFeatures[] = []; // New array for circle ROIs
   private processingEnabled: boolean = true;
   private lastFrameTime: number = 0;
-  private frameInterval: number = 100; // Process every 100ms to avoid overloading
+  private frameInterval: number = 33; // Process at ~30fps for smoother tracking
   
   // Private constructor for singleton
   private constructor() {
@@ -464,7 +464,7 @@ export class ROIManager {
     // Process each Circle ROI first (new simplified method)
     for (const roi of this.activeCircleROIs) {
       // Only process ROIs that are due for an update
-      if (now - (roi.lastProcessed || 0) < 200) { // Process each ROI at most every 200ms
+      if (now - (roi.lastProcessed || 0) < 50) { // Process each ROI at most every 50ms for smoother tracking
         continue;
       }
       
@@ -578,6 +578,29 @@ export class ROIManager {
         roi.trackingResult = trackingResult;
         roi.lastProcessed = now;
         
+        // Update the ROI center coordinates if tracking is successful
+        if (trackingResult.isTracked && trackingResult.center) {
+          // Get the scaling factors from video coordinates back to screen coordinates
+          const videoElement = document.getElementById('camera-feed') as HTMLVideoElement;
+          const displayElement = document.querySelector('.camera-view') as HTMLElement;
+          
+          if (videoElement && displayElement) {
+            const scaleX = displayElement.clientWidth / videoElement.videoWidth;
+            const scaleY = displayElement.clientHeight / videoElement.videoHeight;
+            
+            // Update the ROI position with the new tracked position (convert back to screen coordinates)
+            const newCenter = {
+              x: trackingResult.center.x * scaleX,
+              y: trackingResult.center.y * scaleY
+            };
+            
+            console.log(`[ROIManager] Updating Circle ROI ${roi.id} position: (${roi.center.x}, ${roi.center.y}) => (${newCenter.x}, ${newCenter.y})`);
+            
+            // Update the ROI center coordinates
+            roi.center = newCenter;
+          }
+        }
+        
         // Create a public event to notify other components like ROIDebugCanvas
         dispatch(EventType.ROI_UPDATED, {
           id: roi.id,
@@ -592,7 +615,7 @@ export class ROIManager {
           },
           timestamp: now,
           isCircleROI: true,
-          center: roi.center,
+          center: roi.center, // Send updated center position
           radius: roi.radius
         });
         
@@ -620,7 +643,7 @@ export class ROIManager {
     // Process each legacy ROI
     for (const roi of this.activeROIs) {
       // Only process ROIs that are due for an update
-      if (now - (roi.lastProcessed || 0) < 200) { // Process each ROI at most every 200ms
+      if (now - (roi.lastProcessed || 0) < 50) { // Process each ROI at most every 50ms for smoother tracking
         continue;
       }
       
@@ -863,7 +886,10 @@ export class ROIManager {
         // Draw ROI ID
         ctx.font = 'bold 14px sans-serif';
         ctx.fillStyle = 'rgba(255, 0, 0, 0.9)';
-        ctx.fillText(`ROI ${roi.id.slice(-4)}`, roi.center.x - 20, roi.center.y);
+        const shortId = typeof roi.id === 'string' && roi.id.length > 3 
+                      ? roi.id.slice(-3) 
+                      : roi.id;
+        ctx.fillText(`#${shortId}`, roi.center.x - 15, roi.center.y);
       }
     });
   }
