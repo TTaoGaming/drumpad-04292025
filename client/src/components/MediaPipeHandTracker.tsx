@@ -328,6 +328,12 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
   // Debug setting to show/hide the ROI visualization
   const [showROI, setShowROI] = useState(true);
   
+  // MediaPipe confidence settings to reduce false detections
+  const [confidenceSettings, setConfidenceSettings] = useState({
+    minDetectionConfidence: 0.7, // Higher default value to reduce false detections
+    minTrackingConfidence: 0.7  // Higher default value to reduce false detections
+  });
+  
   /**
    * Calculate distance between two landmarks in 3D space
    * @param p1 First landmark
@@ -518,6 +524,17 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
         if (data.section === 'gestures' && data.setting === 'pinchGesture') {
           setPinchGestureSettings(data.value);
         }
+        
+        // Listen for hand tracking confidence settings changes
+        if (data.section === 'handTracking' && data.setting === 'confidence') {
+          setConfidenceSettings(data.value);
+          
+          // Log the confidence change
+          dispatch(EventType.LOG, {
+            message: `Updated hand confidence settings: Detection=${data.value.minDetectionConfidence.toFixed(2)}, Tracking=${data.value.minTrackingConfidence.toFixed(2)}`,
+            type: 'info'
+          });
+        }
       }
     );
     
@@ -549,13 +566,19 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
           }
         });
         
-        // Configure Hands
+        // Configure Hands with higher confidence settings to reduce false detections
         hands.setOptions({
           selfieMode: false, // Disabled mirror effect for desktop surface scenarios
           maxNumHands: 2,
           modelComplexity: 1,
-          minDetectionConfidence: 0.5,
-          minTrackingConfidence: 0.5
+          minDetectionConfidence: confidenceSettings.minDetectionConfidence,
+          minTrackingConfidence: confidenceSettings.minTrackingConfidence
+        });
+        
+        // Log the confidence settings being used
+        dispatch(EventType.LOG, {
+          message: `Using hand confidence settings: Detection=${confidenceSettings.minDetectionConfidence.toFixed(2)}, Tracking=${confidenceSettings.minTrackingConfidence.toFixed(2)}`,
+          type: 'info'
         });
         
         // Setup result handler
