@@ -46,38 +46,11 @@ export interface HandLandmark {
   z: number;
 }
 
-// Hand connection for visualization
-export interface HandConnection {
-  start: number;
-  end: number;
-  colorIndex: number;
-}
-
 // Detected hand data with landmarks and metadata
 export interface HandData {
   landmarks: HandLandmark[];
-  connections: HandConnection[];
-  colors: string[];
-  handedness?: 'Left' | 'Right';
-  confidence?: number;
-  timestamp?: number;
-}
-
-// Hand confidence settings
-export interface HandConfidenceSettings {
-  enabled: boolean;
-  detectionConfidence: number;
-  trackingConfidence: number;
-  handPresenceThreshold: number;
-  requiredLandmarks: number;
-  stabilityFrames: number;
-}
-
-// Hand presence state
-export interface HandPresenceState {
-  isHandPresent: boolean;
-  confidence: number;
-  validLandmarks: number;
+  handedness: 'Left' | 'Right';
+  timestamp: number;
 }
 
 // Performance metrics for tracking runtime performance

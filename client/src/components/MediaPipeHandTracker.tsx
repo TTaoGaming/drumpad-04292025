@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { EventType, dispatch, addListener } from '@/lib/eventBus';
-import { HandData, HandLandmark, HandConfidenceSettings, HandPresenceState } from '@/lib/types';
+import { HandData, HandLandmark } from '@/lib/types';
 import { OneEuroFilterArray, DEFAULT_FILTER_OPTIONS } from '@/lib/oneEuroFilter';
 import { HandTrackingOptimizer, OptimizationSettings, DEFAULT_OPTIMIZATION_SETTINGS } from '@/lib/handTrackingOptimizer';
 import { debounce, throttle } from '@/lib/utils';
@@ -325,31 +325,8 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
   // Frame counter for frame skipping
   const frameCountRef = useRef(0);
   
-  // Reference to the MediaPipe Hands instance for updating settings
-  const handsRef = useRef<any>(null);
-  
   // Debug setting to show/hide the ROI visualization
   const [showROI, setShowROI] = useState(true);
-  
-  // Hand confidence settings
-  const [confidenceSettings, setConfidenceSettings] = useState<HandConfidenceSettings>({
-    enabled: true,
-    detectionConfidence: 0.5,
-    trackingConfidence: 0.5,
-    handPresenceThreshold: 0.7,
-    requiredLandmarks: 18, // At least 18 out of 21 landmarks must be valid
-    stabilityFrames: 3
-  });
-  
-  // Hand presence state for confidence threshold filtering
-  const [handPresence, setHandPresence] = useState<HandPresenceState>({
-    isHandPresent: false,
-    confidence: 0,
-    validLandmarks: 0
-  });
-  
-  // Ref to track stable frames for hand presence state changes
-  const handPresenceStableFramesRef = useRef(0);
   
   /**
    * Calculate distance between two landmarks in 3D space
@@ -541,26 +518,6 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
         if (data.section === 'gestures' && data.setting === 'pinchGesture') {
           setPinchGestureSettings(data.value);
         }
-        
-        // Listen for hand confidence settings changes
-        if (data.section === 'hands' && data.setting === 'confidenceSettings') {
-          setConfidenceSettings(data.value);
-          
-          // If we have access to the MediaPipe Hands instance, update its settings
-          if (handsRef.current) {
-            // Update MediaPipe detection and tracking confidence
-            handsRef.current.setOptions({
-              minDetectionConfidence: data.value.detectionConfidence,
-              minTrackingConfidence: data.value.trackingConfidence
-            });
-            
-            // Log the change
-            dispatch(EventType.LOG, {
-              message: `Updated hand confidence settings: Detection=${data.value.detectionConfidence.toFixed(2)}, Tracking=${data.value.trackingConfidence.toFixed(2)}, Threshold=${data.value.handPresenceThreshold.toFixed(2)}, MinLandmarks=${data.value.requiredLandmarks}`,
-              type: 'info'
-            });
-          }
-        }
       }
     );
     
@@ -592,21 +549,14 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
           }
         });
         
-        // Configure Hands with our confidence settings
+        // Configure Hands
         hands.setOptions({
           selfieMode: false, // Disabled mirror effect for desktop surface scenarios
           maxNumHands: 2,
           modelComplexity: 1,
-          minDetectionConfidence: confidenceSettings.detectionConfidence,
-          minTrackingConfidence: confidenceSettings.trackingConfidence
+          minDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5
         });
-        
-        // Log the initial configuration
-        console.log("MediaPipe Hands initialized with detection confidence:", confidenceSettings.detectionConfidence, 
-                   "tracking confidence:", confidenceSettings.trackingConfidence);
-        
-        // Store the hands instance in our ref
-        handsRef.current = hands;
         
         // Setup result handler
         hands.onResults((results: any) => {
@@ -625,84 +575,8 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
           // Clear canvas
           ctx.clearRect(0, 0, canvas.width, canvas.height);
           
-          // Initialize hand presence data for this frame
-          let currentHandPresence = {
-            isHandPresent: false,
-            confidence: 0,
-            validLandmarks: 0
-          };
-          
           // Process hands if available
           if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-            // Get the first hand's landmarks and handedness
-            const landmarks = results.multiHandLandmarks[0];
-            const handedness = results.multiHandedness && results.multiHandedness.length > 0 
-              ? results.multiHandedness[0] : null;
-            
-            // Apply confidence threshold filtering if enabled
-            if (confidenceSettings.enabled) {
-              // Calculate number of valid landmarks (not NaN and within normalized range)
-              let validLandmarks = 0;
-              for (const landmark of landmarks) {
-                if (landmark && 
-                    !isNaN(landmark.x) && !isNaN(landmark.y) && !isNaN(landmark.z) &&
-                    landmark.x >= 0 && landmark.x <= 1 && 
-                    landmark.y >= 0 && landmark.y <= 1) {
-                  validLandmarks++;
-                }
-              }
-              
-              // Get confidence score from handedness (if available)
-              const confidence = handedness ? handedness.score : 0;
-              
-              // Update current hand presence data
-              currentHandPresence = {
-                isHandPresent: false, // Will be updated below
-                confidence,
-                validLandmarks
-              };
-              
-              // Determine if hand is present based on thresholds
-              const isConfident = confidence >= confidenceSettings.handPresenceThreshold;
-              const hasEnoughLandmarks = validLandmarks >= confidenceSettings.requiredLandmarks;
-              const newHandPresent = isConfident && hasEnoughLandmarks;
-              
-              // Apply stability frames to prevent flickering
-              if (newHandPresent !== handPresence.isHandPresent) {
-                handPresenceStableFramesRef.current++;
-                
-                // Only change state after enough stable frames
-                if (handPresenceStableFramesRef.current >= confidenceSettings.stabilityFrames) {
-                  // Update hand presence state with stable change
-                  currentHandPresence.isHandPresent = newHandPresent;
-                  setHandPresence(currentHandPresence);
-                  
-                  // Report the hand presence state change
-                  dispatch(EventType.SETTINGS_VALUE_CHANGE, {
-                    section: 'hands',
-                    setting: 'handPresence',
-                    value: currentHandPresence
-                  });
-                  
-                  // Reset stability counter
-                  handPresenceStableFramesRef.current = 0;
-                } else {
-                  // Not enough stable frames yet, keep previous state
-                  currentHandPresence.isHandPresent = handPresence.isHandPresent;
-                }
-              } else {
-                // State hasn't changed
-                currentHandPresence.isHandPresent = handPresence.isHandPresent;
-                handPresenceStableFramesRef.current = 0;
-              }
-              
-              // Skip processing if hand is not confidently present
-              if (!currentHandPresence.isHandPresent) {
-                return;
-              }
-            }
-            
-            // Process each hand (usually just one, but the loop handles multiple)
             results.multiHandLandmarks.forEach((landmarks: any, handIndex: number) => {
               // Apply 1€ filter to hand landmarks
               const filteredLandmarks = applyFilter(landmarks, handIndex, now);

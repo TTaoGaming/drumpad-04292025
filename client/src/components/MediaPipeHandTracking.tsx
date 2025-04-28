@@ -4,23 +4,8 @@ import {
 } from '@mediapipe/hands';
 import { Camera } from '@mediapipe/camera_utils';
 import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
-import { EventType, dispatch, addListener } from '@/lib/eventBus';
+import { EventType, dispatch } from '@/lib/eventBus';
 import { HandData, HandLandmark, HandConnection } from '@/lib/types';
-
-// Define MediaPipe types
-interface HandsOptions {
-  selfieMode: boolean;
-  maxNumHands: number;
-  modelComplexity: number;
-  minDetectionConfidence: number;
-  minTrackingConfidence: number;
-}
-
-type ResultsListener = (results: {
-  multiHandLandmarks?: any[];
-  multiHandedness?: any[];
-  image: HTMLVideoElement | HTMLCanvasElement;
-}) => void;
 
 interface MediaPipeHandTrackingProps {
   videoRef: React.RefObject<HTMLVideoElement>;
@@ -140,8 +125,8 @@ const MediaPipeHandTracking: React.FC<MediaPipeHandTrackingProps> = ({ videoRef 
           }
         });
         
-        // Default options
-        const defaultOptions: HandsOptions = {
+        // Set up options
+        const options: HandsOptions = {
           selfieMode: true, // Mirror mode for front camera
           maxNumHands: 2,
           modelComplexity: 1,
@@ -149,30 +134,7 @@ const MediaPipeHandTracking: React.FC<MediaPipeHandTrackingProps> = ({ videoRef 
           minTrackingConfidence: 0.5
         };
         
-        // Set initial options
-        hands.setOptions(defaultOptions);
-        
-        // Listen for confidence settings changes
-        const confidenceSettingsListener = addListener(
-          EventType.SETTINGS_VALUE_CHANGE,
-          (data) => {
-            if (data.section === 'hands' && data.setting === 'confidenceSettings' && data.value.enabled) {
-              const settings = data.value;
-              
-              // Update MediaPipe options with new confidence thresholds
-              hands.setOptions({
-                ...defaultOptions,
-                minDetectionConfidence: settings.detectionConfidence,
-                minTrackingConfidence: settings.trackingConfidence
-              });
-              
-              dispatch(EventType.LOG, {
-                message: `Updated hand confidence settings: Detection=${settings.detectionConfidence}, Tracking=${settings.trackingConfidence}`,
-                type: 'info'
-              });
-            }
-          }
-        );
+        hands.setOptions(options);
         
         // Setup results listener
         const onResults: ResultsListener = (results) => {
