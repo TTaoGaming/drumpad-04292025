@@ -256,6 +256,10 @@ export class ROIManager {
     console.log(`[ROIManager] Removed ROI ${id}`);
   }
   
+  // Counter for throttling logs
+  private logCounter = 0;
+  private readonly LOG_THROTTLE = 50; // Only log every 50 calls
+
   /**
    * Add a new CircleROI directly with center and radius
    * @param circleROI The circle ROI with center and radius
@@ -267,7 +271,10 @@ export class ROIManager {
     
     // Check if this ROI already exists
     if (this.activeCircleROIs.some(roi => roi.id === id)) {
-      console.log(`[ROIManager] Circle ROI ${id} already exists, skipping add`);
+      // Only log occasionally
+      if (++this.logCounter % this.LOG_THROTTLE === 0) {
+        console.log(`[ROIManager] Circle ROI ${id} already exists, skipping add`);
+      }
       return id; // Return the existing ID if already added
     }
     
@@ -281,7 +288,11 @@ export class ROIManager {
     };
     
     this.activeCircleROIs.push(roi);
-    console.log(`[ROIManager] Added new Circle ROI with ID ${id}, center (${roi.center.x}, ${roi.center.y}), radius ${roi.radius}`);
+    
+    // Only log occasionally
+    if (++this.logCounter % this.LOG_THROTTLE === 0) {
+      console.log(`[ROIManager] Added new Circle ROI with ID ${id}, center (${roi.center.x}, ${roi.center.y}), radius ${roi.radius}`);
+    }
     
     // Attempt to extract features right away from the current frame
     this.extractFeaturesForNewCircleROI(roi);
@@ -378,10 +389,11 @@ export class ROIManager {
       const centerY = roi.center.y * scaleY;
       const radius = roi.radius * Math.max(scaleX, scaleY); // Use the larger scale to ensure the full circle is captured
       
-      // Log the scaling for debugging
-      console.log(`[ROIManager] Display to video scaling: ${scaleX.toFixed(2)}x, ${scaleY.toFixed(2)}y`);
-      console.log(`[ROIManager] Circle ROI center: Display (${roi.center.x}, ${roi.center.y}) => Video (${centerX.toFixed(1)}, ${centerY.toFixed(1)})`);
-      console.log(`[ROIManager] Circle ROI radius: Display ${roi.radius} => Video ${radius.toFixed(1)}`);
+      // Only log occasionally to reduce overhead
+      if (this.logCounter % this.LOG_THROTTLE === 0) {
+        console.log(`[ROIManager] Display to video scaling: ${scaleX.toFixed(2)}x, ${scaleY.toFixed(2)}y`);
+        console.log(`[ROIManager] Circle ROI center: Display (${roi.center.x}, ${roi.center.y}) => Video (${centerX.toFixed(1)}, ${centerY.toFixed(1)})`);
+      }
       
       // Extract the ROI region with circular mask
       const extractSize = radius * 2;
@@ -475,8 +487,10 @@ export class ROIManager {
         continue;
       }
       
-      // Verbose logging to help debug the issue
-      console.log(`[ROIManager] Processing Circle ROI ${roi.id} with center (${roi.center.x}, ${roi.center.y}) and radius ${roi.radius}`);
+      // Only log occasionally to reduce overhead
+      if (this.logCounter % this.LOG_THROTTLE === 0) {
+        console.log(`[ROIManager] Processing Circle ROI ${roi.id} with center (${roi.center.x}, ${roi.center.y}) and radius ${roi.radius}`);
+      }
       
       // Extract the ROI image data
       const roiImageData = this.extractCircleROIImageData(roi, videoElement);
@@ -485,7 +499,10 @@ export class ROIManager {
         continue;
       }
       
-      console.log(`[ROIManager] Extracted Circle ROI image data: ${roiImageData.width}x${roiImageData.height}`);
+      // Only log occasionally to reduce overhead
+      if (this.logCounter % this.LOG_THROTTLE === 0) {
+        console.log(`[ROIManager] Extracted Circle ROI image data: ${roiImageData.width}x${roiImageData.height}`);
+      }
       
       try {
         // Check if we have reference features for this ROI
@@ -564,15 +581,22 @@ export class ROIManager {
         }
         
         // Match current features with reference features
-        console.log(`[ROIManager] Matching ${currentFeatures.keypoints.size()} features against reference for Circle ROI ${roi.id}`);
+        // Only log occasionally to reduce overhead
+        if (this.logCounter % this.LOG_THROTTLE === 0) {
+          console.log(`[ROIManager] Matching ${currentFeatures.keypoints.size()} features against reference for Circle ROI ${roi.id}`);
+        }
+        
         const trackingResult = await matchFeatures(roi.id, currentFeatures);
         
-        console.log(`[ROIManager] Matching result for Circle ROI ${roi.id}:`, {
-          isTracked: trackingResult.isTracked,
-          matchCount: trackingResult.matchCount,
-          inlierCount: trackingResult.inlierCount,
-          confidence: trackingResult.confidence
-        });
+        // Only log occasionally or when tracking status changes
+        if (this.logCounter % this.LOG_THROTTLE === 0) {
+          console.log(`[ROIManager] Matching result for Circle ROI ${roi.id}:`, {
+            isTracked: trackingResult.isTracked,
+            matchCount: trackingResult.matchCount,
+            inlierCount: trackingResult.inlierCount,
+            confidence: trackingResult.confidence
+          });
+        }
         
         // Update tracking result
         roi.trackingResult = trackingResult;
@@ -654,8 +678,10 @@ export class ROIManager {
         continue;
       }
       
-      // Verbose logging to help debug the issue
-      console.log(`[ROIManager] Processing ROI ${roi.id} with ${roi.points.length} points`);
+      // Only log occasionally to reduce overhead
+      if (this.logCounter % this.LOG_THROTTLE === 0) {
+        console.log(`[ROIManager] Processing ROI ${roi.id} with ${roi.points.length} points`);
+      }
       
       // Extract the ROI image data
       const roiImageData = this.extractROIImageData(roi, videoElement);
@@ -664,7 +690,10 @@ export class ROIManager {
         continue;
       }
       
-      console.log(`[ROIManager] Extracted ROI image data: ${roiImageData.width}x${roiImageData.height}`);
+      // Only log occasionally
+      if (this.logCounter % this.LOG_THROTTLE === 0) {
+        console.log(`[ROIManager] Extracted ROI image data: ${roiImageData.width}x${roiImageData.height}`);
+      }
       
       try {
         // Check if we have reference features for this ROI

@@ -22,12 +22,19 @@ interface CVModulePerformance {
 // Track performance for different processing stages
 const cvPerformanceMetrics: Record<string, CVModulePerformance> = {};
 
-// Send log message to main thread
-function cvLog(message: string): void {
-  cvCtx.postMessage({
-    type: 'log',
-    message
-  });
+// Counter for throttling logs
+let cvLogCounter = 0;
+const CV_LOG_THROTTLE = 50; // Only send 1 out of every 50 logs
+
+// Send log message to main thread (with throttling)
+function cvLog(message: string, forceLog = false): void {
+  // Only log critical messages or throttled regular messages
+  if (forceLog || ++cvLogCounter % CV_LOG_THROTTLE === 0) {
+    cvCtx.postMessage({
+      type: 'log',
+      message
+    });
+  }
 }
 
 // Send status update to main thread

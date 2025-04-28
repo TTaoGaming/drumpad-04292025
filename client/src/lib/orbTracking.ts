@@ -129,6 +129,10 @@ export interface TrackingResult {
 // Cache for reference features
 export const referenceFeatures: Map<string, ORBFeature> = new Map();
 
+// Log throttling counter
+let orbExtractCounter = 0;
+const ORB_LOG_THROTTLE = 100; // Only log every 100 calls
+
 /**
  * Extract ORB features from an image
  * @param imageData The image data to extract features from
@@ -137,13 +141,9 @@ export const referenceFeatures: Map<string, ORBFeature> = new Map();
  */
 export async function extractORBFeatures(imageData: ImageData, maxFeatures: number = 500): Promise<ORBFeature | null> {
   try {
-    // More detailed diagnostics
-    console.log('[orbTracking] Extract ORB features called with image data:', {
-      width: imageData.width,
-      height: imageData.height,
-      maxFeatures: maxFeatures,
-      timestamp: new Date().toISOString()
-    });
+    // Increment the counter for log throttling
+    orbExtractCounter++;
+    const shouldLog = orbExtractCounter % ORB_LOG_THROTTLE === 0;
     
     // Make sure OpenCV is available before proceeding
     const ready = await ensureOpenCV();
@@ -165,30 +165,18 @@ export async function extractORBFeatures(imageData: ImageData, maxFeatures: numb
       return null;
     }
     
-    console.log('[orbTracking] OpenCV checks passed, starting feature extraction with image data:', {
-      width: imageData.width,
-      height: imageData.height,
-      maxFeatures: maxFeatures
-    });
-    
     // Create OpenCV matrices
     const imgMat = cv.matFromImageData(imageData);
-    console.log('[orbTracking] Successfully created Mat from ImageData');
-    
     const grayMat = new cv.Mat();
     
     // Convert to grayscale for feature detection
     cv.cvtColor(imgMat, grayMat, cv.COLOR_RGBA2GRAY);
-    console.log('[orbTracking] Converted to grayscale');
 
     // Initialize the keypoints and descriptors
     let keypoints = new cv.KeyPointVector();
     const descriptors = new cv.Mat();
     
     try {
-      // Try to use the most compatible functions for feature detection
-      console.log('[orbTracking] Using FAST feature detection as fallback...');
-      
       // Adjust how we detect features based on image size
       // For smaller ROIs, use a lower threshold to detect more features
       const useAdaptiveThreshold = imageData.width < 150 || imageData.height < 150;
@@ -198,7 +186,6 @@ export async function extractORBFeatures(imageData: ImageData, maxFeatures: numb
       try {
         // Use FAST feature detection which is more reliable across versions
         cv.FAST(grayMat, keypoints, threshold, nonmaxSuppression);
-        console.log(`[orbTracking] FAST detected ${keypoints.size()} keypoints with threshold ${threshold}`);
       } catch (e) {
         console.warn('[orbTracking] FAST detection failed, using ORB instead:', e);
         // Fall back to ORB detector directly
@@ -206,11 +193,9 @@ export async function extractORBFeatures(imageData: ImageData, maxFeatures: numb
           // Use simpler constructor for ORB that works with the available OpenCV.js
           const orb = new cv.ORB();
           orb.detect(grayMat, keypoints);
-          console.log(`[orbTracking] ORB detected ${keypoints.size()} keypoints`);
           // Free the ORB detector
           orb.delete();
         } catch (e) {
-          console.warn('[orbTracking] ORB detection failed too, using manual grid detection:', e);
           // Generate some simple grid keypoints as last resort
           for (let y = 0.1; y < 0.9; y += 0.1) {
             for (let x = 0.1; x < 0.9; x += 0.1) {
@@ -226,23 +211,12 @@ export async function extractORBFeatures(imageData: ImageData, maxFeatures: numb
               keypoints.push_back(kp);
             }
           }
-          console.log(`[orbTracking] Created ${keypoints.size()} fallback keypoints`);
         }
       }
-      
-      // Limit the number of keypoints if we have too many
-      if (keypoints.size() > maxFeatures) {
-        console.log(`[orbTracking] Found ${keypoints.size()} keypoints, computing on all`);
-        // We can't easily sort and limit keypoints in this version of OpenCV.js
-        // so we'll just compute on all and let the matching stage handle prioritization
-      }
-      
-      console.log(`[orbTracking] Detected ${keypoints.size()} keypoints`);
       
       // Try to use BRIEF descriptor extractor which is more reliable
       // If this fails, we'll try a simpler fallback
       try {
-        console.log('[orbTracking] Computing BRIEF descriptors...');
         // Create a mask (we don't use it, but it's required)
         const mask = new cv.Mat();
         
@@ -251,7 +225,6 @@ export async function extractORBFeatures(imageData: ImageData, maxFeatures: numb
           // Try to compute BRIEF descriptors
           cv.computeBRIEFDescriptors(grayMat, keypoints, descriptors);
         } catch (e) {
-          console.log('[orbTracking] No direct BRIEF support, using ORB without detector...');
           // Fall back to default descriptor compute
           cv.compute(grayMat, keypoints, descriptors);
         }
@@ -273,8 +246,6 @@ export async function extractORBFeatures(imageData: ImageData, maxFeatures: numb
       createFallbackKeypoints(keypoints, imageData.width, imageData.height);
     }
     
-    console.log(`[orbTracking] Final keypoint count: ${keypoints.size()}`);
-    
     // Clean up
     imgMat.delete();
     grayMat.delete();
@@ -287,11 +258,6 @@ export async function extractORBFeatures(imageData: ImageData, maxFeatures: numb
     };
   } catch (error) {
     console.error('[orbTracking] Error extracting ORB features:', error);
-    
-    // Log OpenCV availability again if there was an error
-    console.log('[orbTracking] OpenCV status check after error:');
-    checkOpenCVStatus();
-    
     return null;
   }
 }
@@ -380,7 +346,6 @@ export async function matchFeatures(roiId: string, currentFeatures: ORBFeature):
     
     // Match descriptors
     matcher.match(referenceFeature.descriptors, currentFeatures.descriptors, matches);
-    console.log(`Found ${matches.size()} matches for ROI ${roiId}`);
     
     if (matches.size() < 8) {
       // Need at least 8 matches for homography
