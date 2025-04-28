@@ -191,25 +191,18 @@ const ImprovedROIDebugCanvas: React.FC<ImprovedROIDebugCanvasProps> = ({
     // Draw the video frame to temp canvas
     tempCtx.putImageData(frameData, 0, 0);
     
-    // Calculate scaling factors between display size and actual video size
-    const displayElement = document.querySelector('.camera-view') as HTMLElement;
-    if (!displayElement) return;
+    // Since we now use normalized coordinates (0.0-1.0), we can directly
+    // translate to video coordinates without a scaling factor
     
-    const displayWidth = displayElement.clientWidth;
-    const displayHeight = displayElement.clientHeight;
-    
-    const scaleX = videoElement.videoWidth / displayWidth;
-    const scaleY = videoElement.videoHeight / displayHeight;
-    
-    // Calculate the scaled center and radius
-    const scaledCenterX = roi.center.x * scaleX;
-    const scaledCenterY = roi.center.y * scaleY;
-    const scaledRadius = roi.radius * (scaleX + scaleY) / 2; // Average scale for radius
+    // Calculate the center and radius in video pixel coordinates
+    const videoCenterX = roi.center.x * videoElement.videoWidth;
+    const videoCenterY = roi.center.y * videoElement.videoHeight;
+    const videoRadius = roi.radius * videoElement.videoWidth; // Radius is normalized relative to width
     
     // Extract the ROI region as a square that contains the circle
-    const sourceX = Math.max(0, scaledCenterX - scaledRadius);
-    const sourceY = Math.max(0, scaledCenterY - scaledRadius);
-    const sourceSize = scaledRadius * 2;
+    const sourceX = Math.max(0, videoCenterX - videoRadius);
+    const sourceY = Math.max(0, videoCenterY - videoRadius);
+    const sourceSize = videoRadius * 2;
     const sourceWidth = Math.min(sourceSize, videoElement.videoWidth - sourceX);
     const sourceHeight = Math.min(sourceSize, videoElement.videoHeight - sourceY);
     
@@ -241,7 +234,9 @@ const ImprovedROIDebugCanvas: React.FC<ImprovedROIDebugCanvasProps> = ({
     ctx.fillStyle = 'white';
     ctx.font = '12px Arial';
     ctx.textAlign = 'left';
-    ctx.fillText(`ROI: ${Math.round(roi.radius * 2)}px`, 8, 20);
+    // Show both normalized and video pixel radius
+    const displayRadius = Math.round(videoRadius * 2);
+    ctx.fillText(`ROI: ${displayRadius}px (${roi.radius.toFixed(3)})`, 8, 20);
     
     ctx.textAlign = 'right';
     ctx.fillText(`${fps} FPS`, width - 8, 20);

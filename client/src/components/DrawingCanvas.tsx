@@ -678,20 +678,28 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
       setCurrentPath(null);
       setIsDrawing(false);
       
-      // Create Circle ROI directly with center and radius (use the new simplified ROI approach)
+      // Create Circle ROI with normalized coordinates (0.0-1.0) for resolution independence
+      const normalizedCenter = {
+        x: center.x / canvasSize.width,
+        y: center.y / canvasSize.height
+      };
+      
+      // Calculate normalized radius (relative to width)
+      const normalizedRadius = radius / canvasSize.width;
+      
       const circleROI = {
         id: completedPath.id || Date.now().toString(),
-        center: center,
-        radius: radius,
+        center: normalizedCenter,
+        radius: normalizedRadius,
         timestamp: Date.now()
       };
       
       // Add the Circle ROI to the feature detector
       const roiId = orbFeatureDetector.addCircleROI(circleROI);
       
-      // Log ROI creation with the number of vertices and shape
+      // Log ROI creation with both pixel values and normalized values
       dispatch(EventType.LOG, {
-        message: `Created ${finalPathDescription} ROI with center (${Math.round(center.x)}, ${Math.round(center.y)}) and radius ${Math.round(radius)}px (ID: ${roiId})`,
+        message: `Created ${finalPathDescription} ROI with center (${Math.round(center.x)}, ${Math.round(center.y)})px [normalized: (${normalizedCenter.x.toFixed(3)}, ${normalizedCenter.y.toFixed(3)})] and radius ${Math.round(radius)}px [normalized: ${normalizedRadius.toFixed(3)}] (ID: ${roiId})`,
         type: 'success'
       });
       
