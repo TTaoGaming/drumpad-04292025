@@ -60,6 +60,23 @@ const ImprovedROIDebugCanvas: React.FC<ImprovedROIDebugCanvasProps> = ({
       }
     });
     
+    // Listen for general ROI updates that include tracking results
+    const roiUpdateListener = addListener(EventType.ROI_UPDATED, (updatedRoi: any) => {
+      console.log('ROI updated with tracking data:', updatedRoi);
+      if (roi && roi.id === updatedRoi.id) {
+        // Merge the tracking result into our existing ROI state
+        setRoi(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            trackingResult: updatedRoi.trackingResult,
+            status: updatedRoi.status
+          };
+        });
+        setStatus(`Tracking ${updatedRoi.status}: ID ${updatedRoi.id}`);
+      }
+    });
+    
     // Listen for ROI deletion
     const circleRoiDeleteListener = addListener(EventType.CIRCLE_ROI_DELETED, (circleROI: CircleROI) => {
       if (roi && roi.id === circleROI.id) {
@@ -71,6 +88,7 @@ const ImprovedROIDebugCanvas: React.FC<ImprovedROIDebugCanvasProps> = ({
     return () => {
       circleRoiListener.remove();
       circleRoiUpdateListener.remove();
+      roiUpdateListener.remove();
       circleRoiDeleteListener.remove();
     };
   }, [roi]);
@@ -242,8 +260,8 @@ const ImprovedROIDebugCanvas: React.FC<ImprovedROIDebugCanvasProps> = ({
     ctx.fillText(`${fps} FPS`, width - 8, 20);
     
     // Draw matching info if available
-    if (roi.matchResult) {
-      const confidence = roi.matchResult.confidence * 100;
+    if (roi.trackingResult) {
+      const confidence = roi.trackingResult.confidence * 100;
       const confText = `${confidence.toFixed(0)}%`;
       
       // Confidence bar background
