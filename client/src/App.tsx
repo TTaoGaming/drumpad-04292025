@@ -15,7 +15,7 @@ import TemplateMatchingCanvas from "@/components/TemplateMatchingCanvas";
 import TrackingVisualization from "@/components/TrackingVisualization";
 import SettingsPanel from "@/components/settings/SettingsPanel";
 import { EventType, addListener, dispatch } from "@/lib/eventBus";
-import { Notification, HandData, PerformanceMetrics, DrawingPath } from "@/lib/types";
+import { Notification, HandData, PerformanceMetrics, DrawingPath, CircleROI } from "@/lib/types";
 import { getVideoFrame } from "@/lib/cameraManager";
 import { loadOpenCV, setupOpenCVEventListener } from "./lib/opencvLoader";
 

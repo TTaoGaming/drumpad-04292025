@@ -702,12 +702,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
         value: completedPath
       });
       
-      // Also dispatch a circle ROI created event
-      dispatch(EventType.SETTINGS_VALUE_CHANGE, {
-        section: 'drawing',
-        setting: 'newCircleROI',
-        value: circleROI
-      });
+      // Also dispatch a circle ROI created event using the new specific event type
+      dispatch(EventType.CIRCLE_ROI_CREATED, circleROI);
     } 
     else {
       // Regular non-ROI drawing (unchanged)

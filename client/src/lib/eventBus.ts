@@ -24,7 +24,11 @@ export enum EventType {
   DRAWING_MODE_CHANGE = 'drawing-mode-change',
   ROI_CREATED = 'roi-created',
   ROI_UPDATED = 'roi-updated',
-  ROI_DELETED = 'roi-deleted'
+  ROI_DELETED = 'roi-deleted',
+  // Circle ROI events
+  CIRCLE_ROI_CREATED = 'circle-roi-created',
+  CIRCLE_ROI_UPDATED = 'circle-roi-updated',
+  CIRCLE_ROI_DELETED = 'circle-roi-deleted'
 }
 
 type EventCallback = (data: any) => void;
