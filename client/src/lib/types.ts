@@ -3,10 +3,11 @@
  */
 
 // A 2D point with optional Z coordinate for 3D space
+// All coordinates are normalized (0.0 to 1.0) for resolution independence
 export interface Point {
-  x: number;
-  y: number;
-  z?: number;
+  x: number;  // Normalized (0.0-1.0) x coordinate
+  y: number;  // Normalized (0.0-1.0) y coordinate
+  z?: number; // Optional normalized (0.0-1.0) z coordinate
 }
 
 // Path created by drawing on the canvas
@@ -30,7 +31,7 @@ export interface RegionOfInterest {
 export interface CircleROI {
   id: string;
   center: Point;
-  radius: number;
+  radius: number;  // Normalized radius (relative to the view width)
   timestamp: number;
   matchResult?: {
     confidence: number;
