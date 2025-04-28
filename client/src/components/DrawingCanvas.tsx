@@ -100,18 +100,14 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
           
           // Get the fingertip position from event bus
           if (data.value.position) {
-            // The position now comes in normalized coordinates (0.0-1.0) from MediaPipeHandTracker
-            // Convert to pixel coordinates for drawing on canvas
+            // The position comes in normalized coordinates (0.0-1.0) from MediaPipeHandTracker
+            // We'll keep using normalized coordinates throughout the component
             const normalizedPosition = data.value.position;
-            const pixelPosition = {
-              x: Math.round(normalizedPosition.x * canvasSize.width),
-              y: Math.round(normalizedPosition.y * canvasSize.height)
-            };
             
-            console.log(`Converting coordinates: (${normalizedPosition.x.toFixed(3)}, ${normalizedPosition.y.toFixed(3)}) => (${pixelPosition.x}, ${pixelPosition.y})`);
+            console.log(`Using normalized position: (${normalizedPosition.x.toFixed(3)}, ${normalizedPosition.y.toFixed(3)})`);
             
-            // Handle the pinch state change with the converted position
-            handlePinchStateChange(isPinching, pixelPosition, fingerId);
+            // Handle the pinch state change with normalized position
+            handlePinchStateChange(isPinching, normalizedPosition, fingerId);
           }
         }
       }
@@ -135,16 +131,13 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
           }
           
           if (isDrawing && position && currentPath && currentPath.points.length > 0) {
-            // Convert from normalized coordinates to pixel coordinates for the canvas
-            const pixelX = Math.round(position.x * canvasSize.width);
-            const pixelY = Math.round(position.y * canvasSize.height);
-            
+            // Use normalized coordinates directly
             // Add point to our current drawing path
-            addPointToPath(pixelX, pixelY);
+            addPointToPath(position.x, position.y);
             
             // Log for debugging
-            console.log(`Adding point: (${pixelX}, ${pixelY})`);
-            console.log(`Continuing drawing with thumb at (${pixelX}, ${pixelY})`);
+            console.log(`Adding normalized point: (${position.x.toFixed(3)}, ${position.y.toFixed(3)})`);
+            console.log(`Continuing drawing with normalized coordinates`);
           }
         }
       }
@@ -250,28 +243,44 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
       ctx.lineWidth = settings.strokeWidth;
     }
     
+    // Convert normalized coordinates to pixel coordinates for drawing
+    const toPixelX = (x: number) => Math.round(x * canvasSize.width);
+    const toPixelY = (y: number) => Math.round(y * canvasSize.height);
+    
     // For single point (just starting), draw a circle
     if (points.length === 1) {
+      const pixelX = toPixelX(points[0].x);
+      const pixelY = toPixelY(points[0].y);
+      
       ctx.beginPath();
-      ctx.arc(points[0].x, points[0].y, 5, 0, Math.PI * 2);
+      ctx.arc(pixelX, pixelY, 5, 0, Math.PI * 2);
       ctx.fillStyle = settings.strokeColor;
       ctx.fill();
       return;
     }
     
-    // Move to the first point
-    ctx.moveTo(points[0].x, points[0].y);
+    // Move to the first point (convert from normalized to pixel)
+    const firstPixelX = toPixelX(points[0].x);
+    const firstPixelY = toPixelY(points[0].y);
+    ctx.moveTo(firstPixelX, firstPixelY);
     
     // Connect all the points
     for (let i = 1; i < points.length; i++) {
+      // Convert normalized point to pixel coordinates
+      const pixelX = toPixelX(points[i].x);
+      const pixelY = toPixelY(points[i].y);
+      
       if (settings.smoothing && i > 1 && i < points.length - 1) {
         // Create a smooth curve using the average of current and next point
-        const xc = (points[i].x + points[i + 1].x) / 2;
-        const yc = (points[i].y + points[i + 1].y) / 2;
-        ctx.quadraticCurveTo(points[i].x, points[i].y, xc, yc);
+        const nextPixelX = toPixelX(points[i + 1].x);
+        const nextPixelY = toPixelY(points[i + 1].y);
+        
+        const xc = (pixelX + nextPixelX) / 2;
+        const yc = (pixelY + nextPixelY) / 2;
+        ctx.quadraticCurveTo(pixelX, pixelY, xc, yc);
       } else {
         // Regular line to next point
-        ctx.lineTo(points[i].x, points[i].y);
+        ctx.lineTo(pixelX, pixelY);
       }
     }
     
@@ -310,17 +319,21 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
             idNumber = colorIndex > 0 ? colorIndex : 1;
           }
           
+          // Convert normalized center to pixel coordinates for drawing
+          const centerPixelX = Math.round(center.x * canvasSize.width);
+          const centerPixelY = Math.round(center.y * canvasSize.height);
+          
           // Draw ID number
           ctx.font = 'bold 24px sans-serif';
           ctx.fillStyle = 'white';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText(idNumber.toString(), center.x, center.y);
+          ctx.fillText(idNumber.toString(), centerPixelX, centerPixelY);
           
           // Add stroke around text for better visibility
           ctx.strokeStyle = 'black';
           ctx.lineWidth = 1;
-          ctx.strokeText(idNumber.toString(), center.x, center.y);
+          ctx.strokeText(idNumber.toString(), centerPixelX, centerPixelY);
           
           // Reset text properties
           ctx.textAlign = 'start';
@@ -335,7 +348,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
   
   // Handle pinch state changes
   const handlePinchStateChange = (isPinching: boolean, position: { x: number, y: number }, fingerId?: number) => {
-    console.log(`Pinch state change: isPinching=${isPinching}, position=(${Math.round(position.x)}, ${Math.round(position.y)}), isDrawing=${isDrawing}`);
+    console.log(`Pinch state change: isPinching=${isPinching}, position=(${position.x.toFixed(3)}, ${position.y.toFixed(3)}), isDrawing=${isDrawing}`);
 
     // Track pinch state change in ref
     const wasPinching = isPinchingRef.current;
@@ -442,8 +455,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
   const addPointToPath = (x: number, y: number) => {
     if (!currentPath) return;
     
-    // Print debug info about the point being added
-    console.log(`Adding point: (${Math.round(x)}, ${Math.round(y)})`);
+    // Print debug info about the point being added with normalized coordinates
+    console.log(`Adding normalized point: (${x.toFixed(3)}, ${y.toFixed(3)})`);
     
     // Add the new point to the current path
     setCurrentPath(prev => {
@@ -453,15 +466,15 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
       const lastPoint = prev.points[prev.points.length - 1];
       const distance = Math.sqrt((x - lastPoint.x) ** 2 + (y - lastPoint.y) ** 2);
       
-      // Reduced distance threshold to capture more points - only 2 pixels away
-      if (distance < 2) {
+      // Use a small threshold in normalized space (0.002 is ~2px in a 1000px space)
+      if (distance < 0.002) {
         // Skip very close points, but still log it
-        console.log(`  Point too close to last point (${Math.round(distance)}px), skipping`);
+        console.log(`  Point too close to last point (${distance.toFixed(4)}), skipping`);
         return prev;
       }
       
       // Log addition of the point
-      console.log(`  Added point at distance ${Math.round(distance)}px from last point`);
+      console.log(`  Added normalized point at distance ${distance.toFixed(4)}`);
       
       return {
         ...prev,
