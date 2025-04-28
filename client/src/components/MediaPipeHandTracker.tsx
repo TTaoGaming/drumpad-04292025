@@ -542,10 +542,21 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
         // Listen for hand confidence settings changes
         if (data.section === 'hands' && data.setting === 'confidenceSettings') {
           setConfidenceSettings(data.value);
-          dispatch(EventType.LOG, {
-            message: `Updated hand confidence settings: Threshold=${data.value.handPresenceThreshold}, MinLandmarks=${data.value.requiredLandmarks}`,
-            type: 'info'
-          });
+          
+          // If we have access to the MediaPipe Hands instance, update its settings
+          if (handsRef.current) {
+            // Update MediaPipe detection and tracking confidence
+            handsRef.current.setOptions({
+              minDetectionConfidence: data.value.detectionConfidence,
+              minTrackingConfidence: data.value.trackingConfidence
+            });
+            
+            // Log the change
+            dispatch(EventType.LOG, {
+              message: `Updated hand confidence settings: Detection=${data.value.detectionConfidence.toFixed(2)}, Tracking=${data.value.trackingConfidence.toFixed(2)}, Threshold=${data.value.handPresenceThreshold.toFixed(2)}, MinLandmarks=${data.value.requiredLandmarks}`,
+              type: 'info'
+            });
+          }
         }
       }
     );
@@ -578,14 +589,21 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
           }
         });
         
-        // Configure Hands
+        // Configure Hands with our confidence settings
         hands.setOptions({
           selfieMode: false, // Disabled mirror effect for desktop surface scenarios
           maxNumHands: 2,
           modelComplexity: 1,
-          minDetectionConfidence: 0.5,
-          minTrackingConfidence: 0.5
+          minDetectionConfidence: confidenceSettings.detectionConfidence,
+          minTrackingConfidence: confidenceSettings.trackingConfidence
         });
+        
+        // Log the initial configuration
+        console.log("MediaPipe Hands initialized with detection confidence:", confidenceSettings.detectionConfidence, 
+                   "tracking confidence:", confidenceSettings.trackingConfidence);
+        
+        // Store the hands instance in our ref
+        handsRef.current = hands;
         
         // Setup result handler
         hands.onResults((results: any) => {
