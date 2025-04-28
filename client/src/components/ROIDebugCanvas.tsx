@@ -510,11 +510,16 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
         }
       }
       
-      // Add ROI ID label and radius info
+      // Add region label with shortened ID
       ctx.fillStyle = 'white';
       ctx.font = 'bold 16px sans-serif';
       ctx.textAlign = 'left';
-      ctx.fillText(`ROI ID: ${roi.id}`, 10, 20);
+      // Extract just a short ID (last 3 digits) if the ID is a timestamp
+      const shortId = typeof roi.id === 'string' && roi.id.length > 5 
+        ? roi.id.slice(-3) 
+        : (typeof roi.id === 'number' ? roi.id % 1000 : roi.id);
+      
+      ctx.fillText(`Region #${shortId}`, 10, 20);
       
       // Add tracking status with detailed information
       const statusX = width - 65;
@@ -873,7 +878,11 @@ const ROIDebugCanvas: React.FC<ROIDebugCanvasProps> = ({
     }}>
       <div style={{ marginBottom: '8px' }}>
         <h3 style={{ margin: 0, padding: 0, fontSize: '14px' }}>ROI Debug View</h3>
-        {roi && <p style={{ margin: '3px 0 0 0', padding: 0, fontSize: '12px', opacity: 0.8 }}>ROI ID: {roi.id}</p>}
+        {roi && <p style={{ margin: '3px 0 0 0', padding: 0, fontSize: '12px', opacity: 0.8 }}>
+          Region #{typeof roi.id === 'string' && roi.id.length > 5 
+            ? roi.id.slice(-3) 
+            : (typeof roi.id === 'number' ? roi.id % 1000 : roi.id)}
+        </p>}
       </div>
       <canvas
         ref={canvasRef}

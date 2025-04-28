@@ -203,16 +203,30 @@ export async function extractORBFeatures(imageData: ImageData, maxFeatures: numb
         console.warn('[orbTracking] FAST detection failed, using ORB instead:', e);
         // Fall back to ORB detector directly
         try {
-          // Create new ORB detector
-          const orb = new cv.ORB(maxFeatures, 1.2, 8, 31, 0, 2, cv.ORB_HARRIS_SCORE, 31, 20);
+          // Use simpler constructor for ORB that works with the available OpenCV.js
+          const orb = new cv.ORB();
           orb.detect(grayMat, keypoints);
           console.log(`[orbTracking] ORB detected ${keypoints.size()} keypoints`);
           // Free the ORB detector
           orb.delete();
         } catch (e) {
-          console.warn('[orbTracking] ORB detection failed too:', e);
+          console.warn('[orbTracking] ORB detection failed too, using manual grid detection:', e);
           // Generate some simple grid keypoints as last resort
-          createFallbackKeypoints(keypoints, imageData.width, imageData.height);
+          for (let y = 0.1; y < 0.9; y += 0.1) {
+            for (let x = 0.1; x < 0.9; x += 0.1) {
+              const kp = new cv.KeyPoint(
+                x * imageData.width, 
+                y * imageData.height, 
+                10, // size
+                -1, // angle
+                0, // response
+                0, // octave
+                0 // class_id
+              );
+              keypoints.push_back(kp);
+            }
+          }
+          console.log(`[orbTracking] Created ${keypoints.size()} fallback keypoints`);
         }
       }
       
