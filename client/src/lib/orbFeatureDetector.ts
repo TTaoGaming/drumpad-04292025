@@ -411,13 +411,15 @@ export class ROIManager {
       console.log(`[ROIManager] Circle ROI radius: Display ${roi.radius} => Video ${radius.toFixed(1)}`);
       
       // Calculate extraction bounds with more careful boundary checking
-      const extractSize = Math.floor(radius * 2);
-      const sourceX = Math.max(0, Math.floor(centerX - radius));
-      const sourceY = Math.max(0, Math.floor(centerY - radius));
+      // Make sure radius is at least 1 pixel
+      const safeRadius = Math.max(radius, 1);
+      const extractSize = Math.floor(safeRadius * 2);
+      const sourceX = Math.max(0, Math.floor(centerX - safeRadius));
+      const sourceY = Math.max(0, Math.floor(centerY - safeRadius));
       
-      // Ensure we don't try to extract beyond the video frame boundaries
-      const sourceWidth = Math.min(extractSize, videoElement.videoWidth - sourceX);
-      const sourceHeight = Math.min(extractSize, videoElement.videoHeight - sourceY);
+      // Ensure we don't try to extract beyond the video frame boundaries and that extraction area is at least 10x10
+      const sourceWidth = Math.max(10, Math.min(extractSize, videoElement.videoWidth - sourceX));
+      const sourceHeight = Math.max(10, Math.min(extractSize, videoElement.videoHeight - sourceY));
       
       // Validate final extraction dimensions
       if (sourceWidth <= 0 || sourceHeight <= 0) {
@@ -425,8 +427,19 @@ export class ROIManager {
         return null;
       }
       
-      // For debugging
-      console.log(`[ROIManager] Extracting region: x=${sourceX}, y=${sourceY}, w=${sourceWidth}, h=${sourceHeight}`);
+      // For debugging - more detailed output
+      console.log(`[ROIManager] Extracting Circle ROI region:`, {
+        sourceX,
+        sourceY,
+        sourceWidth,
+        sourceHeight,
+        videoWidth: videoElement.videoWidth,
+        videoHeight: videoElement.videoHeight,
+        displayCenter: roi.center,
+        videoCenter: { x: centerX, y: centerY },
+        displayRadius: roi.radius,
+        videoRadius: radius
+      });
       
       // Extract the square region
       let squareROI;

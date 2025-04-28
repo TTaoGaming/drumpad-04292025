@@ -274,6 +274,14 @@ const ImprovedROIDebugCanvas: React.FC<ImprovedROIDebugCanvasProps> = ({
         
         // Draw each keypoint
         ctx.fillStyle = 'rgba(0, 255, 0, 0.7)';
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = 'black';
+        
+        // Draw feature count for debugging
+        ctx.font = '10px Arial';
+        ctx.fillStyle = 'rgba(0, 255, 0, 0.9)';
+        ctx.textAlign = 'left';
+        ctx.fillText(`Features: ${keypoints.length}`, 8, height - 30);
         
         for (const kp of keypoints) {
           if (!kp || typeof kp.x !== 'number' || typeof kp.y !== 'number') continue;
@@ -285,14 +293,41 @@ const ImprovedROIDebugCanvas: React.FC<ImprovedROIDebugCanvasProps> = ({
           // Skip points outside the visible area
           if (canvasX < 0 || canvasX > width || canvasY < 0 || canvasY > height) continue;
           
+          // Draw feature point with size based on importance if available
+          const pointSize = kp.size ? Math.min(kp.size / 10, 6) : 3;
+          
           // Draw feature point
           ctx.beginPath();
-          ctx.arc(canvasX, canvasY, 3, 0, Math.PI * 2);
+          ctx.arc(canvasX, canvasY, pointSize, 0, Math.PI * 2);
           ctx.fill();
+          ctx.stroke();
+          
+          // Draw orientation line if available
+          if (kp.angle !== undefined) {
+            const angleRad = kp.angle * Math.PI / 180;
+            const lineLength = pointSize * 2;
+            
+            // Draw a line showing feature orientation
+            ctx.beginPath();
+            ctx.moveTo(canvasX, canvasY);
+            ctx.lineTo(
+              canvasX + Math.cos(angleRad) * lineLength,
+              canvasY + Math.sin(angleRad) * lineLength
+            );
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.stroke();
+          }
         }
         
         // Draw match lines if available
         if (roi.trackingResult.matches && roi.trackingResult.matches.length > 0) {
+          // Draw match count
+          ctx.font = '10px Arial';
+          ctx.fillStyle = 'rgba(255, 255, 0, 0.9)';
+          ctx.textAlign = 'right';
+          ctx.fillText(`Matches: ${roi.trackingResult.matches.length}`, width - 8, height - 30);
+          
+          // Draw lines between matching points
           ctx.strokeStyle = 'rgba(255, 255, 0, 0.5)';
           ctx.lineWidth = 1;
           
@@ -308,10 +343,22 @@ const ImprovedROIDebugCanvas: React.FC<ImprovedROIDebugCanvasProps> = ({
             if (fromX < 0 || fromX > width || fromY < 0 || fromY > height ||
                 toX < 0 || toX > width || toY < 0 || toY > height) continue;
             
+            // Draw line connecting matching points
             ctx.beginPath();
             ctx.moveTo(fromX, fromY);
             ctx.lineTo(toX, toY);
             ctx.stroke();
+            
+            // Draw small circles at both ends of the line
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.7)';  // reference point in red
+            ctx.beginPath();
+            ctx.arc(fromX, fromY, 2, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.fillStyle = 'rgba(0, 255, 255, 0.7)';  // current point in cyan
+            ctx.beginPath();
+            ctx.arc(toX, toY, 2, 0, Math.PI * 2);
+            ctx.fill();
           }
         }
       }
