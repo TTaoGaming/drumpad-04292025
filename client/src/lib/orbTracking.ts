@@ -29,6 +29,37 @@ async function ensureOpenCV(): Promise<boolean> {
   }
 }
 
+/**
+ * Creates a grid of keypoints when feature detection fails
+ * @param keypoints KeypointVector to populate with fallback keypoints
+ * @param width Image width
+ * @param height Image height
+ */
+function createFallbackKeypoints(keypoints: any, width: number, height: number): void {
+  console.log(`[orbTracking] Creating fallback keypoints for ${width}x${height} image`);
+  
+  // Create a denser grid for smaller images
+  const step = width < 100 || height < 100 ? 0.15 : 0.2;
+  const margin = 0.1; // 10% margin from edge
+  
+  for (let y = margin; y < 1.0 - margin; y += step) {
+    for (let x = margin; x < 1.0 - margin; x += step) {
+      const kp = new cv.KeyPoint(
+        x * width, 
+        y * height, 
+        10, // size
+        -1, // angle
+        0, // response
+        0, // octave
+        0 // class_id
+      );
+      keypoints.push_back(kp);
+    }
+  }
+  
+  console.log(`[orbTracking] Created ${keypoints.size()} fallback keypoints`);
+}
+
 // Debug helper to check OpenCV availability
 function checkOpenCVStatus(): boolean {
   const cvObject = typeof window !== 'undefined' ? (window as any).cv : undefined;
@@ -158,10 +189,32 @@ export async function extractORBFeatures(imageData: ImageData, maxFeatures: numb
       // Try to use the most compatible functions for feature detection
       console.log('[orbTracking] Using FAST feature detection as fallback...');
       
-      // Use FAST feature detection which is more reliable across versions
-      const threshold = 10;
+      // Adjust how we detect features based on image size
+      // For smaller ROIs, use a lower threshold to detect more features
+      const useAdaptiveThreshold = imageData.width < 150 || imageData.height < 150;
+      const threshold = useAdaptiveThreshold ? 5 : 10;
       const nonmaxSuppression = true;
-      cv.FAST(grayMat, keypoints, threshold, nonmaxSuppression);
+      
+      try {
+        // Use FAST feature detection which is more reliable across versions
+        cv.FAST(grayMat, keypoints, threshold, nonmaxSuppression);
+        console.log(`[orbTracking] FAST detected ${keypoints.size()} keypoints with threshold ${threshold}`);
+      } catch (e) {
+        console.warn('[orbTracking] FAST detection failed, using ORB instead:', e);
+        // Fall back to ORB detector directly
+        try {
+          // Create new ORB detector
+          const orb = new cv.ORB(maxFeatures, 1.2, 8, 31, 0, 2, cv.ORB_HARRIS_SCORE, 31, 20);
+          orb.detect(grayMat, keypoints);
+          console.log(`[orbTracking] ORB detected ${keypoints.size()} keypoints`);
+          // Free the ORB detector
+          orb.delete();
+        } catch (e) {
+          console.warn('[orbTracking] ORB detection failed too:', e);
+          // Generate some simple grid keypoints as last resort
+          createFallbackKeypoints(keypoints, imageData.width, imageData.height);
+        }
+      }
       
       // Limit the number of keypoints if we have too many
       if (keypoints.size() > maxFeatures) {
@@ -202,21 +255,8 @@ export async function extractORBFeatures(imageData: ImageData, maxFeatures: numb
       const newKeypoints = new cv.KeyPointVector();
       keypoints = newKeypoints; // Reassign variable
       
-      // Add a few keypoints at grid positions
-      for (let y = 0.2; y < 0.8; y += 0.2) {
-        for (let x = 0.2; x < 0.8; x += 0.2) {
-          const kp = new cv.KeyPoint(
-            x * imageData.width, 
-            y * imageData.height, 
-            10, // size
-            -1, // angle
-            0, // response
-            0, // octave
-            0 // class_id
-          );
-          keypoints.push_back(kp);
-        }
-      }
+      // Use helper function to create fallback keypoints
+      createFallbackKeypoints(keypoints, imageData.width, imageData.height);
     }
     
     console.log(`[orbTracking] Final keypoint count: ${keypoints.size()}`);
@@ -479,3 +519,4 @@ export function cleanupResources(): void {
   });
   referenceFeatures.clear();
 }
+
