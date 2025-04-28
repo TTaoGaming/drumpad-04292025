@@ -892,11 +892,9 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                 
                 // Get thumb position for thumb-centered drawing
                 const thumbTip = landmarks[4]; // Thumb tip
-                const thumbPixelX = Math.round(thumbTip.x * videoWidth);
-                const thumbPixelY = Math.round(thumbTip.y * videoHeight);
                 
-                // Log the coordinate conversion for debugging
-                console.log(`Converting coordinates: (${thumbTip.x.toFixed(3)}, ${thumbTip.y.toFixed(3)}) => (${thumbPixelX}, ${thumbPixelY})`);
+                // Log the normalized coordinates for debugging
+                console.log(`Using normalized thumb coordinates: (${thumbTip.x.toFixed(3)}, ${thumbTip.y.toFixed(3)})`);
                 
                 // Always use index finger (fingerId = 1)
                 const fingerId = 1;
@@ -908,8 +906,8 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                     isPinching,
                     distance,
                     position: {
-                      x: thumbPixelX, // Send thumb position instead of active finger
-                      y: thumbPixelY, // Send thumb position instead of active finger
+                      x: thumbTip.x, // Send normalized thumb position (0.0-1.0)
+                      y: thumbTip.y, // Send normalized thumb position (0.0-1.0)
                       z: thumbTip.z
                     },
                     activeFinger: 'index',
@@ -929,8 +927,8 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                   section: 'tracking',
                   setting: 'thumbPosition',
                   value: {
-                    x: Math.round(landmarks[4].x * videoWidth), // Send thumb pixel coordinates
-                    y: Math.round(landmarks[4].y * videoHeight), // Send thumb pixel coordinates
+                    x: landmarks[4].x, // Send normalized thumb coordinates (0.0-1.0)
+                    y: landmarks[4].y, // Send normalized thumb coordinates (0.0-1.0)
                     z: landmarks[4].z,
                     colorIndex: activeFingerColorIndex // Send the color index for the active pinch
                   }

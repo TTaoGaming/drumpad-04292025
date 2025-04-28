@@ -100,14 +100,18 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
           
           // Get the fingertip position from event bus
           if (data.value.position) {
-            // The position already comes in pixel coordinates from MediaPipeHandTracker
-            // We don't need to scale - just use directly
-            const position = data.value.position;
+            // The position now comes in normalized coordinates (0.0-1.0) from MediaPipeHandTracker
+            // Convert to pixel coordinates for drawing on canvas
+            const normalizedPosition = data.value.position;
+            const pixelPosition = {
+              x: Math.round(normalizedPosition.x * canvasSize.width),
+              y: Math.round(normalizedPosition.y * canvasSize.height)
+            };
             
-            console.log(`Pinch position: (${position.x}, ${position.y})`);
+            console.log(`Converting coordinates: (${normalizedPosition.x.toFixed(3)}, ${normalizedPosition.y.toFixed(3)}) => (${pixelPosition.x}, ${pixelPosition.y})`);
             
-            // Handle the pinch state change with the position
-            handlePinchStateChange(isPinching, { x: position.x, y: position.y }, fingerId);
+            // Handle the pinch state change with the converted position
+            handlePinchStateChange(isPinching, pixelPosition, fingerId);
           }
         }
       }
@@ -131,14 +135,16 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
           }
           
           if (isDrawing && position && currentPath && currentPath.points.length > 0) {
-            // No need to scale - coordinates are already in pixel space from MediaPipeHandTracker
-            // Just use them directly
+            // Convert from normalized coordinates to pixel coordinates for the canvas
+            const pixelX = Math.round(position.x * canvasSize.width);
+            const pixelY = Math.round(position.y * canvasSize.height);
             
             // Add point to our current drawing path
-            addPointToPath(position.x, position.y);
+            addPointToPath(pixelX, pixelY);
             
             // Log for debugging
-            console.log(`Continuing drawing with thumb at (${Math.round(position.x)}, ${Math.round(position.y)})`);
+            console.log(`Adding point: (${pixelX}, ${pixelY})`);
+            console.log(`Continuing drawing with thumb at (${pixelX}, ${pixelY})`);
           }
         }
       }
