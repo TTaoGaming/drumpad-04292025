@@ -624,22 +624,16 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
     
     // For AR MPE drumpad applications, we always use circular ROIs based on drawn diameter
     if (currentPath.isROI) {
+      let center: { x: number, y: number };
+      let radius: number;
+
       // First validate that we have enough points to work with
       if (currentPath.points.length < 3) {
         // Create a default circle at the single point
         const point = currentPath.points[0];
-        const center = { x: point.x, y: point.y };
-        const radius = 50; // Default radius for single point (100px diameter)
+        center = { x: point.x, y: point.y };
+        radius = 50; // Default radius for single point (100px diameter)
         
-        // Generate circle points
-        finalPoints = [];
-        for (let i = 0; i < 24; i++) {
-          const angle = (i / 24) * Math.PI * 2;
-          finalPoints.push({
-            x: center.x + radius * Math.cos(angle),
-            y: center.y + radius * Math.sin(angle)
-          });
-        }
         finalPathDescription = 'circle (default size)';
         console.log(`Created default circle with radius ${radius}px at (${center.x}, ${center.y})`);
       } 
@@ -651,62 +645,95 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
         const allPoints = [...currentPath.points];
         
         // Calculate the center point of the drawing
-        const center = calculateCenter(allPoints);
+        center = calculateCenter(allPoints);
         
         // Find the diameter based on farthest points (the true maximum width of drawing)
         const diameter = findShapeDiameter(allPoints);
-        const radius = Math.max(diameter / 2, 30); // Ensure minimum 30px radius
+        radius = Math.max(diameter / 2, 30); // Ensure minimum 30px radius
         
         console.log(`Measured drawing diameter: ${diameter}px (radius: ${radius}px)`);
         console.log(`Creating circle with center (${Math.round(center.x)}, ${Math.round(center.y)}) and radius ${Math.round(radius)}px`);
         
-        // Create a perfect circle with this diameter
-        finalPoints = [];
-        for (let i = 0; i < 24; i++) {
-          const angle = (i / 24) * Math.PI * 2;
-          finalPoints.push({
-            x: center.x + radius * Math.cos(angle),
-            y: center.y + radius * Math.sin(angle)
-          });
-        }
         finalPathDescription = 'circle (matched size)';
       }
-    }
-    
-    // Add the completed path to our paths list with the new points
-    const completedPath: DrawingPath = {
-      ...currentPath,
-      points: finalPoints,
-      isComplete: true
-    };
-    
-    setPaths(prev => [...prev, completedPath]);
-    setCurrentPath(null);
-    setIsDrawing(false);
-    
-    // If this is an ROI, add it to the feature detector
-    if (completedPath.isROI) {
-      const roiId = orbFeatureDetector.addROI(completedPath);
+      
+      // Generate circle points for visualization
+      finalPoints = [];
+      for (let i = 0; i < 24; i++) {
+        const angle = (i / 24) * Math.PI * 2;
+        finalPoints.push({
+          x: center.x + radius * Math.cos(angle),
+          y: center.y + radius * Math.sin(angle)
+        });
+      }
+      
+      // Add the completed path to our paths list with the new points
+      const completedPath: DrawingPath = {
+        ...currentPath,
+        points: finalPoints,
+        isComplete: true
+      };
+      
+      setPaths(prev => [...prev, completedPath]);
+      setCurrentPath(null);
+      setIsDrawing(false);
+      
+      // Create Circle ROI directly with center and radius (use the new simplified ROI approach)
+      const circleROI = {
+        id: completedPath.id || Date.now().toString(),
+        center: center,
+        radius: radius,
+        timestamp: Date.now()
+      };
+      
+      // Add the Circle ROI to the feature detector
+      const roiId = orbFeatureDetector.addCircleROI(circleROI);
       
       // Log ROI creation with the number of vertices and shape
       dispatch(EventType.LOG, {
-        message: `Created ROI ${finalPathDescription} with ${completedPath.points.length} vertices (ID: ${roiId})`,
+        message: `Created ${finalPathDescription} ROI with center (${Math.round(center.x)}, ${Math.round(center.y)}) and radius ${Math.round(radius)}px (ID: ${roiId})`,
         type: 'success'
       });
-    } else {
+      
+      // Dispatch the new path as an event
+      dispatch(EventType.SETTINGS_VALUE_CHANGE, {
+        section: 'drawing',
+        setting: 'newPath',
+        value: completedPath
+      });
+      
+      // Also dispatch a circle ROI created event
+      dispatch(EventType.SETTINGS_VALUE_CHANGE, {
+        section: 'drawing',
+        setting: 'newCircleROI',
+        value: circleROI
+      });
+    } 
+    else {
+      // Regular non-ROI drawing (unchanged)
+      const completedPath: DrawingPath = {
+        ...currentPath,
+        points: finalPoints,
+        isComplete: true
+      };
+      
+      setPaths(prev => [...prev, completedPath]);
+      setCurrentPath(null);
+      setIsDrawing(false);
+      
       // Notify that drawing has stopped
       dispatch(EventType.LOG, {
         message: `Completed ${settings.mode === 'roi' ? 'ROI selection' : 'free drawing'}`,
         type: 'success'
       });
+      
+      // Dispatch the new path as an event
+      dispatch(EventType.SETTINGS_VALUE_CHANGE, {
+        section: 'drawing',
+        setting: 'newPath',
+        value: completedPath
+      });
     }
-    
-    // Dispatch the new path as an event
-    dispatch(EventType.SETTINGS_VALUE_CHANGE, {
-      section: 'drawing',
-      setting: 'newPath',
-      value: completedPath
-    });
   };
   
   // Clear all paths

@@ -5,7 +5,7 @@
  * ORB feature extraction and tracking within each ROI.
  */
 
-import { DrawingPath, Point, RegionOfInterest } from './types';
+import { DrawingPath, Point, RegionOfInterest, CircleROI } from './types';
 import { 
   extractORBFeatures, 
   matchFeatures, 
@@ -24,12 +24,20 @@ interface ROIWithFeatures extends RegionOfInterest {
   lastProcessed?: number;
 }
 
+// Interface to store CircleROI with its feature information
+interface CircleROIWithFeatures extends CircleROI {
+  features?: ORBFeature;
+  trackingResult?: TrackingResult;
+  lastProcessed?: number;
+}
+
 /**
  * ROI manager with ORB feature tracking
  */
 export class ROIManager {
   private static instance: ROIManager;
   private activeROIs: ROIWithFeatures[] = [];
+  private activeCircleROIs: CircleROIWithFeatures[] = []; // New array for circle ROIs
   private processingEnabled: boolean = true;
   private lastFrameTime: number = 0;
   private frameInterval: number = 100; // Process every 100ms to avoid overloading
@@ -249,10 +257,179 @@ export class ROIManager {
   }
   
   /**
+   * Add a new CircleROI directly with center and radius
+   * @param circleROI The circle ROI with center and radius
+   * @returns The ID of the created ROI
+   */
+  public addCircleROI(circleROI: CircleROI): string {
+    // Use the provided ID or generate a new one
+    const id = circleROI.id || Date.now().toString();
+    
+    // Check if this ROI already exists
+    if (this.activeCircleROIs.some(roi => roi.id === id)) {
+      console.log(`[ROIManager] Circle ROI ${id} already exists, skipping add`);
+      return id; // Return the existing ID if already added
+    }
+    
+    const roi: CircleROIWithFeatures = {
+      ...circleROI,
+      id,
+      timestamp: Date.now(),
+      features: undefined,
+      trackingResult: undefined,
+      lastProcessed: 0
+    };
+    
+    this.activeCircleROIs.push(roi);
+    console.log(`[ROIManager] Added new Circle ROI with ID ${id}, center (${roi.center.x}, ${roi.center.y}), radius ${roi.radius}`);
+    
+    // Attempt to extract features right away from the current frame
+    this.extractFeaturesForNewCircleROI(roi);
+    
+    return id;
+  }
+  
+  /**
+   * Extract initial features for a newly created CircleROI
+   * @param roi The CircleROI to extract features for
+   */
+  private async extractFeaturesForNewCircleROI(roi: CircleROIWithFeatures): Promise<void> {
+    // Get the current frame to extract features from
+    const videoElement = document.getElementById('camera-feed') as HTMLVideoElement;
+    if (!videoElement || !videoElement.videoWidth) {
+      console.warn('[ROIManager] No video feed available for initial feature extraction');
+      return;
+    }
+    
+    console.log('[ROIManager] Attempting initial feature extraction for new Circle ROI');
+    
+    // Extract the ROI image data using the circular roi directly
+    const roiImageData = this.extractCircleROIImageData(roi, videoElement);
+    if (!roiImageData) {
+      console.warn('[ROIManager] Failed to extract Circle ROI image data for initial feature extraction');
+      return;
+    }
+    
+    try {
+      // Extract features from the ROI
+      const features = await extractORBFeatures(roiImageData, 500);
+      if (!features || features.keypoints.size() < 10) {
+        console.warn(`[ROIManager] Not enough features detected for Circle ROI (${features?.keypoints.size() || 0}), need at least 10`);
+        return;
+      }
+      
+      // Save as reference features for this ROI
+      saveReferenceFeatures(roi.id, features);
+      
+      // Update ROI with features information
+      roi.features = features;
+      roi.lastProcessed = Date.now();
+      
+      console.log(`[ROIManager] Successfully extracted ${features.keypoints.size()} features for Circle ROI ${roi.id}`);
+      
+      // Notify that features were extracted
+      dispatch(EventType.LOG, {
+        message: `Extracted ${features.keypoints.size()} features for tracking Circle ROI`,
+        type: 'success'
+      });
+      
+    } catch (error) {
+      console.error('[ROIManager] Error extracting initial features for Circle ROI:', error);
+    }
+  }
+  
+  /**
+   * Extract image data for a specific CircleROI
+   * @param roi The CircleROI to extract image data for
+   * @param videoElement Video element to capture from
+   * @returns Image data for the ROI or null if extraction failed
+   */
+  private extractCircleROIImageData(roi: CircleROIWithFeatures, videoElement: HTMLVideoElement): ImageData | null {
+    try {
+      // Get the current video frame
+      const frameData = getVideoFrame(videoElement);
+      if (!frameData) return null;
+      
+      // Create a temporary canvas to draw the video frame
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = videoElement.videoWidth;
+      tempCanvas.height = videoElement.videoHeight;
+      const tempCtx = tempCanvas.getContext('2d');
+      if (!tempCtx) return null;
+      
+      // Draw the video frame to temp canvas
+      tempCtx.putImageData(frameData, 0, 0);
+      
+      // Calculate scaling factors between display size and actual video size
+      const displayElement = document.querySelector('.camera-view') as HTMLElement;
+      if (!displayElement) {
+        console.warn("[ROIManager] Could not find camera display element for scaling calculation");
+        return null;
+      }
+      
+      const displayWidth = displayElement.clientWidth;
+      const displayHeight = displayElement.clientHeight;
+      
+      // Scale the center and radius from display coordinates to video frame coordinates
+      const scaleX = videoElement.videoWidth / displayWidth;
+      const scaleY = videoElement.videoHeight / displayHeight;
+      
+      const centerX = roi.center.x * scaleX;
+      const centerY = roi.center.y * scaleY;
+      const radius = roi.radius * Math.max(scaleX, scaleY); // Use the larger scale to ensure the full circle is captured
+      
+      // Log the scaling for debugging
+      console.log(`[ROIManager] Display to video scaling: ${scaleX.toFixed(2)}x, ${scaleY.toFixed(2)}y`);
+      console.log(`[ROIManager] Circle ROI center: Display (${roi.center.x}, ${roi.center.y}) => Video (${centerX.toFixed(1)}, ${centerY.toFixed(1)})`);
+      console.log(`[ROIManager] Circle ROI radius: Display ${roi.radius} => Video ${radius.toFixed(1)}`);
+      
+      // Extract the ROI region with circular mask
+      const extractSize = radius * 2;
+      const sourceX = Math.max(0, centerX - radius);
+      const sourceY = Math.max(0, centerY - radius);
+      const sourceWidth = Math.min(extractSize, videoElement.videoWidth - sourceX);
+      const sourceHeight = Math.min(extractSize, videoElement.videoHeight - sourceY);
+      
+      // Create a circular masked version of the ROI
+      // 1. Get the square region containing our circle
+      const squareROI = tempCtx.getImageData(sourceX, sourceY, sourceWidth, sourceHeight);
+      
+      // 2. Create a new canvas to apply the circular mask
+      const maskCanvas = document.createElement('canvas');
+      maskCanvas.width = sourceWidth;
+      maskCanvas.height = sourceHeight;
+      const maskCtx = maskCanvas.getContext('2d');
+      
+      if (!maskCtx) {
+        console.error('[ROIManager] Failed to get mask canvas context');
+        return null;
+      }
+      
+      // 3. Put the square image data on the mask canvas
+      maskCtx.putImageData(squareROI, 0, 0);
+      
+      // 4. Create circular clipping path
+      maskCtx.globalCompositeOperation = 'destination-in';
+      maskCtx.fillStyle = 'white';
+      maskCtx.beginPath();
+      maskCtx.arc(sourceWidth/2, sourceHeight/2, Math.min(sourceWidth/2, sourceHeight/2) - 2, 0, Math.PI * 2);
+      maskCtx.fill();
+      
+      // 5. Get the circular masked image data
+      return maskCtx.getImageData(0, 0, sourceWidth, sourceHeight);
+    } catch (error) {
+      console.error('[ROIManager] Error extracting Circle ROI image data:', error);
+    }
+    
+    return null;
+  }
+  
+  /**
    * Clear all ROIs
    */
   public clearROIs(): void {
     this.activeROIs = [];
+    this.activeCircleROIs = [];
     console.log('[ROIManager] Cleared all ROIs');
   }
   
@@ -262,6 +439,14 @@ export class ROIManager {
    */
   public getROIs(): RegionOfInterest[] {
     return this.activeROIs;
+  }
+  
+  /**
+   * Get all active Circle ROIs
+   * @returns Array of Circle ROIs
+   */
+  public getCircleROIs(): CircleROI[] {
+    return this.activeCircleROIs;
   }
   
   /**
@@ -276,7 +461,163 @@ export class ROIManager {
     }
     this.lastFrameTime = now;
     
-    // Process each ROI
+    // Process each Circle ROI first (new simplified method)
+    for (const roi of this.activeCircleROIs) {
+      // Only process ROIs that are due for an update
+      if (now - (roi.lastProcessed || 0) < 200) { // Process each ROI at most every 200ms
+        continue;
+      }
+      
+      // Get the video element to capture ROI from
+      const videoElement = document.getElementById('camera-feed') as HTMLVideoElement;
+      if (!videoElement || !videoElement.videoWidth) {
+        console.warn('[ROIManager] No video element found or video not started');
+        continue;
+      }
+      
+      // Verbose logging to help debug the issue
+      console.log(`[ROIManager] Processing Circle ROI ${roi.id} with center (${roi.center.x}, ${roi.center.y}) and radius ${roi.radius}`);
+      
+      // Extract the ROI image data
+      const roiImageData = this.extractCircleROIImageData(roi, videoElement);
+      if (!roiImageData) {
+        console.warn('[ROIManager] Failed to extract Circle ROI image data');
+        continue;
+      }
+      
+      console.log(`[ROIManager] Extracted Circle ROI image data: ${roiImageData.width}x${roiImageData.height}`);
+      
+      try {
+        // Check if we have reference features for this ROI
+        if (!referenceFeatures.has(roi.id)) {
+          console.log(`[ROIManager] No reference features for Circle ROI ${roi.id}, extracting...`);
+          
+          // Extract features and save as reference
+          console.log('[ROIManager] Calling extractORBFeatures for Circle ROI...');
+          const features = await extractORBFeatures(roiImageData, 500);
+          
+          if (features) {
+            console.log(`[ROIManager] Feature extraction result for Circle ROI ${roi.id}:`, {
+              success: true,
+              keypoints: features.keypoints.size(),
+              descriptorSize: features.descriptors.rows
+            });
+          } else {
+            console.warn('[ROIManager] Feature extraction returned null for Circle ROI');
+          }
+          
+          if (features && features.keypoints.size() > 10) {
+            saveReferenceFeatures(roi.id, features);
+            roi.features = features;
+            roi.lastProcessed = now;
+            
+            // Create a public event to notify other components
+            dispatch(EventType.ROI_UPDATED, {
+              id: roi.id,
+              status: 'reference-captured',
+              featureCount: features.keypoints.size(),
+              timestamp: now,
+              isCircleROI: true, // Flag to identify this as a circle ROI
+              center: roi.center,
+              radius: roi.radius
+            });
+            
+            console.log(`[ROIManager] Extracted ${features.keypoints.size()} reference features for Circle ROI ${roi.id}`);
+          } else {
+            console.warn(`[ROIManager] Failed to extract enough features for Circle ROI ${roi.id}. Found: ${features?.keypoints.size() || 0}, needed: 10`);
+            
+            // Update lastProcessed to avoid hammering with extraction attempts
+            roi.lastProcessed = now;
+            
+            // Create a public event to notify other components
+            dispatch(EventType.ROI_UPDATED, {
+              id: roi.id,
+              status: 'extraction-failed',
+              featureCount: features?.keypoints.size() || 0,
+              timestamp: now,
+              isCircleROI: true,
+              center: roi.center,
+              radius: roi.radius
+            });
+          }
+          continue;
+        }
+        
+        // Extract current features to match against reference
+        const currentFeatures = await extractORBFeatures(roiImageData, 500);
+        if (!currentFeatures || currentFeatures.keypoints.size() < 10) {
+          console.warn(`[ROIManager] Not enough features in current frame for Circle ROI ${roi.id}. Found: ${currentFeatures?.keypoints.size() || 0}, needed: 10`);
+          roi.lastProcessed = now;
+          
+          // Create a public event to notify other components
+          dispatch(EventType.ROI_UPDATED, {
+            id: roi.id,
+            status: 'tracking-insufficient-features',
+            featureCount: currentFeatures?.keypoints.size() || 0,
+            timestamp: now,
+            isCircleROI: true,
+            center: roi.center,
+            radius: roi.radius
+          });
+          
+          continue;
+        }
+        
+        // Match current features with reference features
+        console.log(`[ROIManager] Matching ${currentFeatures.keypoints.size()} features against reference for Circle ROI ${roi.id}`);
+        const trackingResult = await matchFeatures(roi.id, currentFeatures);
+        
+        console.log(`[ROIManager] Matching result for Circle ROI ${roi.id}:`, {
+          isTracked: trackingResult.isTracked,
+          matchCount: trackingResult.matchCount,
+          inlierCount: trackingResult.inlierCount,
+          confidence: trackingResult.confidence
+        });
+        
+        // Update tracking result
+        roi.trackingResult = trackingResult;
+        roi.lastProcessed = now;
+        
+        // Create a public event to notify other components like ROIDebugCanvas
+        dispatch(EventType.ROI_UPDATED, {
+          id: roi.id,
+          status: trackingResult.isTracked ? 'tracking-success' : 'tracking-lost',
+          trackingResult: {
+            isTracked: trackingResult.isTracked,
+            matchCount: trackingResult.matchCount,
+            inlierCount: trackingResult.inlierCount,
+            confidence: trackingResult.confidence,
+            center: trackingResult.center,
+            rotation: trackingResult.rotation,
+          },
+          timestamp: now,
+          isCircleROI: true,
+          center: roi.center,
+          radius: roi.radius
+        });
+        
+        // Clean up OpenCV resources
+        currentFeatures.keypoints.delete();
+        currentFeatures.descriptors.delete();
+        
+      } catch (error) {
+        console.error(`[ROIManager] Error processing Circle ROI ${roi.id}:`, error);
+        roi.lastProcessed = now; // Mark as processed even if there was an error
+        
+        // Create a public event to notify other components
+        dispatch(EventType.ROI_UPDATED, {
+          id: roi.id,
+          status: 'processing-error',
+          error: error instanceof Error ? error.message : String(error),
+          timestamp: now,
+          isCircleROI: true,
+          center: roi.center,
+          radius: roi.radius
+        });
+      }
+    }
+    
+    // Process each legacy ROI
     for (const roi of this.activeROIs) {
       // Only process ROIs that are due for an update
       if (now - (roi.lastProcessed || 0) < 200) { // Process each ROI at most every 200ms

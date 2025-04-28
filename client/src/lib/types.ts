@@ -26,6 +26,14 @@ export interface RegionOfInterest {
   timestamp: number;
 }
 
+// Circle-based Region of Interest with simplified representation
+export interface CircleROI {
+  id: string;
+  center: Point;
+  radius: number;
+  timestamp: number;
+}
+
 // MediaPipe hand landmark
 export interface HandLandmark {
   x: number;
