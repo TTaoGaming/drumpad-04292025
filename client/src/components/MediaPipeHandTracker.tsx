@@ -556,9 +556,16 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
         const mpCamera = await import('@mediapipe/camera_utils');
         const mpDrawing = await import('@mediapipe/drawing_utils');
         
-        // Initialize MediaPipe Hands with CDN - using version we know works
+        // Initialize MediaPipe Hands with CDN - ensure we use the class correctly
+        // Check whether the import provides a default export or a named export
+        const HandsClass = mpHands.default?.Hands || mpHands.Hands;
+        
+        if (!HandsClass) {
+          throw new Error('MediaPipe Hands class not found. The library may have changed its export structure.');
+        }
+        
         // @ts-ignore - TypeScript doesn't like the locateFile, but it's required
-        const hands = new mpHands.Hands({
+        const hands = new HandsClass({
           locateFile: (file: string) => {
             return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`;
           }

@@ -118,8 +118,14 @@ const MediaPipeHandTracking: React.FC<MediaPipeHandTrackingProps> = ({ videoRef 
       }
       
       try {
-        // Configure MediaPipe Hands
-        const hands = new Hands({
+        // Configure MediaPipe Hands - supporting both default and named exports
+        const HandsClass = Hands;
+        
+        if (!HandsClass) {
+          throw new Error('MediaPipe Hands class not found. The library may have changed its export structure.');
+        }
+        
+        const hands = new HandsClass({
           locateFile: (file) => {
             return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
           }
@@ -238,7 +244,14 @@ const MediaPipeHandTracking: React.FC<MediaPipeHandTrackingProps> = ({ videoRef 
         
         // Set up camera
         if (videoRef.current) {
-          const camera = new Camera(videoRef.current, {
+          // Get the Camera class, checking for both direct and default exports
+          const CameraClass = Camera;
+          
+          if (!CameraClass) {
+            throw new Error('MediaPipe Camera class not found. The library may have changed its export structure.');
+          }
+          
+          const camera = new CameraClass(videoRef.current, {
             onFrame: async () => {
               if (videoRef.current && handsRef.current) {
                 await handsRef.current.send({image: videoRef.current});
