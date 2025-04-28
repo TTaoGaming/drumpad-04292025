@@ -351,6 +351,10 @@ function App() {
     }
   };
 
+  // Throttle console logs related to frame processing
+  const frameLogCountRef = useRef(0);
+  const LOG_EVERY_N_FRAMES = 300; // Only log every 300 frames (approx. every 5 seconds at 60fps)
+  
   const processVideoFrame = () => {
     // Only process if workers are ready and camera is running
     if (
@@ -367,7 +371,10 @@ function App() {
         const frameData = getVideoFrame(videoRef.current);
         
         if (frameData && mediaPipelineWorkerRef.current) {
-          console.log('Sending frame to worker', frameData ? 'Frame available' : 'No frame');
+          // Only log occasionally to reduce overhead
+          if (++frameLogCountRef.current % LOG_EVERY_N_FRAMES === 0) {
+            console.log('Frame processing active');
+          }
           
           // Send frame to Media Pipeline worker for hand detection
           mediaPipelineWorkerRef.current.postMessage({

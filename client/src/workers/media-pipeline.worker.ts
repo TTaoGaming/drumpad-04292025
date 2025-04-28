@@ -20,12 +20,19 @@ interface MPModulePerformance {
 // Track performance for different pipeline stages
 const mpPerformanceMetrics: Record<string, MPModulePerformance> = {};
 
-// Send log message to main thread
-function mpLog(message: string): void {
-  mpCtx.postMessage({
-    type: 'log',
-    message
-  });
+// Counter for throttling logs
+let logCounter = 0;
+const LOG_THROTTLE = 50; // Only send 1 out of every 50 logs
+
+// Send log message to main thread (with throttling)
+function mpLog(message: string, forceLog = false): void {
+  // Only log critical messages or throttled regular messages
+  if (forceLog || ++logCounter % LOG_THROTTLE === 0) {
+    mpCtx.postMessage({
+      type: 'log',
+      message
+    });
+  }
 }
 
 // Send status update to main thread

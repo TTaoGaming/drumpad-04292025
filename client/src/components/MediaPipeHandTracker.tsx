@@ -278,15 +278,13 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
     new HandTrackingOptimizer(performanceSettings.roiOptimization)
   );
   
-  // Create throttled dispatch function for UI updates
-  const throttledDispatch = useCallback((type: EventType, data: any) => {
-    // Use the throttle function with the current interval
-    const throttled = throttle((t: EventType, d: any) => {
-      dispatch(t, d);
-    }, performanceSettings.throttling.interval);
-    
-    throttled(type, data);
-  }, [performanceSettings.throttling.interval]);
+  // Create throttled dispatch function for UI updates - only create once
+  const throttledDispatch = useCallback(
+    throttle((type: EventType, data: any) => {
+      dispatch(type, data);
+    }, performanceSettings.throttling.interval),
+    [performanceSettings.throttling.interval]
+  );
   
   // Apply the 1€ filter to hand landmarks
   const applyFilter = useCallback((landmarks: any, handIndex: number, timestamp: number): any => {
