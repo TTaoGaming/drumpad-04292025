@@ -38,9 +38,6 @@ const DrawingSettings: React.FC = () => {
   
   // Long press delay in milliseconds (default: 500ms)
   const [longPressDelay, setLongPressDelay] = useState(500);
-  
-  // Auto-end drawing timeout in milliseconds (default: 5000ms = 5 seconds)
-  const [maxDrawingDuration, setMaxDrawingDuration] = useState(5000);
 
   // Update global state when settings change
   useEffect(() => {
@@ -59,15 +56,6 @@ const DrawingSettings: React.FC = () => {
       value: longPressDelay
     });
   }, [longPressDelay]);
-  
-  // Update max drawing duration when it changes
-  useEffect(() => {
-    dispatch(EventType.SETTINGS_VALUE_CHANGE, {
-      section: 'drawing',
-      setting: 'maxDrawingDuration',
-      value: maxDrawingDuration
-    });
-  }, [maxDrawingDuration]);
   
   // No longer need to track feature count since we removed the feature detection
   useEffect(() => {
@@ -254,27 +242,6 @@ const DrawingSettings: React.FC = () => {
                 onValueChange={(value) => setLongPressDelay(value[0])}
               />
               <span className="w-16 text-center">{longPressDelay}ms</span>
-            </div>
-          </div>
-          
-          {/* Auto-end Drawing Timer */}
-          <div className="space-y-2">
-            <Label htmlFor="max-drawing-duration">
-              Auto-end Drawing Timer (sec)
-              <p className="text-xs text-muted-foreground mt-1">
-                Drawing automatically completes after this duration
-              </p>
-            </Label>
-            <div className="flex items-center space-x-2">
-              <Slider 
-                id="max-drawing-duration"
-                value={[maxDrawingDuration / 1000]} 
-                min={1} 
-                max={15} 
-                step={1}
-                onValueChange={(value) => setMaxDrawingDuration(value[0] * 1000)}
-              />
-              <span className="w-16 text-center">{maxDrawingDuration / 1000}s</span>
             </div>
           </div>
           
