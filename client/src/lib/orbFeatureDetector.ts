@@ -1,12 +1,14 @@
 /**
- * Region of Interest (ROI) Manager with ORB Feature Detection
+ * Region of Interest (ROI) Manager
  * 
- * Manages regions of interest for the drawing canvas and performs
- * ORB feature extraction and tracking within each ROI.
+ * Manages circle regions of interest created by pinch gestures.
+ * This is a simplified version that focuses only on ROI creation/tracking
+ * without feature extraction or matching.
  */
 
 import { DrawingPath, Point, RegionOfInterest, CircleROI } from './types';
 import { 
+  // Import placeholder functions but they won't do any actual feature tracking
   extractORBFeatures, 
   matchFeatures, 
   ORBFeature, 
@@ -44,7 +46,7 @@ export class ROIManager {
   
   // Private constructor for singleton
   private constructor() {
-    console.log('[ROIManager] Initialized with ORB feature tracking enabled');
+    console.log('[ROIManager] Initialized with simplified ROI management (no feature tracking)');
   }
   
   // Get singleton instance
@@ -96,52 +98,22 @@ export class ROIManager {
   }
   
   /**
-   * Extract initial features for a newly created ROI
-   * @param roi The ROI to extract features for
+   * Process a newly created ROI (without feature extraction)
+   * This method has been simplified to only display ROIs without feature tracking.
+   * @param roi The ROI to process
    */
   private async extractFeaturesForNewROI(roi: ROIWithFeatures): Promise<void> {
-    // Get the current frame to extract features from
-    const videoElement = document.getElementById('camera-feed') as HTMLVideoElement;
-    if (!videoElement || !videoElement.videoWidth) {
-      console.warn('[ROIManager] No video feed available for initial feature extraction');
-      return;
-    }
+    // Just update the lastProcessed timestamp
+    roi.lastProcessed = Date.now();
     
-    console.log('[ROIManager] Attempting initial feature extraction for new ROI');
+    // Dispatch a notification that the ROI was created
+    dispatch(EventType.LOG, {
+      message: `ROI created with ${roi.points.length} points`,
+      type: 'success'
+    });
     
-    // Extract the ROI image data using the circular mask method from ROIDebugCanvas
-    const roiImageData = this.extractROIImageData(roi, videoElement);
-    if (!roiImageData) {
-      console.warn('[ROIManager] Failed to extract ROI image data for initial feature extraction');
-      return;
-    }
-    
-    try {
-      // Extract features from the ROI
-      const features = await extractORBFeatures(roiImageData, 500);
-      if (!features || features.keypoints.size() < 10) {
-        console.warn(`[ROIManager] Not enough features detected (${features?.keypoints.size() || 0}), need at least 10`);
-        return;
-      }
-      
-      // Save as reference features for this ROI
-      saveReferenceFeatures(roi.id, features);
-      
-      // Update ROI with features information
-      roi.features = features;
-      roi.lastProcessed = Date.now();
-      
-      console.log(`[ROIManager] Successfully extracted ${features.keypoints.size()} features for ROI ${roi.id}`);
-      
-      // Notify that features were extracted
-      dispatch(EventType.LOG, {
-        message: `Extracted ${features.keypoints.size()} features for tracking ROI`,
-        type: 'success'
-      });
-      
-    } catch (error) {
-      console.error('[ROIManager] Error extracting initial features:', error);
-    }
+    // No feature extraction anymore - just visual representation
+    console.log(`[ROIManager] ROI created with ID ${roi.id} (no feature extraction)`);
   }
   
   /**
@@ -301,52 +273,22 @@ export class ROIManager {
   }
   
   /**
-   * Extract initial features for a newly created CircleROI
-   * @param roi The CircleROI to extract features for
+   * Process a newly created CircleROI (without feature extraction)
+   * This method has been simplified to only display ROIs without feature tracking.
+   * @param roi The CircleROI to process
    */
   private async extractFeaturesForNewCircleROI(roi: CircleROIWithFeatures): Promise<void> {
-    // Get the current frame to extract features from
-    const videoElement = document.getElementById('camera-feed') as HTMLVideoElement;
-    if (!videoElement || !videoElement.videoWidth) {
-      console.warn('[ROIManager] No video feed available for initial feature extraction');
-      return;
-    }
+    // Just update the lastProcessed timestamp
+    roi.lastProcessed = Date.now();
     
-    console.log('[ROIManager] Attempting initial feature extraction for new Circle ROI');
+    // Dispatch a notification that the ROI was created
+    dispatch(EventType.LOG, {
+      message: `Circle ROI created with radius ${(roi.radius * 100).toFixed(1)}%`,
+      type: 'success'
+    });
     
-    // Extract the ROI image data using the circular roi directly
-    const roiImageData = this.extractCircleROIImageData(roi, videoElement);
-    if (!roiImageData) {
-      console.warn('[ROIManager] Failed to extract Circle ROI image data for initial feature extraction');
-      return;
-    }
-    
-    try {
-      // Extract features from the ROI
-      const features = await extractORBFeatures(roiImageData, 500);
-      if (!features || features.keypoints.size() < 10) {
-        console.warn(`[ROIManager] Not enough features detected for Circle ROI (${features?.keypoints.size() || 0}), need at least 10`);
-        return;
-      }
-      
-      // Save as reference features for this ROI
-      saveReferenceFeatures(roi.id, features);
-      
-      // Update ROI with features information
-      roi.features = features;
-      roi.lastProcessed = Date.now();
-      
-      console.log(`[ROIManager] Successfully extracted ${features.keypoints.size()} features for Circle ROI ${roi.id}`);
-      
-      // Notify that features were extracted
-      dispatch(EventType.LOG, {
-        message: `Extracted ${features.keypoints.size()} features for tracking Circle ROI`,
-        type: 'success'
-      });
-      
-    } catch (error) {
-      console.error('[ROIManager] Error extracting initial features for Circle ROI:', error);
-    }
+    // No feature extraction anymore - just visual representation
+    console.log(`[ROIManager] Circle ROI created with ID ${roi.id} (no feature extraction)`);
   }
   
   /**
