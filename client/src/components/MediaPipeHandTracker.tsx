@@ -325,6 +325,9 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
   // Frame counter for frame skipping
   const frameCountRef = useRef(0);
   
+  // Reference to the MediaPipe Hands instance for updating settings
+  const handsRef = useRef<any>(null);
+  
   // Debug setting to show/hide the ROI visualization
   const [showROI, setShowROI] = useState(true);
   
