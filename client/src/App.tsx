@@ -232,8 +232,8 @@ function App() {
       // Log for debugging
       addLog(`Created new Circle ROI at (${Math.round(circleROI.center.x)}, ${Math.round(circleROI.center.y)}) with radius ${Math.round(circleROI.radius)}px (ID: ${circleROI.id})`, 'success');
       
-      // Here we could store the CircleROI if needed, but we're already keeping the DrawingPath visualization
-      // The actual tracking will be done by the ROIManager via the orbFeatureDetector.addCircleROI call
+      // We're only visualizing the ROI now, not tracking features within it
+      // This simplified approach focuses only on hand tracking with pinch lasso ROI functionality
     });
 
     // Cleanup event listeners on unmount

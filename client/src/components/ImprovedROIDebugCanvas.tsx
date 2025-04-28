@@ -34,7 +34,7 @@ const ImprovedROIDebugCanvas: React.FC<ImprovedROIDebugCanvasProps> = ({
     const opencvListener = addListener(EventType.OPENCV_STATUS, (data) => {
       if (data.ready) {
         setIsOpenCVReady(true);
-        setStatus('OpenCV ready. Draw an ROI to continue.');
+        setStatus('OpenCV ready. Use pinch gesture to create ROI.');
       }
     });
     
@@ -241,27 +241,17 @@ const ImprovedROIDebugCanvas: React.FC<ImprovedROIDebugCanvasProps> = ({
     ctx.textAlign = 'right';
     ctx.fillText(`${fps} FPS`, width - 8, 20);
     
-    // Draw matching info if available
-    if (roi.matchResult) {
-      const confidence = roi.matchResult.confidence * 100;
-      const confText = `${confidence.toFixed(0)}%`;
-      
-      // Confidence bar background
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-      ctx.fillRect(0, height - 20, width, 20);
-      
-      // Confidence bar foreground
-      const barColor = confidence > 80 ? '#4CAF50' : 
-                       confidence > 60 ? '#FFC107' : 
-                       '#F44336';
-      ctx.fillStyle = barColor;
-      ctx.fillRect(0, height - 20, width * (confidence / 100), 20);
-      
-      // Confidence text
-      ctx.fillStyle = 'white';
-      ctx.textAlign = 'center';
-      ctx.fillText(`Match: ${confText}`, width / 2, height - 6);
-    }
+    // Status box for ROI info instead of matching data
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fillRect(0, height - 20, width, 20);
+    
+    ctx.fillStyle = '#4CAF50'; // Always green now since we're not tracking
+    ctx.fillRect(0, height - 20, width, 4); // Just a thin green line at the top
+    
+    // Info text about lasso mode
+    ctx.fillStyle = 'white';
+    ctx.textAlign = 'center';
+    ctx.fillText('Pinch Lasso ROI', width / 2, height - 6);
   };
 
   if (!visible) return null;

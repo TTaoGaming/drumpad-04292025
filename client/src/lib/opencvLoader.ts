@@ -13,12 +13,13 @@ let _opencvLoadPromise: Promise<void> | null = null;
 export function isOpenCVReady(): boolean {
   if (typeof window === 'undefined') return false;
   
-  // Check if the OpenCV library is loaded and key functions are available
+  // Check if the OpenCV library is loaded and basic functions are available
+  // We only need basic functionality now that we've removed ORB tracking
   const cv = (window as any).cv;
   const isReady = 
     !!cv && 
-    typeof cv.ORB === 'function' &&
-    typeof cv.Mat === 'function';
+    typeof cv.Mat === 'function' &&
+    typeof cv.matFromImageData === 'function';
   
   _opencvReady = isReady;
   return isReady;
