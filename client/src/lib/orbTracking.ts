@@ -1,12 +1,12 @@
 /**
- * ORB Feature Tracking Module
+ * [PLACEHOLDER] Enhanced Marker Tracking
  * 
- * This module handles ORB feature extraction and matching for ROI tracking.
- * It enables markers to be tracked as they move or rotate within the camera view.
+ * This is a placeholder for future marker tracking strategies.
+ * We have removed the ORB-based tracking to simplify the system
+ * and focus only on hand tracking with pinch lasso ROI functionality.
  */
 
-// OpenCV.js is loaded globally via the opencvLoader module
-// This declares the global type but actual loading is done via opencvLoader
+// Declare OpenCV global for type checking
 declare const cv: any;
 
 // Import OpenCV loader for initialization
