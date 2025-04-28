@@ -32,6 +32,10 @@ export interface CircleROI {
   center: Point;
   radius: number;
   timestamp: number;
+  matchResult?: {
+    confidence: number;
+    isTracked: boolean;
+  };
 }
 
 // MediaPipe hand landmark
