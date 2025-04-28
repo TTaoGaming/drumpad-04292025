@@ -74,12 +74,17 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
     if (drawingTimeoutRef.current) {
       clearTimeout(drawingTimeoutRef.current);
       drawingTimeoutRef.current = null;
+      console.log('Cleared existing drawing timeout timer');
     }
+    
+    console.log(`Setting new auto-end drawing timer for ${maxDrawingDuration}ms (${maxDrawingDuration/1000} seconds)`);
     
     // Set a new timer to automatically end drawing after the configured time
     drawingTimeoutRef.current = setTimeout(() => {
+      console.log(`AUTO-END TIMER TRIGGERED: Drawing timeout reached (${maxDrawingDuration}ms), automatically completing ROI`);
+      
       if (isDrawing && currentPath) {
-        console.log(`Drawing timeout reached (${maxDrawingDuration}ms), automatically completing ROI`);
+        console.log(`Current path has ${currentPath.points.length} points`);
         
         // End the drawing
         dispatch(EventType.NOTIFICATION, {
@@ -87,13 +92,16 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
           type: 'info'
         });
         
+        // Important: Call stopDrawing to complete the path and create the ROI
         stopDrawing();
+      } else {
+        console.log('Drawing timeout reached but no current path or not drawing');
       }
       
       drawingTimeoutRef.current = null;
     }, maxDrawingDuration);
     
-    console.log(`Set auto drawing timeout for ${maxDrawingDuration}ms`);
+    console.log(`Set auto drawing timeout ID: ${drawingTimeoutRef.current}`);
   };
 
   // Listen for pinch events from MediaPipeHandTracker
@@ -225,7 +233,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
         drawingTimeoutRef.current = null;
       }
     };
-  }, [isDrawing, width, height, settings.enabled, currentPath, longPressDelay]);
+  }, [isDrawing, width, height, settings.enabled, currentPath, longPressDelay, maxDrawingDuration]);
   
   // Drawing canvas renderer
   useEffect(() => {
