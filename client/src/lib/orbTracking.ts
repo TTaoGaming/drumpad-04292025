@@ -476,6 +476,47 @@ export async function matchFeatures(roiId: string, currentFeatures: ORBFeature):
       });
     }
     
+    // Convert OpenCV keypoints to our simplified FeaturePoint format for visualization
+    const keypointsForVisualization: FeaturePoint[] = [];
+    if (currentFeatures.keypoints && currentFeatures.keypoints.size) {
+      const kpCount = currentFeatures.keypoints.size();
+      for (let i = 0; i < kpCount; i++) {
+        const kp = currentFeatures.keypoints.get(i);
+        keypointsForVisualization.push({
+          x: kp.pt.x,
+          y: kp.pt.y,
+          size: kp.size,
+          angle: kp.angle
+        });
+      }
+    }
+    
+    // Convert matches to visualization format
+    const matchesForVisualization: FeatureMatch[] = [];
+    const matchCount = matches.size();
+    for (let i = 0; i < matchCount; i++) {
+      const match = matches.get(i);
+      // Only include good matches (RANSAC inliers)
+      if (i < mask.rows && mask.ucharPtr(i, 0)[0] !== 0) {
+        const queryKp = referenceFeature.keypoints.get(match.queryIdx);
+        const trainKp = currentFeatures.keypoints.get(match.trainIdx);
+        
+        matchesForVisualization.push({
+          queryIdx: match.queryIdx,
+          trainIdx: match.trainIdx,
+          queryPoint: { 
+            x: queryKp.pt.x, 
+            y: queryKp.pt.y 
+          },
+          trainPoint: { 
+            x: trainKp.pt.x, 
+            y: trainKp.pt.y 
+          },
+          distance: match.distance
+        });
+      }
+    }
+    
     return {
       isTracked: confidence > 0.4, // At least 40% inliers
       homography,
@@ -484,7 +525,10 @@ export async function matchFeatures(roiId: string, currentFeatures: ORBFeature):
       confidence,
       center,
       corners,
-      rotation
+      rotation,
+      // Add keypoints and matches for visualization
+      keypoints: keypointsForVisualization,
+      matches: matchesForVisualization
     };
   } catch (error) {
     console.error('[orbTracking] Error matching features:', error);

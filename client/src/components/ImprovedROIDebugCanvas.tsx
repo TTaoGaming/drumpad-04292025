@@ -261,6 +261,60 @@ const ImprovedROIDebugCanvas: React.FC<ImprovedROIDebugCanvasProps> = ({
       ctx.fillStyle = 'white';
       ctx.textAlign = 'center';
       ctx.fillText(`Match: ${confText}`, width / 2, height - 6);
+      
+      // Draw feature points if available in tracking result
+      if (roi.trackingResult && roi.trackingResult.keypoints) {
+        const keypoints = roi.trackingResult.keypoints;
+        
+        // Adjust points from video coordinates to our canvas coordinates
+        const scaleX = width / sourceWidth;
+        const scaleY = height / sourceHeight;
+        const offsetX = -sourceX;
+        const offsetY = -sourceY;
+        
+        // Draw each keypoint
+        ctx.fillStyle = 'rgba(0, 255, 0, 0.7)';
+        
+        for (const kp of keypoints) {
+          if (!kp || typeof kp.x !== 'number' || typeof kp.y !== 'number') continue;
+          
+          // Transform coordinates from video to canvas space
+          const canvasX = (kp.x + offsetX) * scaleX;
+          const canvasY = (kp.y + offsetY) * scaleY;
+          
+          // Skip points outside the visible area
+          if (canvasX < 0 || canvasX > width || canvasY < 0 || canvasY > height) continue;
+          
+          // Draw feature point
+          ctx.beginPath();
+          ctx.arc(canvasX, canvasY, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        
+        // Draw match lines if available
+        if (roi.trackingResult.matches && roi.trackingResult.matches.length > 0) {
+          ctx.strokeStyle = 'rgba(255, 255, 0, 0.5)';
+          ctx.lineWidth = 1;
+          
+          for (const match of roi.trackingResult.matches) {
+            if (!match || !match.queryPoint || !match.trainPoint) continue;
+            
+            const fromX = (match.queryPoint.x + offsetX) * scaleX;
+            const fromY = (match.queryPoint.y + offsetY) * scaleY;
+            const toX = (match.trainPoint.x + offsetX) * scaleX;
+            const toY = (match.trainPoint.y + offsetY) * scaleY;
+            
+            // Skip lines that go outside the visible area
+            if (fromX < 0 || fromX > width || fromY < 0 || fromY > height ||
+                toX < 0 || toX > width || toY < 0 || toY > height) continue;
+            
+            ctx.beginPath();
+            ctx.moveTo(fromX, fromY);
+            ctx.lineTo(toX, toY);
+            ctx.stroke();
+          }
+        }
+      }
     }
   };
 
