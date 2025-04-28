@@ -49,6 +49,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
   const [longPressDelay, setLongPressDelay] = useState(500); // 500ms default delay
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pinchPositionRef = useRef<{x: number, y: number} | null>(null);
+  const isPinchingRef = useRef<boolean>(false); // Track pinch state
+  const isLongPressActiveRef = useRef<boolean>(false); // Track if long press is in progress
   const [settings, setSettings] = useState<DrawingSettings>({
     enabled: enabled,
     mode: 'roi',
@@ -328,48 +330,71 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
   // Handle pinch state changes
   const handlePinchStateChange = (isPinching: boolean, position: { x: number, y: number }, fingerId?: number) => {
     console.log(`Pinch state change: isPinching=${isPinching}, position=(${Math.round(position.x)}, ${Math.round(position.y)}), isDrawing=${isDrawing}`);
+
+    // Track pinch state change in ref
+    const wasPinching = isPinchingRef.current;
+    isPinchingRef.current = isPinching;
     
-    // Start long press timer when pinching begins but not drawing yet
-    if (isPinching && !isDrawing) {
+    // CASE 1: Pinch just started (transition from not pinching to pinching)
+    if (isPinching && !wasPinching && !isDrawing) {
       // Log raw position data for debugging
-      console.log('Pinch detected, waiting for long press delay of', longPressDelay, 'ms');
+      console.log('New pinch detected, starting long press timer with delay of', longPressDelay, 'ms');
       
-      // Cancel any existing timers
+      // Make sure any existing timer is cleared
       if (longPressTimerRef.current) {
         clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+        isLongPressActiveRef.current = false;
       }
       
-      // Save the current position
+      // Save the initial pinch position
       pinchPositionRef.current = { x: position.x, y: position.y };
+      
+      // Mark that we're starting a new long press
+      isLongPressActiveRef.current = true;
       
       // Set a timer to start drawing after the delay
       longPressTimerRef.current = setTimeout(() => {
-        // Only start drawing if we're still pinching
-        if (pinchPositionRef.current) {
+        // Only start drawing if we're still pinching when the timer finishes
+        if (isPinchingRef.current && pinchPositionRef.current && isLongPressActiveRef.current) {
           console.log('Long press timer completed, starting to draw');
+          
           // Use the saved position coordinates
           startDrawing(pinchPositionRef.current.x, pinchPositionRef.current.y, fingerId);
           
-          // Dispatch an event to notify that drawing has started
+          // Reset long press state since we've now started drawing
+          isLongPressActiveRef.current = false;
+          
+          // Dispatch a notification
           dispatch(EventType.NOTIFICATION, {
             message: 'Drawing started after long press',
             type: 'info'
           });
+        } else {
+          console.log('Long press timer completed, but pinch already released');
+          isLongPressActiveRef.current = false;
         }
+        
+        // Clear the timer reference
+        longPressTimerRef.current = null;
       }, longPressDelay);
     } 
-    // Continue drawing when pinching and already drawing
+    // CASE 2: Continue drawing when already drawing and still pinching
     else if (isPinching && isDrawing) {
-      // Add the current point to the path (with more distance info)
+      // Add the current point to the path
       console.log('Continuing drawing with thumb pinch at:', position);
       addPointToPath(position.x, position.y);
     }
-    // Stop drawing when pinching ends
+    // CASE 3: Pinch released
     else if (!isPinching) {
+      console.log('Pinch released, was drawing:', isDrawing);
+      
       // Clear any pending long press timer
       if (longPressTimerRef.current) {
+        console.log('Canceling long press timer due to pinch release');
         clearTimeout(longPressTimerRef.current);
         longPressTimerRef.current = null;
+        isLongPressActiveRef.current = false;
       }
       
       // Reset the saved position
@@ -377,8 +402,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
       
       // Stop drawing if we were drawing
       if (isDrawing) {
-        console.log('Pinch released, stopping drawing with points:', 
-                    currentPath ? currentPath.points.length : 0);
+        console.log('Stopping drawing with points:', currentPath ? currentPath.points.length : 0);
         stopDrawing();
       }
     }
