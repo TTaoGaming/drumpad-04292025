@@ -1,0 +1,66 @@
+[ROIManager] Error extracting Circle ROI image data: 
+DOMException {}
+
+[ROIManager] Error extracting Circle ROI image data: 
+DOMException {}
+
+[ROIManager] Error extracting Circle ROI image data: 
+DOMException {}
+
+[ROIManager] Error extracting Circle ROI image data: 
+DOMException {}
+
+Error matching features: 
+BindingError {name: "BindingError", message: "Cannot pass deleted object as a pointer of type DMatchVector const*", stack: "BindingError: Cannot pass deleted object as a pointer of type DMatchVector const*↵    at…"}
+
+at t.value (https://1111bdea-7076-48a4-98d1-9991dca59b53-00-1s8cd2auadk8h.kirk.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:17465)
+at new t (https://1111bdea-7076-48a4-98d1-9991dca59b53-00-1s8cd2auadk8h.kirk.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:12630)
+at t.value (https://1111bdea-7076-48a4-98d1-9991dca59b53-00-1s8cd2auadk8h.kirk.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:32766)
+at https://1111bdea-7076-48a4-98d1-9991dca59b53-00-1s8cd2auadk8h.kirk.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:34400
+[ROIManager] Error extracting Circle ROI image data: 
+DOMException {}
+
+Error matching features: 
+BindingError {name: "BindingError", message: "Cannot pass deleted object as a pointer of type DMatchVector const*", stack: "BindingError: Cannot pass deleted object as a pointer of type DMatchVector const*↵    at…"}
+
+[ROIManager] Error extracting Circle ROI image data: 
+DOMException {}
+
+Error matching features: 
+BindingError {name: "BindingError", message: "Cannot pass deleted object as a pointer of type DMatchVector const*", stack: "BindingError: Cannot pass deleted object as a pointer of type DMatchVector const*↵    at…"}
+
+[ROIManager] Error extracting Circle ROI image data: 
+DOMException {}
+
+Error matching features: 
+BindingError {name: "BindingError", message: "Cannot pass deleted object as a pointer of type DMatchVector const*", stack: "BindingError: Cannot pass deleted object as a pointer of type DMatchVector const*↵    at…"}
+
+[ROIManager] Error extracting Circle ROI image data: 
+DOMException {}
+
+Error matching features: 
+BindingError {name: "BindingError", message: "Cannot pass deleted object as a pointer of type DMatchVector const*", stack: "BindingError: Cannot pass deleted object as a pointer of type DMatchVector const*↵    at…"}
+
+[ROIManager] Error extracting Circle ROI image data: 
+DOMException {}
+
+Error matching features: 
+BindingError {name: "BindingError", message: "Cannot pass deleted object as a pointer of type DMatchVector const*", stack: "BindingError: Cannot pass deleted object as a pointer of type DMatchVector const*↵    at…"}
+
+[ROIManager] Error extracting Circle ROI image data: 
+DOMException {}
+
+Error matching features: 
+BindingError {name: "BindingError", message: "Cannot pass deleted object as a pointer of type DMatchVector const*", stack: "BindingError: Cannot pass deleted object as a pointer of type DMatchVector const*↵    at…"}
+
+[ROIManager] Error extracting Circle ROI image data: 
+DOMException {}
+
+[ROIManager] Error extracting Circle ROI image data: 
+DOMException {}
+
+[ROIManager] Error extracting Circle ROI image data: 
+DOMException {}
+
+[ROIManager] Error extracting Circle ROI image data: 
+DOMException {}
