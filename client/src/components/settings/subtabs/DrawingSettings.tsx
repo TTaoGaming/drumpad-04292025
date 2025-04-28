@@ -257,6 +257,27 @@ const DrawingSettings: React.FC = () => {
             </div>
           </div>
           
+          {/* Auto-end Drawing Timer */}
+          <div className="space-y-2">
+            <Label htmlFor="max-drawing-duration">
+              Auto-end Drawing Timer (sec)
+              <p className="text-xs text-muted-foreground mt-1">
+                Drawing automatically completes after this duration
+              </p>
+            </Label>
+            <div className="flex items-center space-x-2">
+              <Slider 
+                id="max-drawing-duration"
+                value={[maxDrawingDuration / 1000]} 
+                min={1} 
+                max={15} 
+                step={1}
+                onValueChange={(value) => setMaxDrawingDuration(value[0] * 1000)}
+              />
+              <span className="w-16 text-center">{maxDrawingDuration / 1000}s</span>
+            </div>
+          </div>
+          
           {/* Feature detection section removed */}
           
           <Separator />
