@@ -519,15 +519,28 @@ export async function matchFeatures(roiId: string, currentFeatures: ORBFeature):
       }
     }
     
+    // Create a deep copy of the homography matrix to return
+    // This way we can safely delete the original in the finally block
+    const homographyArray = [];
+    for (let i = 0; i < 3; i++) {
+      for (let j = 0; j < 3; j++) {
+        homographyArray.push(homography.doubleAt(i, j));
+      }
+    }
+
+    // Store matchCount before we delete matches
+    const matchCountValue = matches.size();
+    
+    // Calculate rotation from homography before we delete it
+    const rotationValue = calculateRotationFromHomography(homography);
+    
     return {
       isTracked: confidence > 0.4, // At least 40% inliers
-      homography,
-      matchCount: matches.size(),
+      matchCount: matchCountValue,
       inlierCount: inlierCount,
       confidence,
       center,
-      corners,
-      rotation,
+      rotation: rotationValue,
       // Add keypoints and matches for visualization
       keypoints: keypointsForVisualization,
       matches: matchesForVisualization
@@ -552,8 +565,8 @@ export async function matchFeatures(roiId: string, currentFeatures: ORBFeature):
     if (transformedCenter) transformedCenter.delete();
     if (cornersMat) cornersMat.delete();
     if (transformedCorners) transformedCorners.delete();
-    // We don't delete homography here as it's returned to the caller
-    // The caller should handle its cleanup when done
+    // Now we can safely delete homography since we've copied its data
+    if (homography) homography.delete();
   }
 }
 
