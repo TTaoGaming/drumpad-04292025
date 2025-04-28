@@ -228,6 +228,15 @@ function App() {
     // Initial log
     addLog('Application initialized. Click "Start Camera" to begin.');
 
+    // Listen for new Circle ROIs from DrawingCanvas
+    const circleRoiListener = addListener(EventType.CIRCLE_ROI_CREATED, (circleROI: CircleROI) => {
+      // Log for debugging
+      addLog(`Created new Circle ROI at (${Math.round(circleROI.center.x)}, ${Math.round(circleROI.center.y)}) with radius ${Math.round(circleROI.radius)}px (ID: ${circleROI.id})`, 'success');
+      
+      // Here we could store the CircleROI if needed, but we're already keeping the DrawingPath visualization
+      // The actual tracking will be done by the ROIManager via the orbFeatureDetector.addCircleROI call
+    });
+
     // Cleanup event listeners on unmount
     return () => {
       stopFrameProcessing();
@@ -246,6 +255,7 @@ function App() {
       notificationListener.remove();
       frameProcessedListener.remove();
       drawingListener.remove();
+      circleRoiListener.remove();
     };
   }, []);
 

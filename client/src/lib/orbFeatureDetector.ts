@@ -766,7 +766,7 @@ export class ROIManager {
    * @param height Canvas height
    */
   public drawFeatures(ctx: CanvasRenderingContext2D, width: number, height: number): void {
-    // Draw each ROI with tracking information
+    // Draw each legacy ROI with tracking information
     this.activeROIs.forEach(roi => {
       // Draw ROI outline
       ctx.beginPath();
@@ -815,6 +815,55 @@ export class ROIManager {
         ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
         ctx.lineWidth = 1;
         ctx.stroke();
+      }
+    });
+    
+    // Draw each Circle ROI with tracking information
+    this.activeCircleROIs.forEach(roi => {
+      // Draw Circle ROI outline
+      ctx.beginPath();
+      ctx.arc(roi.center.x, roi.center.y, roi.radius, 0, Math.PI * 2);
+      ctx.closePath();
+      
+      // Style based on tracking status
+      if (roi.trackingResult?.isTracked) {
+        // Successfully tracked - green
+        ctx.strokeStyle = 'rgba(0, 255, 0, 0.8)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Draw confidence level
+        const confidence = roi.trackingResult.confidence;
+        const confidenceText = `${(confidence * 100).toFixed(0)}%`;
+        ctx.font = '12px sans-serif';
+        ctx.fillStyle = 'rgba(0, 255, 0, 0.9)';
+        ctx.fillText(confidenceText, roi.center.x + 5, roi.center.y - 5);
+        
+        // Draw tracking center point
+        if (roi.trackingResult.center) {
+          ctx.beginPath();
+          ctx.arc(roi.trackingResult.center.x, roi.trackingResult.center.y, 4, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(0, 200, 255, 0.8)';
+          ctx.fill();
+          
+          // Draw line from original center to tracked center
+          ctx.beginPath();
+          ctx.moveTo(roi.center.x, roi.center.y);
+          ctx.lineTo(roi.trackingResult.center.x, roi.trackingResult.center.y);
+          ctx.strokeStyle = 'rgba(0, 200, 255, 0.6)';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+      } else {
+        // Not tracked - red
+        ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Draw ROI ID
+        ctx.font = 'bold 14px sans-serif';
+        ctx.fillStyle = 'rgba(255, 0, 0, 0.9)';
+        ctx.fillText(`ROI ${roi.id.slice(-4)}`, roi.center.x - 20, roi.center.y);
       }
     });
   }
