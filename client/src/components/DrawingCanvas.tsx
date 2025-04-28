@@ -51,6 +51,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
   const pinchPositionRef = useRef<{x: number, y: number} | null>(null);
   const isPinchingRef = useRef<boolean>(false); // Track pinch state
   const isLongPressActiveRef = useRef<boolean>(false); // Track if long press is in progress
+  const handDisappearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); // Timer for hand disappearance
+  const lastHandDetectionRef = useRef<number>(Date.now()); // Track last time a hand was detected
   const [settings, setSettings] = useState<DrawingSettings>({
     enabled: enabled,
     mode: 'roi',
@@ -65,6 +67,40 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
   
   // Always use index finger (red) for ROI
   // We removed the ability to change fingers and now always use index finger
+
+  // Function to check for hand disappearance while drawing
+  const setHandDisappearTimer = () => {
+    // Only set the timer if we're currently drawing
+    if (isDrawing) {
+      // Clear any existing timer
+      if (handDisappearTimerRef.current) {
+        clearTimeout(handDisappearTimerRef.current);
+      }
+      
+      // Set a new timer to check if hand has disappeared for too long
+      handDisappearTimerRef.current = setTimeout(() => {
+        const now = Date.now();
+        const elapsed = now - lastHandDetectionRef.current;
+        
+        // If it's been more than 1 second since we've seen a hand, stop drawing
+        if (elapsed > 1000 && isDrawing) {
+          console.log(`Hand disappeared for ${elapsed}ms, ending drawing`);
+          
+          // End the drawing
+          if (currentPath) {
+            dispatch(EventType.NOTIFICATION, {
+              message: 'Drawing ended - hand moved out of frame',
+              type: 'info'
+            });
+            
+            stopDrawing();
+          }
+        }
+        
+        handDisappearTimerRef.current = null;
+      }, 1000); // Check after 1 second
+    }
+  };
 
   // Listen for pinch events from MediaPipeHandTracker
   useEffect(() => {
@@ -83,6 +119,23 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
       console.log(`Video display size: ${videoDisplayWidth}x${videoDisplayHeight}`);
       console.log(`Canvas size: ${canvasSize.width}x${canvasSize.height}`);
     }
+    
+    // Listen for hand tracking events to know when hands are in frame
+    const handTrackingListener = addListener(
+      EventType.SETTINGS_VALUE_CHANGE,
+      (data) => {
+        // When any hand data is received, update the last detection time
+        if (data.section === 'tracking' && data.setting === 'handData') {
+          // Update the last time a hand was detected
+          lastHandDetectionRef.current = Date.now();
+          
+          // If we're drawing, set/reset the disappearance timer
+          if (isDrawing) {
+            setHandDisappearTimer();
+          }
+        }
+      }
+    );
     
     const pinchStateListener = addListener(
       EventType.SETTINGS_VALUE_CHANGE,
@@ -103,6 +156,9 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
             // The position already comes in pixel coordinates from MediaPipeHandTracker
             // We don't need to scale - just use directly
             const position = data.value.position;
+            
+            // Update last hand detection time since we received a position
+            lastHandDetectionRef.current = Date.now();
             
             console.log(`Pinch position: (${position.x}, ${position.y})`);
             
@@ -164,11 +220,18 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
       pinchStateListener.remove();
       fingerPositionListener.remove();
       settingsListener.remove();
+      handTrackingListener.remove();
       
       // Clean up the long press timer if component unmounts
       if (longPressTimerRef.current) {
         clearTimeout(longPressTimerRef.current);
         longPressTimerRef.current = null;
+      }
+      
+      // Clean up the hand disappearance timer
+      if (handDisappearTimerRef.current) {
+        clearTimeout(handDisappearTimerRef.current);
+        handDisappearTimerRef.current = null;
       }
     };
   }, [isDrawing, width, height, settings.enabled, currentPath, longPressDelay]);
@@ -424,6 +487,9 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
     
     setCurrentPath(newPath);
     setIsDrawing(true);
+    
+    // Start the hand disappearance timer
+    setHandDisappearTimer();
     
     // Notify that drawing has started
     dispatch(EventType.LOG, {
