@@ -345,32 +345,17 @@ export class ROIManager {
    * @returns Image data for the ROI or null if extraction failed
    */
   private extractCircleROIImageData(roi: CircleROIWithFeatures, videoElement: HTMLVideoElement): ImageData | null {
-    // Create temporary canvases outside try block so we can clean them up in finally
-    const tempCanvas = document.createElement('canvas');
-    const maskCanvas = document.createElement('canvas');
-    
     try {
-      // Validate the ROI data
-      if (!roi || !roi.center || typeof roi.radius !== 'number' || roi.radius <= 0) {
-        console.warn('[ROIManager] Invalid Circle ROI data:', roi);
-        return null;
-      }
-      
       // Get the current video frame
       const frameData = getVideoFrame(videoElement);
-      if (!frameData) {
-        console.warn('[ROIManager] Failed to get video frame');
-        return null;
-      }
+      if (!frameData) return null;
       
-      // Set up temporary canvas
+      // Create a temporary canvas to draw the video frame
+      const tempCanvas = document.createElement('canvas');
       tempCanvas.width = videoElement.videoWidth;
       tempCanvas.height = videoElement.videoHeight;
-      const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
-      if (!tempCtx) {
-        console.warn('[ROIManager] Failed to get temp canvas context');
-        return null;
-      }
+      const tempCtx = tempCanvas.getContext('2d');
+      if (!tempCtx) return null;
       
       // Draw the video frame to temp canvas
       tempCtx.putImageData(frameData, 0, 0);
@@ -385,12 +370,6 @@ export class ROIManager {
       const displayWidth = displayElement.clientWidth;
       const displayHeight = displayElement.clientHeight;
       
-      // Validate display dimensions
-      if (displayWidth <= 0 || displayHeight <= 0) {
-        console.warn('[ROIManager] Invalid display dimensions:', displayWidth, displayHeight);
-        return null;
-      }
-      
       // Scale the center and radius from display coordinates to video frame coordinates
       const scaleX = videoElement.videoWidth / displayWidth;
       const scaleY = videoElement.videoHeight / displayHeight;
@@ -399,108 +378,50 @@ export class ROIManager {
       const centerY = roi.center.y * scaleY;
       const radius = roi.radius * Math.max(scaleX, scaleY); // Use the larger scale to ensure the full circle is captured
       
-      // Validate the scaled values
-      if (isNaN(centerX) || isNaN(centerY) || isNaN(radius) || radius <= 0) {
-        console.warn('[ROIManager] Invalid scaled ROI values:', { centerX, centerY, radius });
-        return null;
-      }
-      
       // Log the scaling for debugging
       console.log(`[ROIManager] Display to video scaling: ${scaleX.toFixed(2)}x, ${scaleY.toFixed(2)}y`);
       console.log(`[ROIManager] Circle ROI center: Display (${roi.center.x}, ${roi.center.y}) => Video (${centerX.toFixed(1)}, ${centerY.toFixed(1)})`);
       console.log(`[ROIManager] Circle ROI radius: Display ${roi.radius} => Video ${radius.toFixed(1)}`);
       
-      // Calculate extraction bounds with more careful boundary checking
-      // Make sure radius is at least 1 pixel
-      const safeRadius = Math.max(radius, 1);
-      const extractSize = Math.floor(safeRadius * 2);
-      const sourceX = Math.max(0, Math.floor(centerX - safeRadius));
-      const sourceY = Math.max(0, Math.floor(centerY - safeRadius));
+      // Extract the ROI region with circular mask
+      const extractSize = radius * 2;
+      const sourceX = Math.max(0, centerX - radius);
+      const sourceY = Math.max(0, centerY - radius);
+      const sourceWidth = Math.min(extractSize, videoElement.videoWidth - sourceX);
+      const sourceHeight = Math.min(extractSize, videoElement.videoHeight - sourceY);
       
-      // Ensure we don't try to extract beyond the video frame boundaries and that extraction area is at least 30x30
-      // 30x30 is a better minimum size for finding useful features
-      const sourceWidth = Math.max(30, Math.min(extractSize, videoElement.videoWidth - sourceX));
-      const sourceHeight = Math.max(30, Math.min(extractSize, videoElement.videoHeight - sourceY));
+      // Create a circular masked version of the ROI
+      // 1. Get the square region containing our circle
+      const squareROI = tempCtx.getImageData(sourceX, sourceY, sourceWidth, sourceHeight);
       
-      // Validate final extraction dimensions
-      if (sourceWidth <= 0 || sourceHeight <= 0) {
-        console.warn('[ROIManager] Invalid extraction dimensions:', { sourceWidth, sourceHeight });
-        return null;
-      }
-      
-      // For debugging - more detailed output
-      console.log(`[ROIManager] Extracting Circle ROI region:`, {
-        sourceX,
-        sourceY,
-        sourceWidth,
-        sourceHeight,
-        videoWidth: videoElement.videoWidth,
-        videoHeight: videoElement.videoHeight,
-        displayCenter: roi.center,
-        videoCenter: { x: centerX, y: centerY },
-        displayRadius: roi.radius,
-        videoRadius: radius
-      });
-      
-      // Extract the square region
-      let squareROI;
-      try {
-        squareROI = tempCtx.getImageData(sourceX, sourceY, sourceWidth, sourceHeight);
-      } catch (e) {
-        console.error('[ROIManager] Error getting square ROI:', e);
-        return null;
-      }
-      
-      // Create a new canvas to apply the circular mask
+      // 2. Create a new canvas to apply the circular mask
+      const maskCanvas = document.createElement('canvas');
       maskCanvas.width = sourceWidth;
       maskCanvas.height = sourceHeight;
-      const maskCtx = maskCanvas.getContext('2d', { willReadFrequently: true });
+      const maskCtx = maskCanvas.getContext('2d');
       
       if (!maskCtx) {
         console.error('[ROIManager] Failed to get mask canvas context');
         return null;
       }
       
-      // Put the square image data on the mask canvas
+      // 3. Put the square image data on the mask canvas
       maskCtx.putImageData(squareROI, 0, 0);
       
-      // Create circular clipping path
+      // 4. Create circular clipping path
       maskCtx.globalCompositeOperation = 'destination-in';
       maskCtx.fillStyle = 'white';
       maskCtx.beginPath();
-      
-      // Use a slightly smaller radius to ensure we stay within bounds
-      const maskRadius = Math.min(sourceWidth/2, sourceHeight/2) - 2;
-      maskCtx.arc(sourceWidth/2, sourceHeight/2, maskRadius, 0, Math.PI * 2);
+      maskCtx.arc(sourceWidth/2, sourceHeight/2, Math.min(sourceWidth/2, sourceHeight/2) - 2, 0, Math.PI * 2);
       maskCtx.fill();
       
-      // Get the circular masked image data
-      let maskedImageData;
-      try {
-        maskedImageData = maskCtx.getImageData(0, 0, sourceWidth, sourceHeight);
-        return maskedImageData;
-      } catch (e) {
-        console.error('[ROIManager] Error getting masked image data:', e);
-        return null;
-      }
-      
+      // 5. Get the circular masked image data
+      return maskCtx.getImageData(0, 0, sourceWidth, sourceHeight);
     } catch (error) {
       console.error('[ROIManager] Error extracting Circle ROI image data:', error);
-      return null;
-    } finally {
-      // Clean up canvas elements to prevent memory leaks
-      // These aren't OpenCV objects but it's still good practice to clean them up
-      try {
-        if (tempCanvas && tempCanvas.parentNode) {
-          tempCanvas.parentNode.removeChild(tempCanvas);
-        }
-        if (maskCanvas && maskCanvas.parentNode) {
-          maskCanvas.parentNode.removeChild(maskCanvas);
-        }
-      } catch (e) {
-        // Ignore cleanup errors
-      }
     }
+    
+    return null;
   }
   
   /**
@@ -603,7 +524,7 @@ export class ROIManager {
             
             console.log(`[ROIManager] Extracted ${features.keypoints.size()} reference features for Circle ROI ${roi.id}`);
           } else {
-            console.warn(`[ROIManager] Failed to extract enough features for Circle ROI ${roi.id}. Found: ${features?.keypoints.size() || 0}, needed: 5`);
+            console.warn(`[ROIManager] Failed to extract enough features for Circle ROI ${roi.id}. Found: ${features?.keypoints.size() || 0}, needed: 10`);
             
             // Update lastProcessed to avoid hammering with extraction attempts
             roi.lastProcessed = now;
@@ -691,9 +612,6 @@ export class ROIManager {
             confidence: trackingResult.confidence,
             center: trackingResult.center,
             rotation: trackingResult.rotation,
-            // Include keypoints and matches for visualization
-            keypoints: trackingResult.keypoints,
-            matches: trackingResult.matches
           },
           timestamp: now,
           isCircleROI: true,
@@ -841,9 +759,6 @@ export class ROIManager {
             confidence: trackingResult.confidence,
             center: trackingResult.center,
             rotation: trackingResult.rotation,
-            // Include keypoints and matches for visualization
-            keypoints: trackingResult.keypoints,
-            matches: trackingResult.matches
           },
           timestamp: now
         });

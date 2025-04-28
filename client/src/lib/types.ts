@@ -27,36 +27,6 @@ export interface RegionOfInterest {
   timestamp: number;
 }
 
-// Feature point with coordinates
-export interface FeaturePoint extends Point {
-  size?: number;
-  angle?: number;
-  response?: number;
-}
-
-// Match between two feature points
-export interface FeatureMatch {
-  queryIdx?: number;
-  trainIdx?: number;
-  queryPoint?: Point;
-  trainPoint?: Point;
-  distance?: number;
-}
-
-// Tracking result with detailed information
-export interface TrackingResult {
-  isTracked: boolean;
-  confidence: number;
-  inlierCount: number;
-  matchCount: number;
-  center?: Point;
-  rotation?: number;
-  homography?: any;
-  corners?: Point[];  // The four corner points of the transformed region
-  keypoints?: FeaturePoint[];
-  matches?: FeatureMatch[];
-}
-
 // Circle-based Region of Interest with simplified representation
 export interface CircleROI {
   id: string;
@@ -67,7 +37,6 @@ export interface CircleROI {
     confidence: number;
     isTracked: boolean;
   };
-  trackingResult?: TrackingResult;
 }
 
 // MediaPipe hand landmark

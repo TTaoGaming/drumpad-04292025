@@ -338,21 +338,7 @@ export function clearReferenceFeatures(roiId: string): void {
  * @param currentFeatures Features from the current frame
  * @returns Tracking result with transformation details
  */
-import { FeaturePoint, FeatureMatch, TrackingResult as TrackingResultType } from '@/lib/types';
-
-export async function matchFeatures(roiId: string, currentFeatures: ORBFeature): Promise<TrackingResultType> {
-  // Declare variables that need cleanup at top level so finally block can see them
-  let matcher = null;
-  let matches = null;
-  let refPointsMat = null;
-  let currPointsMat = null;
-  let mask = null;
-  let centerMat = null;
-  let transformedCenter = null;
-  let cornersMat = null;
-  let transformedCorners = null;
-  let homography = null;
-  
+export async function matchFeatures(roiId: string, currentFeatures: ORBFeature): Promise<TrackingResult> {
   try {
     // Make sure OpenCV is available before proceeding
     const ready = await ensureOpenCV();
@@ -368,7 +354,7 @@ export async function matchFeatures(roiId: string, currentFeatures: ORBFeature):
     
     // Check if OpenCV is loaded before proceeding
     if (typeof cv === 'undefined' || !cv.BFMatcher) {
-      console.warn('[orbTracking] OpenCV is not fully loaded yet. Skipping feature matching.');
+      console.warn('OpenCV is not fully loaded yet. Skipping feature matching.');
       return {
         isTracked: false,
         matchCount: 0,
@@ -389,15 +375,17 @@ export async function matchFeatures(roiId: string, currentFeatures: ORBFeature):
     }
     
     // Create feature matcher (BF = Brute Force)
-    matcher = new cv.BFMatcher(cv.NORM_HAMMING, true);
-    matches = new cv.DMatchVector();
+    const matcher = new cv.BFMatcher(cv.NORM_HAMMING, true);
+    const matches = new cv.DMatchVector();
     
     // Match descriptors
     matcher.match(referenceFeature.descriptors, currentFeatures.descriptors, matches);
     console.log(`Found ${matches.size()} matches for ROI ${roiId}`);
     
-    if (matches.size() < 5) {
-      // Need at least 5 matches for homography (lowered from 8 for more forgiving matching)
+    if (matches.size() < 8) {
+      // Need at least 8 matches for homography
+      matcher.delete();
+      matches.delete();
       return {
         isTracked: false,
         matchCount: matches.size(),
@@ -419,14 +407,14 @@ export async function matchFeatures(roiId: string, currentFeatures: ORBFeature):
       currPoints.push(new cv.Point(currKeypoint.pt.x, currKeypoint.pt.y));
     }
     
-    refPointsMat = cv.matFromArray(refPoints.length, 1, cv.CV_32FC2, 
+    const refPointsMat = cv.matFromArray(refPoints.length, 1, cv.CV_32FC2, 
       refPoints.flatMap(p => [p.x, p.y]));
-    currPointsMat = cv.matFromArray(currPoints.length, 1, cv.CV_32FC2, 
+    const currPointsMat = cv.matFromArray(currPoints.length, 1, cv.CV_32FC2, 
       currPoints.flatMap(p => [p.x, p.y]));
     
     // Calculate homography
-    mask = new cv.Mat();
-    homography = cv.findHomography(refPointsMat, currPointsMat, cv.RANSAC, 3.0, mask);
+    const mask = new cv.Mat();
+    const homography = cv.findHomography(refPointsMat, currPointsMat, cv.RANSAC, 3.0, mask);
     
     // Count inliers (non-zero values in mask)
     let inlierCount = 0;
@@ -442,8 +430,8 @@ export async function matchFeatures(roiId: string, currentFeatures: ORBFeature):
     const centerX = referenceFeature.imageData.width / 2;
     const centerY = referenceFeature.imageData.height / 2;
     
-    centerMat = cv.matFromArray(1, 1, cv.CV_32FC2, [centerX, centerY]);
-    transformedCenter = new cv.Mat();
+    const centerMat = cv.matFromArray(1, 1, cv.CV_32FC2, [centerX, centerY]);
+    const transformedCenter = new cv.Mat();
     
     cv.perspectiveTransform(centerMat, transformedCenter, homography);
     
@@ -460,14 +448,14 @@ export async function matchFeatures(roiId: string, currentFeatures: ORBFeature):
     const width = referenceFeature.imageData.width;
     const height = referenceFeature.imageData.height;
     
-    cornersMat = cv.matFromArray(4, 1, cv.CV_32FC2, [
+    const cornersMat = cv.matFromArray(4, 1, cv.CV_32FC2, [
       0, 0,
       width, 0,
       width, height,
       0, height
     ]);
     
-    transformedCorners = new cv.Mat();
+    const transformedCorners = new cv.Mat();
     cv.perspectiveTransform(cornersMat, transformedCorners, homography);
     
     const corners = [];
@@ -478,96 +466,35 @@ export async function matchFeatures(roiId: string, currentFeatures: ORBFeature):
       });
     }
     
-    // Convert OpenCV keypoints to our simplified FeaturePoint format for visualization
-    const keypointsForVisualization: FeaturePoint[] = [];
-    if (currentFeatures.keypoints && currentFeatures.keypoints.size) {
-      const kpCount = currentFeatures.keypoints.size();
-      for (let i = 0; i < kpCount; i++) {
-        const kp = currentFeatures.keypoints.get(i);
-        keypointsForVisualization.push({
-          x: kp.pt.x,
-          y: kp.pt.y,
-          size: kp.size,
-          angle: kp.angle
-        });
-      }
-    }
-    
-    // Convert matches to visualization format
-    const matchesForVisualization: FeatureMatch[] = [];
-    const matchCount = matches.size();
-    for (let i = 0; i < matchCount; i++) {
-      const match = matches.get(i);
-      // Only include good matches (RANSAC inliers)
-      if (i < mask.rows && mask.ucharPtr(i, 0)[0] !== 0) {
-        const queryKp = referenceFeature.keypoints.get(match.queryIdx);
-        const trainKp = currentFeatures.keypoints.get(match.trainIdx);
-        
-        matchesForVisualization.push({
-          queryIdx: match.queryIdx,
-          trainIdx: match.trainIdx,
-          queryPoint: { 
-            x: queryKp.pt.x, 
-            y: queryKp.pt.y 
-          },
-          trainPoint: { 
-            x: trainKp.pt.x, 
-            y: trainKp.pt.y 
-          },
-          distance: match.distance
-        });
-      }
-    }
-    
-    // Create a deep copy of the homography matrix to return
-    // This way we can safely delete the original in the finally block
-    const homographyArray = [];
-    for (let i = 0; i < 3; i++) {
-      for (let j = 0; j < 3; j++) {
-        homographyArray.push(homography.doubleAt(i, j));
-      }
-    }
-
-    // Store matchCount before we delete matches
-    const matchCountValue = matches.size();
-    
-    // Calculate rotation from homography before we delete it
-    const rotationValue = calculateRotationFromHomography(homography);
+    // Clean up
+    matcher.delete();
+    matches.delete();
+    refPointsMat.delete();
+    currPointsMat.delete();
+    mask.delete();
+    centerMat.delete();
+    transformedCenter.delete();
+    cornersMat.delete();
+    transformedCorners.delete();
     
     return {
-      isTracked: confidence > 0.25, // Lowered from 40% to 25% for more forgiving tracking
-      matchCount: matchCountValue,
+      isTracked: confidence > 0.4, // At least 40% inliers
+      homography,
+      matchCount: matches.size(),
       inlierCount: inlierCount,
       confidence,
       center,
-      rotation: rotationValue,
       corners,
-      // Add keypoints and matches for visualization
-      keypoints: keypointsForVisualization,
-      matches: matchesForVisualization
+      rotation
     };
   } catch (error) {
-    console.error('[orbTracking] Error matching features:', error);
+    console.error('Error matching features:', error);
     return {
       isTracked: false,
       matchCount: 0,
       inlierCount: 0,
       confidence: 0
     };
-  } finally {
-    // Clean up all OpenCV objects to prevent memory leaks
-    // Using optional chaining to safely check if objects exist before deleting
-    if (matcher) matcher.delete();
-    if (matches) matches.delete();
-    if (refPointsMat) refPointsMat.delete();
-    if (currPointsMat) currPointsMat.delete();
-    if (mask) mask.delete();
-    if (centerMat) centerMat.delete();
-    if (transformedCenter) transformedCenter.delete();
-    if (cornersMat) cornersMat.delete();
-    if (transformedCorners) transformedCorners.delete();
-    // Now we can safely delete homography since we've copied its data
-    if (homography) homography.delete();
   }
 }
 
