@@ -417,9 +417,10 @@ export class ROIManager {
       const sourceX = Math.max(0, Math.floor(centerX - safeRadius));
       const sourceY = Math.max(0, Math.floor(centerY - safeRadius));
       
-      // Ensure we don't try to extract beyond the video frame boundaries and that extraction area is at least 10x10
-      const sourceWidth = Math.max(10, Math.min(extractSize, videoElement.videoWidth - sourceX));
-      const sourceHeight = Math.max(10, Math.min(extractSize, videoElement.videoHeight - sourceY));
+      // Ensure we don't try to extract beyond the video frame boundaries and that extraction area is at least 30x30
+      // 30x30 is a better minimum size for finding useful features
+      const sourceWidth = Math.max(30, Math.min(extractSize, videoElement.videoWidth - sourceX));
+      const sourceHeight = Math.max(30, Math.min(extractSize, videoElement.videoHeight - sourceY));
       
       // Validate final extraction dimensions
       if (sourceWidth <= 0 || sourceHeight <= 0) {
@@ -602,7 +603,7 @@ export class ROIManager {
             
             console.log(`[ROIManager] Extracted ${features.keypoints.size()} reference features for Circle ROI ${roi.id}`);
           } else {
-            console.warn(`[ROIManager] Failed to extract enough features for Circle ROI ${roi.id}. Found: ${features?.keypoints.size() || 0}, needed: 10`);
+            console.warn(`[ROIManager] Failed to extract enough features for Circle ROI ${roi.id}. Found: ${features?.keypoints.size() || 0}, needed: 5`);
             
             // Update lastProcessed to avoid hammering with extraction attempts
             roi.lastProcessed = now;
