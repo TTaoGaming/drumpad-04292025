@@ -677,6 +677,9 @@ export class ROIManager {
             confidence: trackingResult.confidence,
             center: trackingResult.center,
             rotation: trackingResult.rotation,
+            // Include keypoints and matches for visualization
+            keypoints: trackingResult.keypoints,
+            matches: trackingResult.matches
           },
           timestamp: now,
           isCircleROI: true,
@@ -824,6 +827,9 @@ export class ROIManager {
             confidence: trackingResult.confidence,
             center: trackingResult.center,
             rotation: trackingResult.rotation,
+            // Include keypoints and matches for visualization
+            keypoints: trackingResult.keypoints,
+            matches: trackingResult.matches
           },
           timestamp: now
         });

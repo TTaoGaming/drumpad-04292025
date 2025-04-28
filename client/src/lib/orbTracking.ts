@@ -338,7 +338,9 @@ export function clearReferenceFeatures(roiId: string): void {
  * @param currentFeatures Features from the current frame
  * @returns Tracking result with transformation details
  */
-export async function matchFeatures(roiId: string, currentFeatures: ORBFeature): Promise<TrackingResult> {
+import { FeaturePoint, FeatureMatch, TrackingResult as TrackingResultType } from '@/lib/types';
+
+export async function matchFeatures(roiId: string, currentFeatures: ORBFeature): Promise<TrackingResultType> {
   // Declare variables that need cleanup at top level so finally block can see them
   let matcher = null;
   let matches = null;
