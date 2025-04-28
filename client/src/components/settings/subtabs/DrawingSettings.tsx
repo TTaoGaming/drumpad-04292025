@@ -35,6 +35,9 @@ const DrawingSettings: React.FC = () => {
     smoothing: true,
     showFeatures: false // Kept for interface compatibility
   });
+  
+  // Long press delay in milliseconds (default: 500ms)
+  const [longPressDelay, setLongPressDelay] = useState(500);
 
   // Update global state when settings change
   useEffect(() => {
@@ -44,6 +47,15 @@ const DrawingSettings: React.FC = () => {
       value: settings
     });
   }, [settings]);
+  
+  // Update long press delay when it changes
+  useEffect(() => {
+    dispatch(EventType.SETTINGS_VALUE_CHANGE, {
+      section: 'drawing',
+      setting: 'longPressDelay',
+      value: longPressDelay
+    });
+  }, [longPressDelay]);
   
   // No longer need to track feature count since we removed the feature detection
   useEffect(() => {
@@ -209,6 +221,29 @@ const DrawingSettings: React.FC = () => {
               />
             </div>
           )}
+          
+          <Separator />
+          
+          {/* Pinch Long Press Delay */}
+          <div className="space-y-2">
+            <Label htmlFor="long-press-delay">
+              Long Press Delay (ms)
+              <p className="text-xs text-muted-foreground mt-1">
+                Duration to hold pinch before drawing starts
+              </p>
+            </Label>
+            <div className="flex items-center space-x-2">
+              <Slider 
+                id="long-press-delay"
+                value={[longPressDelay]} 
+                min={100} 
+                max={1000} 
+                step={50}
+                onValueChange={(value) => setLongPressDelay(value[0])}
+              />
+              <span className="w-16 text-center">{longPressDelay}ms</span>
+            </div>
+          </div>
           
           {/* Feature detection section removed */}
           
