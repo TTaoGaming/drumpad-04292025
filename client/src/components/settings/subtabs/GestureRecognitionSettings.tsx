@@ -1,6 +1,6 @@
 import React from 'react';
 import PinchGestureSettings from './PinchGestureSettings';
-import HandConfidenceSettings from './HandConfidenceSettings';
+import HandConfidenceSettings from '@/components/settings/subtabs/HandConfidenceSettings';
 
 const GestureRecognitionSettings: React.FC = () => {
   return (
