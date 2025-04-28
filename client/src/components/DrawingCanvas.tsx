@@ -80,8 +80,10 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
     console.log(`Setting new auto-end drawing timer for ${maxDrawingDuration}ms (${maxDrawingDuration/1000} seconds)`);
     
     // Set a new timer to automatically end drawing after the configured time
-    drawingTimeoutRef.current = setTimeout(() => {
-      console.log(`AUTO-END TIMER TRIGGERED: Drawing timeout reached (${maxDrawingDuration}ms), automatically completing ROI`);
+    const timeoutId = setTimeout(() => {
+      console.log(`======= AUTO-END TIMER TRIGGERED =======`);
+      console.log(`Drawing timeout reached (${maxDrawingDuration}ms), automatically completing ROI`);
+      console.log(`Current state: isDrawing=${isDrawing}, currentPath=${currentPath ? 'exists' : 'null'}`);
       
       if (isDrawing && currentPath) {
         console.log(`Current path has ${currentPath.points.length} points`);
@@ -93,7 +95,9 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
         });
         
         // Important: Call stopDrawing to complete the path and create the ROI
+        // Using direct function reference to ensure it's the same function
         stopDrawing();
+        console.log('Auto-end timer called stopDrawing()');
       } else {
         console.log('Drawing timeout reached but no current path or not drawing');
       }
@@ -101,7 +105,8 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
       drawingTimeoutRef.current = null;
     }, maxDrawingDuration);
     
-    console.log(`Set auto drawing timeout ID: ${drawingTimeoutRef.current}`);
+    drawingTimeoutRef.current = timeoutId;
+    console.log(`Set auto drawing timeout with ID: ${timeoutId}`);
   };
 
   // Listen for pinch events from MediaPipeHandTracker
@@ -682,12 +687,22 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
   
   // Complete the current drawing path
   const stopDrawing = () => {
-    if (!currentPath) return;
+    console.log('stopDrawing called - current state:', { 
+      isDrawing, 
+      hasCurrentPath: currentPath ? true : false,
+      pointCount: currentPath ? currentPath.points.length : 0
+    });
+    
+    if (!currentPath) {
+      console.log('No current path to complete');
+      return;
+    }
     
     // Clear the drawing timeout timer since we're stopping manually
     if (drawingTimeoutRef.current) {
       clearTimeout(drawingTimeoutRef.current);
       drawingTimeoutRef.current = null;
+      console.log('Cleared existing drawing timeout timer in stopDrawing');
     }
     
     let finalPoints = [...currentPath.points];
