@@ -1,11 +1,11 @@
 /**
- * Simple Contour Tracking System
+ * Enhanced Contour Tracking System
  * 
- * A lightweight contour detection and tracking system that works
+ * A contour detection and tracking system that works
  * with the Circle ROI created by pinch gestures.
  * 
- * This implementation avoids complex feature matching and focuses
- * on basic contour detection for performance and simplicity.
+ * This implementation identifies specific shapes (squares, rectangles)
+ * and provides real-world measurements using knuckle ruler calibration.
  */
 
 import { CircleROI, Point } from './types';
@@ -14,6 +14,25 @@ import { EventType, dispatch } from './eventBus';
 
 // Declare OpenCV global
 declare const cv: any;
+
+// Define shape types that can be recognized
+export type ShapeType = 'square' | 'rectangle' | 'triangle' | 'circle' | 'unknown';
+
+// Interface for marker data (identified shapes)
+export interface MarkerData {
+  id: string;           // Unique ID for the marker
+  label: string;        // User-assigned label (e.g., "marker #1")
+  shape: ShapeType;     // Type of shape detected
+  area: number;         // Area of the contour in pixels²
+  perimeter: number;    // Perimeter of the contour in pixels
+  corners: Point[];     // Corner points for polygon shapes
+  center: Point;        // Center point of the marker
+  sizeInCm?: {          // Real-world size based on knuckle ruler calibration
+    width: number;      // Width in cm
+    height: number;     // Height in cm
+  };
+  timestamp: number;    // When the marker was detected
+}
 
 // Store initial contours for each ROI
 interface ContourData {
@@ -26,6 +45,7 @@ interface ContourData {
   isVisible: boolean; // Whether the contours are visible (not occluded)
   occlusionTimestamp?: number; // When the contours became occluded
   centerOfMass: Point; // Center of mass of the contours
+  markers: MarkerData[]; // Identified markers within this ROI
 }
 
 // Storage for contour data
@@ -176,7 +196,119 @@ export async function detectContours(imageData: ImageData): Promise<any | null> 
  * @param contourResult Result from detectContours
  * @returns New ImageData with contours drawn, or null if error
  */
-export function createContourVisualization(imageData: ImageData, contourResult: any): ImageData | null {
+/**
+ * Identify the shape of a contour
+ * @param contour The contour to analyze
+ * @returns Information about the identified shape
+ */
+export function identifyShape(contour: any): { 
+  shape: ShapeType,
+  corners: Point[],
+  perimeter: number,
+  area: number,
+  center: Point
+} {
+  // Calculate basic contour features
+  const perimeter = cv.arcLength(contour, true);
+  const area = cv.contourArea(contour);
+  
+  // Calculate moments to find centroid
+  const M = cv.moments(contour);
+  const center = {
+    x: M.m10 / M.m00,
+    y: M.m01 / M.m00
+  };
+  
+  // Approximate the contour with fewer points
+  const epsilon = 0.04 * perimeter; // Precision parameter (smaller = more precise)
+  const approx = new cv.Mat();
+  cv.approxPolyDP(contour, approx, epsilon, true);
+  
+  // Extract the corner points
+  const corners: Point[] = [];
+  for (let i = 0; i < approx.rows; i++) {
+    corners.push({
+      x: approx.data32S[i * 2],
+      y: approx.data32S[i * 2 + 1]
+    });
+  }
+  
+  // Identify shape based on number of corners
+  let shape: ShapeType = 'unknown';
+  
+  if (approx.rows === 3) {
+    shape = 'triangle';
+  } 
+  else if (approx.rows === 4) {
+    // Calculate aspect ratio to distinguish between square and rectangle
+    // Find min/max X and Y to get width and height
+    let minX = Number.MAX_VALUE;
+    let minY = Number.MAX_VALUE;
+    let maxX = Number.MIN_VALUE;
+    let maxY = Number.MIN_VALUE;
+    
+    for (const corner of corners) {
+      minX = Math.min(minX, corner.x);
+      minY = Math.min(minY, corner.y);
+      maxX = Math.max(maxX, corner.x);
+      maxY = Math.max(maxY, corner.y);
+    }
+    
+    const width = maxX - minX;
+    const height = maxY - minY;
+    const aspectRatio = Math.max(width, height) / Math.min(width, height);
+    
+    // If aspect ratio is close to 1, it's a square
+    if (aspectRatio < 1.2) {
+      shape = 'square';
+    } else {
+      shape = 'rectangle';
+    }
+  } 
+  else if (approx.rows >= 8 && approx.rows <= 12) {
+    // Calculate circularity to check if it's circular
+    const circularity = (4 * Math.PI * area) / (perimeter * perimeter);
+    // Circle has circularity close to 1.0
+    if (circularity > 0.8) {
+      shape = 'circle';
+    }
+  }
+  
+  // Clean up the approximation matrix
+  approx.delete();
+  
+  return {
+    shape,
+    corners,
+    perimeter,
+    area,
+    center
+  };
+}
+
+/**
+ * Generate a unique and consistent marker label
+ * @param roiId The ROI ID
+ * @param shape The shape type
+ * @param index The index of the marker in the ROI
+ * @returns A consistent marker label
+ */
+function generateMarkerLabel(roiId: string, shape: ShapeType, index: number): string {
+  return `${shape} #${index + 1}`;
+}
+
+/**
+ * Create a visual debug image showing the contours and identified shapes
+ * @param imageData Original image data
+ * @param contourResult Result from detectContours
+ * @param markers Optional array of identified markers to visualize
+ * @returns New ImageData with contours drawn, or null if error
+ */
+export function createContourVisualization(
+  imageData: ImageData, 
+  contourResult: any, 
+  markers?: MarkerData[]
+): ImageData | null {
   if (!contourResult || !contourConfig.drawContours) return null;
   
   try {
@@ -193,6 +325,97 @@ export function createContourVisualization(imageData: ImageData, contourResult: 
       // Draw the center of mass
       const center = contourResult.centerOfMass;
       cv.circle(dst, new cv.Point(center.x, center.y), 5, centerColor, -1);
+      
+      // Draw identified markers if provided
+      if (markers && markers.length > 0) {
+        // Draw each marker with its label
+        for (const marker of markers) {
+          // Different color for each shape type
+          let shapeColor;
+          switch (marker.shape) {
+            case 'square': 
+              shapeColor = new cv.Scalar(255, 0, 0, 255); // Red
+              break;
+            case 'rectangle': 
+              shapeColor = new cv.Scalar(0, 0, 255, 255); // Blue
+              break;
+            case 'triangle': 
+              shapeColor = new cv.Scalar(255, 255, 0, 255); // Yellow
+              break;
+            case 'circle': 
+              shapeColor = new cv.Scalar(255, 0, 255, 255); // Magenta
+              break;
+            default: 
+              shapeColor = new cv.Scalar(128, 128, 128, 255); // Gray
+          }
+          
+          // Draw the corners as a polygon
+          if (marker.corners.length > 0) {
+            const points = new cv.Mat();
+            for (const corner of marker.corners) {
+              points.push_back(new cv.Mat([corner.x, corner.y], cv.CV_32SC1));
+            }
+            cv.polylines(dst, [points], true, shapeColor, 3);
+            points.delete();
+          }
+          
+          // Draw the center point of the marker
+          cv.circle(dst, new cv.Point(marker.center.x, marker.center.y), 4, shapeColor, -1);
+          
+          // Add a text label with the marker ID
+          const fontScale = 0.5;
+          const fontColor = new cv.Scalar(255, 255, 255, 255);
+          const textPoint = new cv.Point(marker.center.x - 30, marker.center.y - 10);
+          
+          // Add white background for text
+          const textSize = cv.getTextSize(marker.label, cv.FONT_HERSHEY_SIMPLEX, fontScale, 1);
+          cv.rectangle(
+            dst, 
+            new cv.Point(textPoint.x - 2, textPoint.y - textSize.height - 2), 
+            new cv.Point(textPoint.x + textSize.width + 2, textPoint.y + 2),
+            new cv.Scalar(0, 0, 0, 128),
+            cv.FILLED
+          );
+          
+          // Draw the marker label
+          cv.putText(
+            dst, 
+            marker.label, 
+            textPoint, 
+            cv.FONT_HERSHEY_SIMPLEX, 
+            fontScale, 
+            fontColor, 
+            1
+          );
+          
+          // Draw size in centimeters if available
+          if (marker.sizeInCm) {
+            const sizeText = `${marker.sizeInCm.width.toFixed(1)}cm × ${marker.sizeInCm.height.toFixed(1)}cm`;
+            const sizePoint = new cv.Point(marker.center.x - 40, marker.center.y + 15);
+            
+            // Add white background for size text
+            const sizeTextSize = cv.getTextSize(sizeText, cv.FONT_HERSHEY_SIMPLEX, fontScale, 1);
+            cv.rectangle(
+              dst, 
+              new cv.Point(sizePoint.x - 2, sizePoint.y - sizeTextSize.height - 2), 
+              new cv.Point(sizePoint.x + sizeTextSize.width + 2, sizePoint.y + 2),
+              new cv.Scalar(0, 0, 0, 128),
+              cv.FILLED
+            );
+            
+            // Draw the size text
+            cv.putText(
+              dst, 
+              sizeText, 
+              sizePoint, 
+              cv.FONT_HERSHEY_SIMPLEX, 
+              fontScale, 
+              fontColor, 
+              1
+            );
+          }
+        }
+      }
       
       // Convert back to ImageData
       const tempCanvas = document.createElement('canvas');
@@ -245,7 +468,8 @@ export async function initializeContourTracking(roi: CircleROI, imageData: Image
       imageData: roiImageData,
       timestamp: Date.now(),
       isVisible: true,
-      centerOfMass: contourResult.centerOfMass
+      centerOfMass: contourResult.centerOfMass,
+      markers: [] // Initialize empty markers array
     });
     
     // Send initialization event
