@@ -8,7 +8,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { EventType, addListener, dispatch } from '@/lib/eventBus';
 import { RegionOfInterest, CircleROI } from '@/lib/types';
 import { getVideoFrame } from '@/lib/cameraManager';
-import { contourConfig } from '@/lib/contourTracking';
+import { contourConfig, MarkerData, getMarkersFromROI } from '@/lib/contourTracking';
 
 interface ImprovedROIDebugCanvasProps {
   width: number;
@@ -32,6 +32,7 @@ const ImprovedROIDebugCanvas: React.FC<ImprovedROIDebugCanvasProps> = ({
     originalContourCount: number;
     visibilityRatio: number;
     visualizationData?: ImageData;
+    markers?: MarkerData[];
   } | null>(null);
   const lastFrameTimeRef = useRef<number>(0);
   const frameCountRef = useRef<number>(0);
@@ -76,19 +77,40 @@ const ImprovedROIDebugCanvas: React.FC<ImprovedROIDebugCanvasProps> = ({
         
         // Check for contour tracking data
         if (data.contourTracking) {
+          // Get markers from contour tracking result if available
+          const markers = data.contourTracking.markers || [];
+          
           setContourData({
             isOccluded: data.contourTracking.isOccluded || false,
             contourCount: data.trackingResult?.matchCount || 0,
             originalContourCount: data.trackingResult?.inlierCount || 0,
             visibilityRatio: data.trackingResult?.confidence || 0,
-            visualizationData: data.contourTracking.visualizationData
+            visualizationData: data.contourTracking.visualizationData,
+            markers: markers
           });
           
-          // Update status based on contour data
+          // Update status based on contour data and markers
           if (data.contourTracking.isOccluded) {
             setStatus(`ROI occluded (${data.trackingResult?.confidence.toFixed(2)})`);
+          } else if (markers.length > 0) {
+            // If markers found, update status to show marker count
+            setStatus(`Found ${markers.length} marker${markers.length > 1 ? 's' : ''}`);
           } else {
             setStatus(`Tracking ${data.trackingResult?.matchCount || 0} contours`);
+          }
+          
+          // If we have markers, also try to get additional data via the getMarkersFromROI function
+          if (markers.length === 0 && roi) {
+            const roiMarkers = getMarkersFromROI(roi.id);
+            if (roiMarkers.length > 0) {
+              setContourData(prevState => {
+                return {
+                  ...prevState!,
+                  markers: roiMarkers
+                };
+              });
+              setStatus(`Found ${roiMarkers.length} marker${roiMarkers.length > 1 ? 's' : ''}`);
+            }
           }
         }
       }
