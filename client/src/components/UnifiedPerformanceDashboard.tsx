@@ -259,8 +259,11 @@ const UnifiedPerformanceDashboard: React.FC<UnifiedPerformanceDashboardProps> = 
           const newModuleTimings: ModuleTimingData[] = [];
           
           // Process the module timings from the performance metrics
-          if (metrics && metrics.moduleTimings && metrics.moduleTimings.length > 0) {
-            console.log('Processing module timings:', metrics.moduleTimings);
+          console.log('Module timings array type:', metrics.moduleTimings ? Array.isArray(metrics.moduleTimings) : 'undefined');
+          console.log('Module timings array length:', metrics.moduleTimings ? metrics.moduleTimings.length : 0);
+          
+          if (metrics && metrics.moduleTimings && Array.isArray(metrics.moduleTimings) && metrics.moduleTimings.length > 0) {
+            console.log('Processing module timings:', JSON.stringify(metrics.moduleTimings));
             
             metrics.moduleTimings.forEach((timing, index) => {
               // Get color from map or generate a random one if not exist

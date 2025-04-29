@@ -77,6 +77,9 @@ export function endFrame(): void {
     lastFpsUpdateTime = now;
   }
   
+  // Log module timings for debugging
+  console.log('Module timings collected:', moduleTimings);
+  
   // Calculate total processing time
   let totalProcessingTime = 0;
   for (const timing of moduleTimings) {
@@ -88,9 +91,12 @@ export function endFrame(): void {
     fps: currentFps,
     timestamp: now,
     frameTime: elapsed,
-    moduleTimings: [...moduleTimings],
+    moduleTimings: [...moduleTimings], // Make a copy of the array
     totalTime: totalProcessingTime
   };
+  
+  // Log metrics before dispatch
+  console.log('Performance metrics before dispatch:', metrics);
   
   // Send the metrics to any listeners
   dispatch(EventType.FRAME_PROCESSED, metrics);

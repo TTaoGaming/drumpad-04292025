@@ -520,6 +520,9 @@ function App() {
           // Any UI rendering that happens in this frame
           endTiming('rendering');
           
+          // Need to end the frameProcessing timing we started at the beginning
+          endTiming('frameProcessing');
+          
           // End frame timing and publish metrics
           endFrame();
           
