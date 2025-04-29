@@ -4,8 +4,6 @@
  * A utility for loading and initializing OpenCV.js in the main thread
  */
 
-import logger from './logger';
-
 let _opencvReady = false;
 let _opencvLoadPromise: Promise<void> | null = null;
 
@@ -34,19 +32,19 @@ export function isOpenCVReady(): boolean {
 export function loadOpenCV(): Promise<void> {
   // If OpenCV is already loaded, return a resolved promise
   if (isOpenCVReady()) {
-    logger.debug('OpenCV', 'OpenCV already loaded');
+    console.log('OpenCV already loaded');
     return Promise.resolve();
   }
   
   // If we're already loading, return the existing promise
   if (_opencvLoadPromise) {
-    logger.debug('OpenCV', 'OpenCV loading already in progress');
+    console.log('OpenCV loading already in progress');
     return _opencvLoadPromise;
   }
   
   // Create a new loading promise
   _opencvLoadPromise = new Promise((resolve, reject) => {
-    logger.info('OpenCV', 'Starting OpenCV.js load');
+    console.log('Starting OpenCV.js load');
     
     // Create a script element to load OpenCV
     const script = document.createElement('script');
@@ -55,13 +53,13 @@ export function loadOpenCV(): Promise<void> {
     
     // Handle success
     script.onload = () => {
-      logger.info('OpenCV', 'OpenCV.js script loaded, waiting for initialization');
+      console.log('OpenCV.js script loaded, waiting for initialization');
       
       // OpenCV will set up a Module object with onRuntimeInitialized callback
       (window as any).Module = {
         ...(window as any).Module,
         onRuntimeInitialized: () => {
-          logger.info('OpenCV', 'OpenCV runtime initialized');
+          console.log('OpenCV runtime initialized');
           _opencvReady = true;
           document.dispatchEvent(new Event('opencv-ready'));
           resolve();
@@ -71,7 +69,7 @@ export function loadOpenCV(): Promise<void> {
     
     // Handle failure
     script.onerror = (err) => {
-      logger.error('OpenCV', 'Failed to load OpenCV.js', err);
+      console.error('Failed to load OpenCV.js', err);
       _opencvLoadPromise = null;
       reject(new Error('Failed to load OpenCV.js'));
     };
@@ -85,9 +83,9 @@ export function loadOpenCV(): Promise<void> {
     // Set a timeout in case initialization callback never fires
     setTimeout(() => {
       if (!_opencvReady) {
-        logger.warn('OpenCV', 'OpenCV initialization timeout reached');
+        console.warn('OpenCV initialization timeout reached');
         if (isOpenCVReady()) {
-          logger.info('OpenCV', 'OpenCV appears to be available but onRuntimeInitialized never fired');
+          console.log('OpenCV appears to be available but onRuntimeInitialized never fired');
           _opencvReady = true;
           // Dispatch event in case listeners were set up
           document.dispatchEvent(new Event('opencv-ready'));
@@ -96,13 +94,13 @@ export function loadOpenCV(): Promise<void> {
           // Check one more time with a broader definition of "ready"
           const cv = (window as any).cv;
           if (cv && typeof cv.Mat === 'function') {
-            logger.info('OpenCV', 'OpenCV partially available, proceeding with limited functionality');
+            console.log('OpenCV partially available, proceeding with limited functionality');
             _opencvReady = true;
             // Dispatch event in case listeners were set up
             document.dispatchEvent(new Event('opencv-ready'));
             resolve();
           } else {
-            logger.error('OpenCV', 'OpenCV initialization failed completely after timeout');
+            console.error('OpenCV initialization failed completely after timeout');
             _opencvLoadPromise = null;
             reject(new Error('OpenCV initialization timed out'));
           }

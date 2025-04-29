@@ -15,7 +15,7 @@ import { EventType, addListener, dispatch } from "@/lib/eventBus";
 import { Notification, HandData, PerformanceMetrics, DrawingPath, CircleROI } from "@/lib/types";
 import { getVideoFrame } from "@/lib/cameraManager";
 import { loadOpenCV, setupOpenCVEventListener } from "./lib/opencvLoader";
-import logger from './lib/logger';
+import logger, { LogLevel, setLogLevel } from './lib/logger';
 
 function App() {
   const [isOpenCVReady, setIsOpenCVReady] = useState(false);
@@ -542,49 +542,22 @@ function App() {
     }, 5000);
   };
 
-  // Listen for OpenCV worker messages
+  // Initialize logger as early as possible
   useEffect(() => {
-    const handleMessage = (e: MessageEvent) => {
-      const message = e.data;
-      logger.debug('App', '[OpenCV Worker]:', message);
-      
-      if (message.type === 'status') {
-        logger.debug('App', 'OpenCV status update:', message.ready);
-        setIsOpenCVReady(message.ready);
-        
-        if (message.ready) {
-          addLog('OpenCV.js ready in worker', 'success');
-        }
-      } else if (message.type === 'opencv-ready') {
-        logger.info('App', 'OpenCV initialized in worker with features:', message.opencvFeatures);
-        addLog(`OpenCV.js ready with features: ${message.opencvFeatures.join(', ')}`, 'success');
-      }
-    };
+    // Configure the logger based on environment or user preferences
+    // Default to INFO level in production, DEBUG in development
+    const logLevel = process.env.NODE_ENV === 'production' ? LogLevel.INFO : LogLevel.DEBUG;
+    setLogLevel(logLevel);
     
-    if (opencvWorkerRef.current) {
-      opencvWorkerRef.current.addEventListener('message', handleMessage);
-    }
+    // You can also configure other logger options here
+    logger.configureLogger({
+      throttleTime: 1000, // 1 second throttle for similar logs
+      groupSimilarLogs: true,
+    });
     
-    return () => {
-      if (opencvWorkerRef.current) {
-        opencvWorkerRef.current.removeEventListener('message', handleMessage);
-      }
-    };
+    // Log initial startup
+    logger.info('App', 'Application initialized. Click "Start Camera" to begin.');
   }, []);
-
-  // Handle video resolution changes
-  useEffect(() => {
-    if (videoRef.current && videoRef.current.videoWidth > 0) {
-      const newResolution = { width: videoRef.current.videoWidth, height: videoRef.current.videoHeight };
-      if (newResolution.width !== resolution.width || newResolution.height !== resolution.height) {
-        logger.debug('App', 'Video resolution updated:', `${newResolution.width}x${newResolution.height}`);
-        setResolution(newResolution);
-        
-        // Log the resolution change
-        addLog(`Camera started at ${Math.round(newResolution.height)}p resolution`, 'info');
-      }
-    }
-  }, [videoRef, resolution]);
 
   return (
     <div id="camera-container" className="relative w-screen h-screen bg-background">

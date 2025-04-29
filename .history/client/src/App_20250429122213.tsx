@@ -15,7 +15,7 @@ import { EventType, addListener, dispatch } from "@/lib/eventBus";
 import { Notification, HandData, PerformanceMetrics, DrawingPath, CircleROI } from "@/lib/types";
 import { getVideoFrame } from "@/lib/cameraManager";
 import { loadOpenCV, setupOpenCVEventListener } from "./lib/opencvLoader";
-import logger from './lib/logger';
+import logger, { LogLevel, setLogLevel } from './lib/logger';
 
 function App() {
   const [isOpenCVReady, setIsOpenCVReady] = useState(false);
@@ -541,6 +541,23 @@ function App() {
       setNotifications(prev => prev.filter(notification => notification.id !== id));
     }, 5000);
   };
+
+  // Initialize logger as early as possible
+  useEffect(() => {
+    // Configure the logger based on environment or user preferences
+    // Default to INFO level in production, DEBUG in development
+    const logLevel = process.env.NODE_ENV === 'production' ? LogLevel.INFO : LogLevel.DEBUG;
+    setLogLevel(logLevel);
+    
+    // You can also configure other logger options here
+    logger.configureLogger({
+      throttleTime: 1000, // 1 second throttle for similar logs
+      groupSimilarLogs: true,
+    });
+    
+    // Log initial startup
+    logger.info('App', 'Application initialized. Click "Start Camera" to begin.');
+  }, []);
 
   // Listen for OpenCV worker messages
   useEffect(() => {

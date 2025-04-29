@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 import { addListener, EventType } from '@/lib/eventBus';
 import { PerformanceMetrics } from '@/lib/types';
-import logger from '@/lib/logger';
 
 interface UnifiedPerformanceDashboardProps {
   targetFps: number;
@@ -73,7 +72,7 @@ const UnifiedPerformanceDashboard: React.FC<UnifiedPerformanceDashboardProps> = 
   
   // Debug current state
   useEffect(() => {
-    logger.debug('Performance', 'Module timings updated:', moduleTimings);
+    console.log('Module timings updated:', moduleTimings);
   }, [moduleTimings]);
   
   // State for memory usage
@@ -195,7 +194,7 @@ const UnifiedPerformanceDashboard: React.FC<UnifiedPerformanceDashboardProps> = 
     const canvasPoolListener = addListener(
       EventType.CANVAS_POOL_UPDATED,
       (data) => {
-        logger.debug('Performance', 'Canvas pool event received:', data);
+        console.log('Canvas pool event received:', data);
         if (data) {
           setCanvasPool({
             size: data.size || 0,
@@ -211,13 +210,13 @@ const UnifiedPerformanceDashboard: React.FC<UnifiedPerformanceDashboardProps> = 
     const frameProcessedListener = addListener(
       EventType.FRAME_PROCESSED, 
       (metrics: PerformanceMetrics) => {
-        logger.debug('Performance', 'Frame processed event received in dashboard:', metrics);
+        console.log('Frame processed event received in dashboard:', metrics);
         if (metrics) {
-          logger.debug('Performance', 'Performance metrics received:', metrics);
+          console.log('Performance metrics received:', metrics);
           
           // Log the detailed module timings
           if (metrics.moduleTimings && metrics.moduleTimings.length > 0) {
-            logger.debug('Performance', 'Module Timings:', metrics.moduleTimings);
+            console.log('Module Timings:', metrics.moduleTimings);
           }
           
           setPerformanceMetrics(metrics);
@@ -260,11 +259,11 @@ const UnifiedPerformanceDashboard: React.FC<UnifiedPerformanceDashboardProps> = 
           const newModuleTimings: ModuleTimingData[] = [];
           
           // Process the module timings from the performance metrics
-          logger.debug('Performance', 'Module timings array type:', metrics.moduleTimings ? Array.isArray(metrics.moduleTimings) : 'undefined');
-          logger.debug('Performance', 'Module timings array length:', metrics.moduleTimings ? metrics.moduleTimings.length : 0);
+          console.log('Module timings array type:', metrics.moduleTimings ? Array.isArray(metrics.moduleTimings) : 'undefined');
+          console.log('Module timings array length:', metrics.moduleTimings ? metrics.moduleTimings.length : 0);
           
           if (metrics && metrics.moduleTimings && Array.isArray(metrics.moduleTimings) && metrics.moduleTimings.length > 0) {
-            logger.debug('Performance', 'Processing module timings:', JSON.stringify(metrics.moduleTimings));
+            console.log('Processing module timings:', JSON.stringify(metrics.moduleTimings));
             
             metrics.moduleTimings.forEach((timing, index) => {
               // Get color from map or generate a random one if not exist

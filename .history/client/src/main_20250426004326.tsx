@@ -1,8 +1,6 @@
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
-// Import our logger initialization
-import "./lib/initLogger";
 
 // Don't load OpenCV.js here - it should be loaded in the worker
 document.head.innerHTML += `
