@@ -177,34 +177,67 @@ export async function detectContours(imageData: ImageData): Promise<any | null> 
  * @returns New ImageData with contours drawn, or null if error
  */
 export function createContourVisualization(imageData: ImageData, contourResult: any): ImageData | null {
-  if (!contourResult || !contourConfig.drawContours) return null;
+  // Skip visualization if requested or no contours
+  if (!contourResult || !contourConfig.drawContours) {
+    console.log('[contourTracking] Skipping visualization - drawContours:', contourConfig.drawContours, 'contourResult:', contourResult ? 'exists' : 'missing');
+    return null;
+  }
   
   try {
+    if (!isOpenCVReady()) {
+      console.warn('[contourTracking] OpenCV not ready for visualization');
+      return null;
+    }
+    
+    // Create OpenCV matrices
     const src = cv.matFromImageData(imageData);
     const dst = src.clone();
     
     try {
-      // Draw contours on the image
+      // Draw contours on the image with higher visibility
       const color = new cv.Scalar(0, 255, 0, 255); // Green contours
       const centerColor = new cv.Scalar(255, 0, 0, 255); // Red center point
       
+      // Draw all contours with thicker lines for better visibility
       cv.drawContours(dst, contourResult.contours, -1, color, 2);
       
-      // Draw the center of mass
+      // Draw the center of mass with a larger circle for visibility
       const center = contourResult.centerOfMass;
-      cv.circle(dst, new cv.Point(center.x, center.y), 5, centerColor, -1);
+      if (center) {
+        cv.circle(dst, new cv.Point(center.x, center.y), 5, centerColor, -1);
+      }
+      
+      // Draw a bright outline for better visibility in dark areas
+      cv.rectangle(
+        dst, 
+        new cv.Point(0, 0), 
+        new cv.Point(imageData.width - 1, imageData.height - 1),
+        new cv.Scalar(255, 255, 255, 128),
+        1
+      );
       
       // Convert back to ImageData
       const tempCanvas = document.createElement('canvas');
       tempCanvas.width = imageData.width;
       tempCanvas.height = imageData.height;
       const ctx = tempCanvas.getContext('2d');
-      if (!ctx) return null;
+      if (!ctx) {
+        console.warn('[contourTracking] Failed to get canvas context for visualization');
+        return null;
+      }
       
       // Put the contour image on canvas and read back as ImageData
       cv.imshow(tempCanvas, dst);
-      return ctx.getImageData(0, 0, imageData.width, imageData.height);
+      const visualizationData = ctx.getImageData(0, 0, imageData.width, imageData.height);
+      
+      // Log success occasionally
+      if (Math.random() < 0.05) { // 5% chance to log
+        console.log(`[contourTracking] Visualization created: ${visualizationData.width}x${visualizationData.height} with data length ${visualizationData.data.length}`);
+      }
+      
+      return visualizationData;
     } finally {
+      // Clean up OpenCV resources
       src.delete();
       dst.delete();
     }

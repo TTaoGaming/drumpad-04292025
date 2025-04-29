@@ -63,7 +63,7 @@ const ImprovedROIDebugCanvas: React.FC<ImprovedROIDebugCanvasProps> = ({
       setContourData(null);
     });
     
-    // Listen for ROI updates
+    // Listen for ROI updates - with improved debugging for visualization issues
     const circleRoiUpdateListener = addListener(EventType.ROI_UPDATED, (data: any) => {
       if (roi && data.id === roi.id) {
         // Update the ROI
@@ -75,8 +75,19 @@ const ImprovedROIDebugCanvas: React.FC<ImprovedROIDebugCanvasProps> = ({
           });
         }
         
-        // Check for contour tracking data
+        // Check for contour tracking data with improved logging
         if (data.contourTracking) {
+          // Log occasionally to debug visualization data issues
+          if (Math.random() < 0.05) { // Log approximately 5% of the time
+            console.log(`[ROIDebugCanvas] ROI update received for ID ${data.id}:`, {
+              isOccluded: data.contourTracking.isOccluded,
+              contourCount: data.trackingResult?.matchCount,
+              visibilityRatio: data.trackingResult?.confidence,
+              hasVisualization: data.contourTracking.visualizationData ? 'Yes' : 'No'
+            });
+          }
+          
+          // Update contour data state
           setContourData({
             isOccluded: data.contourTracking.isOccluded || false,
             contourCount: data.trackingResult?.matchCount || 0,
@@ -239,6 +250,16 @@ const ImprovedROIDebugCanvas: React.FC<ImprovedROIDebugCanvasProps> = ({
     
     // If we have contour visualization data, show that instead of the original ROI
     if (contourData?.visualizationData) {
+      // Log visualization data information occasionally
+      if (Math.random() < 0.01) { // 1% chance to log
+        console.log(`[ROIDebugCanvas] Visualization data:`, {
+          width: contourData.visualizationData.width,
+          height: contourData.visualizationData.height,
+          data: contourData.visualizationData.data ? 'Present' : 'Missing',
+          dataLength: contourData.visualizationData.data?.length || 0
+        });
+      }
+      
       // Create temp canvas for the contour visualization
       const contourCanvas = document.createElement('canvas');
       contourCanvas.width = contourData.visualizationData.width;
@@ -246,15 +267,25 @@ const ImprovedROIDebugCanvas: React.FC<ImprovedROIDebugCanvasProps> = ({
       const contourCtx = contourCanvas.getContext('2d');
       
       if (contourCtx) {
-        // Draw the contour visualization data
-        contourCtx.putImageData(contourData.visualizationData, 0, 0);
-        
-        // Draw onto our main canvas
-        ctx.drawImage(
-          contourCanvas,
-          0, 0, contourCanvas.width, contourCanvas.height,
-          0, 0, width, height
-        );
+        try {
+          // Draw the contour visualization data
+          contourCtx.putImageData(contourData.visualizationData, 0, 0);
+          
+          // Draw onto our main canvas
+          ctx.drawImage(
+            contourCanvas,
+            0, 0, contourCanvas.width, contourCanvas.height,
+            0, 0, width, height
+          );
+        } catch (err) {
+          console.error('[ROIDebugCanvas] Error rendering contour visualization:', err);
+          // If visualization fails, fall back to showing the ROI directly
+          ctx.drawImage(
+            tempCanvas, 
+            sourceX, sourceY, sourceWidth, sourceHeight,
+            0, 0, width, height
+          );
+        }
       } else {
         // Fallback to original image if context creation fails
         ctx.drawImage(
@@ -270,6 +301,11 @@ const ImprovedROIDebugCanvas: React.FC<ImprovedROIDebugCanvasProps> = ({
         sourceX, sourceY, sourceWidth, sourceHeight,
         0, 0, width, height
       );
+      
+      // Log that we're not using visualization data
+      if (Math.random() < 0.01) { // 1% chance
+        console.log(`[ROIDebugCanvas] No visualization data available for ROI ${roi.id}, showing raw ROI`);
+      }
     }
     
     // Draw a circular mask to highlight the ROI
