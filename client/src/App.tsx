@@ -424,7 +424,7 @@ function App() {
   const frameLogCountRef = useRef(0);
   const LOG_EVERY_N_FRAMES = 300; // Only log every 300 frames (approx. every 5 seconds at 60fps)
   
-  const processVideoFrame = () => {
+  const processVideoFrame = async () => {
     // Calculate time since last frame
     const now = performance.now();
     const elapsed = now - lastFrameTimeRef.current;
@@ -470,62 +470,60 @@ function App() {
         frameProcessingRef.current = true;
         
         try {
-          // Import the performance tracking functionality
-          import('./lib/performanceTracker').then(({ startTiming, endTiming, endFrame }) => {
-            // Start overall frame timing
-            startTiming('frameProcessing');
+          // Static import this for better performance (we'll use this import later)
+          const { startTiming, endTiming, endFrame } = await import('./lib/performanceTracker');
+          
+          startTiming('frameProcessing');
+          
+          // Capture frame from video with timing
+          startTiming('frameCapture');
+          const frameData = videoRef.current ? getVideoFrame(videoRef.current) : null;
+          endTiming('frameCapture');
+          
+          if (frameData) {
+            // Measure communication with workers
+            startTiming('workerCommunication');
             
-            // Capture frame from video with timing
-            startTiming('frameCapture');
-            const frameData = getVideoFrame(videoRef.current);
-            endTiming('frameCapture');
-            
-            // We'll measure each processing step individually
-            startTiming('preprocessing');
-            // Any preprocessing code would go here
-            endTiming('preprocessing');
-            
-            // Process the captured frame and measure worker communication
-            if (frameData) {
-              startTiming('workerCommunication');
-              
-              // MediaPipe Hands worker processing
-              if (mediaPipeHandsWorkerRef.current) {
-                mediaPipeHandsWorkerRef.current.postMessage({
-                  command: 'process',
-                  data: {
-                    frame: frameData,
-                    framePerformance: { 
-                      frameTime: elapsed
-                    }
-                  }
-                });
-              } else if (mediaPipelineWorkerRef.current) {
-                // Fallback to the old pipeline if the hands worker isn't ready
-                mediaPipelineWorkerRef.current.postMessage({
-                  command: 'process-frame',
-                  data: frameData
-                });
-              }
-              
-              // OpenCV worker processing
-              if (opencvWorkerRef.current) {
-                opencvWorkerRef.current.postMessage({
-                  command: 'process-frame',
-                  data: frameData
-                });
-              }
-              
-              endTiming('workerCommunication');
+            // Send frame to MediaPipe Hands worker for processing
+            if (mediaPipeHandsWorkerRef.current) {
+              mediaPipeHandsWorkerRef.current.postMessage({
+                command: 'process',
+                data: {
+                  frame: frameData,
+                  frameTime: elapsed
+                }
+              });
+            } else if (mediaPipelineWorkerRef.current) {
+              // Fallback to old pipeline if hands worker isn't ready
+              mediaPipelineWorkerRef.current.postMessage({
+                command: 'process-frame',
+                data: frameData
+              });
             }
             
-            // End the frame timing and publish metrics
-            endFrame();
-          }).catch(err => {
-            console.error('Error importing performance tracker:', err);
-          });
+            // OpenCV worker processing in parallel
+            if (opencvWorkerRef.current) {
+              opencvWorkerRef.current.postMessage({
+                command: 'process-frame',
+                data: frameData
+              });
+            }
+            
+            endTiming('workerCommunication');
+          }
           
-          // Frame data is now handled inside the performance tracking block
+          // UI rendering measurements
+          startTiming('rendering');
+          // Any UI rendering that happens in this frame
+          endTiming('rendering');
+          
+          // End frame timing and publish metrics
+          endFrame();
+          
+          // Mark frame as complete to allow next frame processing
+          setTimeout(() => {
+            frameProcessingRef.current = false;
+          }, 0);
         } catch (error) {
           console.error('Error processing video frame:', error);
           frameProcessingRef.current = false;

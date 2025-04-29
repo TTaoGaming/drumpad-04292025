@@ -209,23 +209,18 @@ const UnifiedPerformanceDashboard: React.FC<UnifiedPerformanceDashboardProps> = 
     // Set up event listeners for performance metrics
     const frameProcessedListener = addListener(
       EventType.FRAME_PROCESSED, 
-      (data: {performance: PerformanceMetrics, timestamp: number}) => {
-        console.log('Frame processed event received in dashboard:', data);
-        if (data && data.performance) {
-          console.log('Performance metrics received:', data.performance);
+      (metrics: PerformanceMetrics) => {
+        console.log('Frame processed event received in dashboard:', metrics);
+        if (metrics) {
+          console.log('Performance metrics received:', metrics);
           
-          // Log the individual timing values
-          console.log('Module Timings:', {
-            captureTime: data.performance.captureTime,
-            handDetectionTime: data.performance.handDetectionTime,
-            contourTrackingTime: data.performance.contourTrackingTime,
-            roiProcessingTime: data.performance.roiProcessingTime,
-            renderTime: data.performance.renderTime
-          });
-          setPerformanceMetrics(data.performance);
+          // Log the detailed module timings
+          console.log('Module Timings:', metrics.moduleTimings);
+          
+          setPerformanceMetrics(metrics);
           
           // Update FPS data
-          const newFps = data.performance.fps || 0;
+          const newFps = metrics.fps || 0;
           setFpsData(prev => {
             const newHistory = [...prev.history.slice(-59), newFps];
             const sum = newHistory.reduce((a, b) => a + b, 0);
@@ -240,48 +235,50 @@ const UnifiedPerformanceDashboard: React.FC<UnifiedPerformanceDashboardProps> = 
             };
           });
           
-          // Update module timings based on performance data
-          const newModuleTimings = [
-            { 
-              name: 'Frame Capture', 
-              duration: data.performance.captureTime || 0, 
-              color: moduleTimings[0].color 
-            },
-            { 
-              name: 'MediaPipe', 
-              duration: data.performance.handDetectionTime || 0, 
-              color: moduleTimings[1].color 
-            },
-            { 
-              name: 'Contour Tracking', 
-              duration: data.performance.contourTrackingTime || 0, 
-              color: moduleTimings[2].color 
-            },
-            { 
-              name: 'ROI Processing', 
-              duration: data.performance.roiProcessingTime || 0, 
-              color: moduleTimings[3].color 
-            },
-            { 
-              name: 'Rendering', 
-              duration: data.performance.renderTime || 0, 
-              color: moduleTimings[4].color 
-            }
+          // Process the new module timings data
+          const defaultColors = [
+            '#4285F4', // Blue
+            '#EA4335', // Red
+            '#FBBC05', // Yellow
+            '#34A853', // Green
+            '#8AB4F8'  // Light blue
           ];
           
-          // Add any additional module timings from the moduleTimings object
-          if (data.performance.moduleTimings) {
-            console.log('Additional module timings:', data.performance.moduleTimings);
+          // Initialize with predefined colors for predefined modules
+          const moduleColorMap = new Map<string, string>([
+            ['frameCapture', defaultColors[0]],
+            ['frameProcessing', defaultColors[1]],
+            ['workerCommunication', defaultColors[2]],
+            ['rendering', defaultColors[3]],
+            ['preprocessing', defaultColors[4]]
+          ]);
+          
+          // Create new module timings array from the metrics data
+          const newModuleTimings: ModuleTimingData[] = [];
+          
+          // Process the module timings from the performance metrics
+          if (metrics.moduleTimings && metrics.moduleTimings.length > 0) {
+            console.log('Processing module timings:', metrics.moduleTimings);
             
-            Object.entries(data.performance.moduleTimings).forEach(([name, duration]) => {
-              // Only add if it's not one of our standard modules
-              if (!['frameCapture', 'handDetection', 'contourTracking', 'roiProcessing', 'rendering'].includes(name)) {
-                newModuleTimings.push({
-                  name: name.charAt(0).toUpperCase() + name.slice(1),
-                  duration: duration,
-                  color: '#' + Math.floor(Math.random()*16777215).toString(16) // Random color
-                });
+            metrics.moduleTimings.forEach((timing, index) => {
+              // Get color from map or generate a random one if not exist
+              let color = moduleColorMap.get(timing.name);
+              if (!color) {
+                // Generate random color for new modules
+                color = '#' + Math.floor(Math.random()*16777215).toString(16);
+                moduleColorMap.set(timing.name, color);
               }
+              
+              // Format module name for display
+              const displayName = timing.name
+                .replace(/([A-Z])/g, ' $1') // Add space before capitals
+                .replace(/^./, str => str.toUpperCase()); // Capitalize first letter
+                
+              newModuleTimings.push({
+                name: displayName,
+                duration: timing.duration,
+                color
+              });
             });
           }
           
