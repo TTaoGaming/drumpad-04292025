@@ -24,25 +24,37 @@ const FpsStats: React.FC = () => {
     const frameProcessedListener = addListener(
       EventType.FRAME_PROCESSED,
       (data) => {
-        if (data && data.fps) {
+        if (data && data.performance) {
           const now = performance.now();
-          setCurrentFps(Math.round(data.fps));
           
-          // Add the new reading to history
+          // Get fps from performance metrics
+          const instantFps = data.performance.fps || 0;
+          const rollingAvgFps = data.performance.fpsRollingAvg || instantFps;
+          
+          // If the fps is extremely high, it might be a miscalculation, cap it
+          const cappedFps = Math.min(instantFps, 120); // Cap at 120fps
+          setCurrentFps(Math.round(cappedFps));
+          
+          // Add the new reading to history for our own averaging
           fpsReadingsRef.current.push({
             timestamp: now,
-            fps: data.fps
+            fps: cappedFps
           });
           
-          // Calculate 5s average
-          const fiveSecondsAgo = now - 5000;
-          const readings5s = fpsReadingsRef.current.filter(
-            reading => reading.timestamp >= fiveSecondsAgo
-          );
-          
-          if (readings5s.length > 0) {
-            const sum5s = readings5s.reduce((sum, reading) => sum + reading.fps, 0);
-            setAvg5sFps(Math.round(sum5s / readings5s.length));
+          // Use the rolling average from the worker if available
+          if (rollingAvgFps) {
+            setAvg5sFps(Math.round(Math.min(rollingAvgFps, 120)));
+          } else {
+            // Calculate 5s average as fallback
+            const fiveSecondsAgo = now - 5000;
+            const readings5s = fpsReadingsRef.current.filter(
+              reading => reading.timestamp >= fiveSecondsAgo
+            );
+            
+            if (readings5s.length > 0) {
+              const sum5s = readings5s.reduce((sum, reading) => sum + reading.fps, 0);
+              setAvg5sFps(Math.round(sum5s / readings5s.length));
+            }
           }
           
           // Calculate 10s average
