@@ -63,7 +63,7 @@ export interface HandData {
 }
 
 // Performance metrics for tracking runtime performance
-export interface PerformanceMetrics {
+export interface PerformanceData {
   fps: number;
   processingTime: number;
   moduleTimings: {

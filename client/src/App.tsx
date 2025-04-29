@@ -7,14 +7,14 @@ import ConsoleOutput from "@/components/ConsoleOutput";
 import HandVisualization from "@/components/HandVisualization";
 import PerformanceDisplay from "@/components/PerformanceDisplay";
 import PerformanceMonitor from "@/components/PerformanceMonitor";
-import FpsStats from "@/components/PerformanceMetrics";
+import PerformanceMetrics from "@/components/PerformanceMetrics";
 import MediaPipeHandTracker from "@/components/MediaPipeHandTracker";
 import DrawingCanvas from "@/components/DrawingCanvas";
 import ImprovedROIDebugCanvas from "@/components/ImprovedROIDebugCanvas";
 import TrackingVisualization from "@/components/TrackingVisualization";
 import SettingsPanel from "@/components/settings/SettingsPanel";
 import { EventType, addListener, dispatch } from "@/lib/eventBus";
-import { Notification, HandData, PerformanceMetrics, DrawingPath, CircleROI } from "@/lib/types";
+import { Notification, HandData, PerformanceData, DrawingPath, CircleROI } from "@/lib/types";
 import { getVideoFrame } from "@/lib/cameraManager";
 import { loadOpenCV, setupOpenCVEventListener } from "./lib/opencvLoader";
 
@@ -26,7 +26,7 @@ function App() {
   const [logs, setLogs] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [handData, setHandData] = useState<HandData | undefined>(undefined);
-  const [performanceMetrics, setPerformanceMetrics] = useState<PerformanceMetrics | undefined>(undefined);
+  const [performanceMetrics, setPerformanceMetrics] = useState<PerformanceData | undefined>(undefined);
   const [resolution, setResolution] = useState({ width: 640, height: 480 });
   const [drawingPaths, setDrawingPaths] = useState<DrawingPath[]>([]);
   const [showDebugCanvas, setShowDebugCanvas] = useState(true);
@@ -666,7 +666,7 @@ function App() {
       <PerformanceMonitor />
       
       {/* FPS Statistics with averages */}
-      {isCameraRunning && <FpsStats />}
+      {isCameraRunning && <PerformanceMetrics />}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { PerformanceMetrics } from '@/lib/types';
+import { PerformanceData } from '@/lib/types';
 
 interface PerformanceDisplayProps {
   performance?: PerformanceMetrics;

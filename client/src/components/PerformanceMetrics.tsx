@@ -6,18 +6,36 @@ interface FpsReading {
   fps: number;
 }
 
+interface PerformanceData {
+  [key: string]: number;
+}
+
+interface ModuleTimings {
+  name: string;
+  time: number;
+  percentage: number;
+}
+
 /**
- * FPS Stats Component
+ * Enhanced Performance Metrics Component
  * 
- * Displays realtime and average FPS metrics
+ * Displays detailed performance metrics including:
+ * - Real-time FPS with rolling averages
+ * - Module-specific timing information
+ * - Frame processing breakdown
  */
-const FpsStats: React.FC = () => {
+const PerformanceMetrics: React.FC = () => {
   const [currentFps, setCurrentFps] = useState<number>(0);
   const [avg5sFps, setAvg5sFps] = useState<number>(0);
   const [avg10sFps, setAvg10sFps] = useState<number>(0);
+  const [expanded, setExpanded] = useState<boolean>(false);
+  const [moduleTimings, setModuleTimings] = useState<ModuleTimings[]>([]);
+  const [totalFrameTime, setTotalFrameTime] = useState<number>(0);
+  const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
   
   // Store historical FPS readings for calculating averages
   const fpsReadingsRef = useRef<FpsReading[]>([]);
+  const performanceRef = useRef<PerformanceData>({});
   
   useEffect(() => {
     // Listen for frame processed events to calculate FPS
@@ -26,10 +44,17 @@ const FpsStats: React.FC = () => {
       (data) => {
         if (data && data.performance) {
           const now = performance.now();
+          const perfData = data.performance;
+          
+          // Store all performance metrics for analysis
+          performanceRef.current = {
+            ...performanceRef.current,
+            ...perfData
+          };
           
           // Get fps from performance metrics
-          const instantFps = data.performance.fps || 0;
-          const rollingAvgFps = data.performance.fpsRollingAvg || instantFps;
+          const instantFps = perfData.fps || 0;
+          const rollingAvgFps = perfData.fpsRollingAvg || instantFps;
           
           // If the fps is extremely high, it might be a miscalculation, cap it
           const cappedFps = Math.min(instantFps, 120); // Cap at 120fps
@@ -72,6 +97,50 @@ const FpsStats: React.FC = () => {
           fpsReadingsRef.current = fpsReadingsRef.current.filter(
             reading => reading.timestamp >= tenSecondsAgo
           );
+          
+          // Process module timings for display
+          const moduleData: ModuleTimings[] = [];
+          let totalTime = 0;
+          
+          // Calculate total frame time
+          if (perfData.timeBetweenFrames) {
+            totalTime = perfData.timeBetweenFrames;
+            setTotalFrameTime(totalTime);
+          }
+          
+          // Extract module-specific timings
+          const validKeys = [
+            'frameProcessing', 
+            'processResults', 
+            'init',
+            'contourDetection',
+            'featureExtraction',
+            'templateMatching',
+            'roiProcessing'
+          ];
+          
+          // Go through all performance metrics and find timing data
+          Object.entries(perfData).forEach(([key, value]) => {
+            // Skip metadata fields
+            if (key === 'fps' || key === 'fpsRollingAvg' || key === 'timeBetweenFrames' || 
+                key === 'workerUptime' || key.includes('_start') || value <= 0) {
+              return;
+            }
+            
+            // Additional sanity check - look for plausible values
+            if (typeof value === 'number' && value < 500) {
+              const percentage = totalTime > 0 ? (value / totalTime) * 100 : 0;
+              moduleData.push({
+                name: key,
+                time: value,
+                percentage: percentage
+              });
+            }
+          });
+          
+          // Sort by time consumed (descending)
+          moduleData.sort((a, b) => b.time - a.time);
+          setModuleTimings(moduleData);
         }
       }
     );
@@ -81,9 +150,20 @@ const FpsStats: React.FC = () => {
     };
   }, []);
   
+  // Toggle expanded view
+  const toggleExpand = () => {
+    setExpanded(!expanded);
+  };
+  
+  // Toggle advanced metrics
+  const toggleAdvanced = () => {
+    setShowAdvanced(!showAdvanced);
+  };
+  
   return (
-    <div className="absolute bottom-16 left-4 z-10 p-2 bg-black/70 rounded-md text-white text-xs font-mono">
-      <div className="grid grid-cols-3 gap-2">
+    <div className="absolute bottom-4 left-4 z-10 p-3 bg-black/80 rounded-md text-white text-xs font-mono shadow-lg transition-all">
+      {/* Main display - always visible */}
+      <div className="grid grid-cols-3 gap-3 mb-2" onClick={toggleExpand}>
         <div className="text-center">
           <div className="text-white/70">FPS</div>
           <div className="text-lg font-bold">{currentFps}</div>
@@ -97,8 +177,78 @@ const FpsStats: React.FC = () => {
           <div className="text-lg font-bold">{avg10sFps}</div>
         </div>
       </div>
+      
+      {/* Expanded details */}
+      {expanded && (
+        <div className="border-t border-white/20 pt-2 mt-1">
+          <div className="flex justify-between items-center mb-2">
+            <div className="text-white/90 font-bold">Module Performance</div>
+            <button 
+              onClick={toggleAdvanced}
+              className="text-xs px-2 py-1 bg-white/10 rounded hover:bg-white/20"
+            >
+              {showAdvanced ? 'Simple View' : 'Advanced View'}
+            </button>
+          </div>
+          
+          {/* Frame time */}
+          <div className="mb-2">
+            <div className="text-white/70 text-xs">Total Frame Time: {totalFrameTime.toFixed(1)}ms</div>
+          </div>
+          
+          {/* Module timings */}
+          <div className="space-y-1 max-h-48 overflow-y-auto">
+            {moduleTimings.map((module, index) => (
+              <div key={index} className="grid grid-cols-12 gap-1 items-center">
+                <div className="col-span-6 text-white/90 truncate">{module.name}</div>
+                <div className="col-span-2 text-right text-white/80">{module.time.toFixed(1)}ms</div>
+                <div className="col-span-4 pl-1">
+                  <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-blue-500" 
+                      style={{ width: `${Math.min(module.percentage, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+            
+            {moduleTimings.length === 0 && (
+              <div className="text-white/50 italic">No module timings available</div>
+            )}
+          </div>
+          
+          {/* Advanced metrics - when toggled */}
+          {showAdvanced && (
+            <div className="mt-3 border-t border-white/20 pt-2">
+              <div className="text-white/90 font-bold mb-2">Raw Performance Data</div>
+              <div className="space-y-1 max-h-48 overflow-y-auto">
+                {Object.entries(performanceRef.current)
+                  .filter(([key, value]) => typeof value === 'number')
+                  .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
+                  .map(([key, value], index) => (
+                    <div key={index} className="grid grid-cols-12 gap-1">
+                      <div className="col-span-8 text-white/70 truncate">{key}</div>
+                      <div className="col-span-4 text-right text-white/80">
+                        {typeof value === 'number' 
+                          ? (value > 100 ? value.toFixed(0) : value.toFixed(2))
+                          : String(value)
+                        }
+                      </div>
+                    </div>
+                  ))
+                }
+              </div>
+            </div>
+          )}
+          
+          <div className="text-xs text-center text-white/40 mt-2">
+            Click panel to collapse
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
-export default FpsStats;
+export default PerformanceMetrics;
