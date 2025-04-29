@@ -55,17 +55,6 @@ export function endTiming(moduleId: string): void {
     
     // Remove from active timings
     activeTimings.delete(moduleId);
-  } else {
-    // If no start time found, this might be from a delayed timer
-    // Just estimate with a small value
-    const endTime = performance.now();
-    const startTime = endTime - 1.0; // assume 1ms
-    moduleTimings.push({
-      name: moduleId,
-      duration: 1.0,
-      startTime,
-      endTime
-    });
   }
 }
 

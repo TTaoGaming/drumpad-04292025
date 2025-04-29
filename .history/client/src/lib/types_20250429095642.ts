@@ -76,8 +76,6 @@ export interface PerformanceMetrics {
   frameTime?: number;       // Time since last frame in ms
   totalTime?: number;       // Total processing time in ms
   moduleTimings: ModuleTiming[]; // Detailed timings for each module
-  skippedFrames?: number;   // Number of frames skipped for performance
-  frameSkipLevel?: number;  // Current level of frame skipping (0-5)
 }
 
 // Finger joint angles

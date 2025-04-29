@@ -106,8 +106,7 @@ const HandVisualization: React.FC<HandVisualizationProps> = ({
     canvas.width = width;
     canvas.height = height;
     
-    // Get 2D context with willReadFrequently flag for better performance
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const ctx = canvas.getContext('2d');
     if (!ctx) {
       console.error("Could not get 2D context");
       return;

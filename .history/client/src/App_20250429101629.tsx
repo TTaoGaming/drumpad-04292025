@@ -38,12 +38,6 @@ function App() {
   const animationFrameRef = useRef<number | null>(null);
   const resolutionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Add variables for frame skipping
-  const frameSkipCountRef = useRef<number>(0);
-  const targetFpsRef = useRef<number>(30);
-  const lastFrameTimeRef = useRef<number>(0);
-  const adaptiveFrameSkipRef = useRef<boolean>(true);
-
   // Start OpenCV loading process
 
   useEffect(() => {
@@ -423,6 +417,7 @@ function App() {
   // Frame rate throttling configuration
   const targetFPS = 60; // Target 60 FPS for smooth performance
   const frameInterval = 1000 / targetFPS; // Time between frames in ms
+  const lastFrameTimeRef = useRef(0);
   const performanceCounterRef = useRef({ frames: 0, startTime: 0, lastFpsUpdate: 0 });
   
   // Throttle console logs related to frame processing
@@ -430,51 +425,9 @@ function App() {
   const LOG_EVERY_N_FRAMES = 300; // Only log every 300 frames (approx. every 5 seconds at 60fps)
   
   const processVideoFrame = async () => {
-    if (!isCameraRunning) return;
-    
-    // Implement adaptive frame skipping
+    // Calculate time since last frame
     const now = performance.now();
-    const timeSinceLastFrame = now - lastFrameTimeRef.current;
-    const targetFrameTime = 1000 / targetFpsRef.current;
-    
-    // Skip frames if we're running behind and adaptive frame skipping is enabled
-    if (adaptiveFrameSkipRef.current && lastFrameTimeRef.current !== 0) {
-      // If we're taking more than 1.5x target frame time, start skipping frames
-      if (timeSinceLastFrame < targetFrameTime * 0.8) {
-        // We're running ahead of schedule, process this frame
-        frameSkipCountRef.current = Math.max(0, frameSkipCountRef.current - 1);
-      } else if (timeSinceLastFrame > targetFrameTime * 1.5) {
-        // We're running behind, increase frame skip
-        frameSkipCountRef.current = Math.min(5, frameSkipCountRef.current + 1);
-      }
-      
-      // Skip this frame if frameSkipCount > 0
-      if (frameSkipCountRef.current > 0) {
-        // Update performance metrics to show skipped frames
-        setPerformanceMetrics(prev => ({
-          ...(prev || {}),
-          skippedFrames: (prev?.skippedFrames || 0) + 1,
-          frameSkipLevel: frameSkipCountRef.current
-        }));
-        
-        // Schedule next frame and skip processing this one
-        animationFrameRef.current = requestAnimationFrame(processVideoFrame);
-        return;
-      }
-    }
-    
-    // Update last frame time
-    lastFrameTimeRef.current = now;
-    
-    // If we're already processing a frame, skip this one
-    if (frameProcessingRef.current) {
-      console.log('Frame processing in progress, skipping');
-      animationFrameRef.current = requestAnimationFrame(processVideoFrame);
-      return;
-    }
-    
-    // Mark that we're processing a frame
-    frameProcessingRef.current = true;
+    const elapsed = now - lastFrameTimeRef.current;
     
     // Track actual FPS
     if (performanceCounterRef.current.startTime === 0) {
@@ -482,7 +435,9 @@ function App() {
     }
     
     // Only process frame if enough time has elapsed
-    if (timeSinceLastFrame >= frameInterval) {
+    if (elapsed >= frameInterval) {
+      // Update last frame time, adjusting for any extra time beyond the frame interval
+      lastFrameTimeRef.current = now - (elapsed % frameInterval);
       performanceCounterRef.current.frames++;
       
       // Update FPS counter every second
@@ -538,7 +493,7 @@ function App() {
                 command: 'process',
                 data: {
                   frame: frameData,
-                  frameTime: timeSinceLastFrame
+                  frameTime: elapsed
                 }
               });
             } else if (mediaPipelineWorkerRef.current) {
