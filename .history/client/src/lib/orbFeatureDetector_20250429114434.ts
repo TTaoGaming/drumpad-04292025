@@ -46,13 +46,10 @@ export class ROIManager {
   private processingEnabled: boolean = true;
   private lastFrameTime: number = 0;
   private frameInterval: number = 33; // Process at ~30fps for smoother tracking
-  private continuousProcessingTimer: number | null = null; // Timer for continuous processing
   
   // Private constructor for singleton
   private constructor() {
     console.log('[ROIManager] Initialized with simplified ROI management (no feature tracking)');
-    // Start continuous frame processing immediately
-    this.startContinuousProcessing();
   }
   
   // Get singleton instance
@@ -61,55 +58,6 @@ export class ROIManager {
       ROIManager.instance = new ROIManager();
     }
     return ROIManager.instance;
-  }
-  
-  /**
-   * Start continuous frame processing independent of hand detection
-   */
-  private startContinuousProcessing(): void {
-    // Clear any existing timer
-    if (this.continuousProcessingTimer !== null) {
-      window.clearInterval(this.continuousProcessingTimer);
-      this.continuousProcessingTimer = null;
-    }
-    
-    // Set up continuous processing timer
-    this.continuousProcessingTimer = window.setInterval(() => {
-      if (!this.processingEnabled || this.activeCircleROIs.length === 0) {
-        return; // Skip if processing is disabled or no ROIs to track
-      }
-      
-      // Get video element to process frame
-      const videoElement = document.getElementById('camera-feed') as HTMLVideoElement;
-      if (!videoElement || !videoElement.videoWidth) {
-        return; // Skip if video element not ready
-      }
-      
-      // Get current frame from video
-      const frameData = getVideoFrame(videoElement);
-      if (!frameData) {
-        return; // Skip if couldn't get frame
-      }
-      
-      // Process the frame for contour tracking
-      this.processFrame(frameData).catch(err => {
-        console.error('[ROIManager] Error in continuous processing:', err);
-      });
-      
-    }, this.frameInterval); // Run at the same interval as the frame processing
-    
-    console.log('[ROIManager] Started continuous frame processing');
-  }
-  
-  /**
-   * Stop continuous frame processing
-   */
-  private stopContinuousProcessing(): void {
-    if (this.continuousProcessingTimer !== null) {
-      window.clearInterval(this.continuousProcessingTimer);
-      this.continuousProcessingTimer = null;
-      console.log('[ROIManager] Stopped continuous frame processing');
-    }
   }
   
   /**
@@ -418,28 +366,16 @@ export class ROIManager {
   
   /**
    * Process video frame to track contours in each ROI
-   * This now runs continuously independent of hand detection
    * @param imageData Full frame image data from video
    */
   public async processFrame(imageData: ImageData): Promise<void> {
-    // Rate limiting logic to avoid processing too many frames
+    // Don't process too many frames - rate limit to avoid performance issues
     const now = Date.now();
     if (now - this.lastFrameTime < this.frameInterval || !this.processingEnabled) {
       return;
     }
     this.lastFrameTime = now;
     this.logCounter++;
-    
-    // Verify we have ROIs to track
-    if (this.activeCircleROIs.length === 0) {
-      return; // Nothing to process
-    }
-    
-    // Get the video element for reference (we already have the frame data)
-    const videoElement = document.getElementById('camera-feed') as HTMLVideoElement;
-    if (!videoElement || !videoElement.videoWidth) {
-      return; // Need video element for dimensions
-    }
     
     // Process each Circle ROI using contour tracking
     for (const roi of this.activeCircleROIs) {
@@ -448,14 +384,28 @@ export class ROIManager {
         continue;
       }
       
+      // Get the video element to capture ROI from
+      const videoElement = document.getElementById('camera-feed') as HTMLVideoElement;
+      if (!videoElement || !videoElement.videoWidth) {
+        console.warn('[ROIManager] No video element found or video not started');
+        continue;
+      }
+      
       // Only log occasionally to reduce overhead
       if (this.logCounter % this.LOG_THROTTLE === 0) {
         console.log(`[ROIManager] Processing Circle ROI ${roi.id} with center (${roi.center.x.toFixed(3)}, ${roi.center.y.toFixed(3)}) and radius ${roi.radius.toFixed(3)}`);
       }
       
+      // Get full frame from video for contour tracking
+      const frameData = getVideoFrame(videoElement);
+      if (!frameData) {
+        console.warn('[ROIManager] Failed to get video frame');
+        continue;
+      }
+      
       try {
         // Use contour tracking for this ROI
-        const contourResult = await updateContourTracking(roi, imageData);
+        const contourResult = await updateContourTracking(roi, frameData);
         
         // Update the ROI with the tracking result
         roi.contourTracking = contourResult;
@@ -470,21 +420,28 @@ export class ROIManager {
         const trackingStatus = contourResult.isOccluded ? 'contour-occluded' : 'contour-visible';
         
         // Update the ROI center coordinates if tracking has centerOfMass data
-        // Now runs regardless of hand detection
         if (contourResult.centerOfMass && !contourResult.isOccluded) {
-          // Set the new center directly from the contour tracking result
-          const newCenter = {
-            x: contourResult.centerOfMass.x,
-            y: contourResult.centerOfMass.y
-          };
+          // Get the scaling factors from video coordinates back to screen coordinates
+          const displayElement = document.querySelector('.camera-view') as HTMLElement;
           
-          // Only log occasionally
-          if (this.logCounter % this.LOG_THROTTLE === 0) {
-            console.log(`[ROIManager] Moving ROI ${roi.id} from (${roi.center.x.toFixed(3)}, ${roi.center.y.toFixed(3)}) to (${newCenter.x.toFixed(3)}, ${newCenter.y.toFixed(3)})`);
+          if (videoElement && displayElement && contourResult.centerOfMass) {
+            // The center of mass is already calculated in global normalized coordinates
+            // by contourTracking.ts - no need to renormalize
+            
+            // Set the new center directly from the contour tracking result
+            const newCenter = {
+              x: contourResult.centerOfMass.x,
+              y: contourResult.centerOfMass.y
+            };
+            
+            // Only log occasionally
+            if (this.logCounter % this.LOG_THROTTLE === 0) {
+              console.log(`[ROIManager] Moving ROI ${roi.id} from (${roi.center.x.toFixed(3)}, ${roi.center.y.toFixed(3)}) to (${newCenter.x.toFixed(3)}, ${newCenter.y.toFixed(3)})`);
+            }
+            
+            // Update the ROI center coordinates
+            roi.center = newCenter;
           }
-          
-          // Update the ROI center coordinates
-          roi.center = newCenter;
         }
         
         // Create a public event to notify other components
@@ -642,25 +599,7 @@ export class ROIManager {
    */
   public setProcessingEnabled(enabled: boolean): void {
     this.processingEnabled = enabled;
-    
-    // Start or stop continuous processing based on enabled state
-    if (enabled) {
-      this.startContinuousProcessing();
-    } else {
-      this.stopContinuousProcessing();
-    }
-    
     console.log(`[ROIManager] Feature processing ${enabled ? 'enabled' : 'disabled'}`);
-  }
-  
-  /**
-   * Clean up and dispose of resources
-   * Should be called when the application is unmounted
-   */
-  public dispose(): void {
-    this.stopContinuousProcessing();
-    this.clearROIs();
-    console.log('[ROIManager] Disposed and cleaned up resources');
   }
 }
 
