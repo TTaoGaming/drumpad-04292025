@@ -470,8 +470,11 @@ function App() {
         frameProcessingRef.current = true;
         
         try {
-          // Static import this for better performance (we'll use this import later)
-          const { startTiming, endTiming, endFrame } = await import('./lib/performanceTracker');
+          // Import and initialize performance tracking utilities
+          const { initPerformanceTracker, startTiming, endTiming, endFrame } = await import('./lib/performanceTracker');
+          
+          // Initialize tracker for this frame
+          initPerformanceTracker();
           
           startTiming('frameProcessing');
           

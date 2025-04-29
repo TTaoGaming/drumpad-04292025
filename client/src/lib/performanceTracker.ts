@@ -1,131 +1,100 @@
 /**
- * Performance Tracker - Accurate module-level performance monitoring
+ * Performance Tracking Utility
  * 
- * This utility helps track performance metrics for different modules in the application.
- * It uses high-resolution timestamps to measure execution time and provides detailed
- * breakdowns of where time is being spent.
+ * Provides precise measurement of processing times for individual modules
+ * and overall frame processing performance.
  */
-
-import { ModuleTiming, PerformanceMetrics } from './types';
+import { PerformanceMetrics, ModuleTiming } from './types';
 import { dispatch, EventType } from './eventBus';
 
-// Active timings currently being measured
-const activeTimings: Map<string, { startTime: number }> = new Map();
+// Active module timings for the current frame
+const activeTimings = new Map<string, number>();
 
-// Completed module timings for the current frame
-let currentFrameModules: ModuleTiming[] = [];
+// Completed timings for the current frame
+const moduleTimings: ModuleTiming[] = [];
 
-// FPS calculation
+// Frame counters
+let frameStartTime = 0;
 let frameCount = 0;
 let lastFpsUpdateTime = 0;
 let currentFps = 0;
 
-// Frame boundary times
-let frameStartTime = 0;
-let lastFrameTime = 0;
+// Initialize tracker
+export function initPerformanceTracker(): void {
+  frameStartTime = performance.now();
+  frameCount = 0;
+  lastFpsUpdateTime = frameStartTime;
+  currentFps = 0;
+}
 
 /**
- * Start tracking time for a specific module
- * @param moduleName The name of the module being timed
+ * Start timing a specific module
+ * @param moduleId Unique identifier for the module being timed
  */
-export function startTiming(moduleName: string): void {
-  // If this is the first module of a new frame, record frame start time
-  if (activeTimings.size === 0 && currentFrameModules.length === 0) {
-    frameStartTime = performance.now();
-  }
-  
-  // Start timing this module
-  activeTimings.set(moduleName, { 
-    startTime: performance.now() 
-  });
+export function startTiming(moduleId: string): void {
+  activeTimings.set(moduleId, performance.now());
 }
 
 /**
  * End timing for a specific module and record its duration
- * @param moduleName The name of the module being timed
+ * @param moduleId Unique identifier for the module being timed
  */
-export function endTiming(moduleName: string): void {
-  const endTime = performance.now();
-  const timing = activeTimings.get(moduleName);
-  
-  if (timing) {
-    // Calculate duration and create timing entry
-    const duration = endTime - timing.startTime;
-    const moduleTiming: ModuleTiming = {
-      name: moduleName,
+export function endTiming(moduleId: string): void {
+  const startTime = activeTimings.get(moduleId);
+  if (startTime) {
+    const endTime = performance.now();
+    const duration = endTime - startTime;
+    
+    // Store the timing result
+    moduleTimings.push({
+      name: moduleId,
       duration,
-      startTime: timing.startTime,
+      startTime,
       endTime
-    };
+    });
     
-    // Add to completed modules and remove from active timings
-    currentFrameModules.push(moduleTiming);
-    activeTimings.delete(moduleName);
-    
-    // Debug info
-    console.log(`Module ${moduleName} took ${duration.toFixed(2)}ms`);
+    // Remove from active timings
+    activeTimings.delete(moduleId);
   }
 }
 
 /**
- * Mark the end of a frame's processing and publish metrics
+ * Finalizes the frame processing and publishes metrics
  */
 export function endFrame(): void {
-  // Calculate frame metrics
-  const now = performance.now();
-  const frameEndTime = now;
-  const totalFrameTime = frameEndTime - frameStartTime;
-  
-  // Update FPS calculation
+  // Calculate FPS
   frameCount++;
-  if (now - lastFpsUpdateTime >= 1000) {
-    // Calculate FPS over the last second
-    currentFps = Math.round((frameCount * 1000) / (now - lastFpsUpdateTime));
+  const now = performance.now();
+  const elapsed = now - frameStartTime;
+  
+  // Update FPS counter every second
+  if (now - lastFpsUpdateTime > 1000) {
+    const seconds = (now - lastFpsUpdateTime) / 1000;
+    currentFps = Math.round(frameCount / seconds);
+    
+    // Reset counters
     frameCount = 0;
     lastFpsUpdateTime = now;
   }
   
-  // Create complete metrics object
+  // Calculate total processing time
+  let totalProcessingTime = 0;
+  for (const timing of moduleTimings) {
+    totalProcessingTime += timing.duration;
+  }
+  
+  // Publish performance metrics via event bus
   const metrics: PerformanceMetrics = {
     fps: currentFps,
-    totalFrameTime,
-    frameStartTime,
-    frameEndTime,
     timestamp: now,
-    moduleTimings: [...currentFrameModules]
+    frameTime: elapsed,
+    moduleTimings: [...moduleTimings],
+    totalTime: totalProcessingTime
   };
   
-  // Dispatch metrics event
+  // Send the metrics to any listeners
   dispatch(EventType.FRAME_PROCESSED, metrics);
   
-  // Reset for next frame
-  currentFrameModules = [];
-  lastFrameTime = totalFrameTime;
-}
-
-/**
- * Reset all performance tracking state
- */
-export function resetPerformanceTracking(): void {
-  activeTimings.clear();
-  currentFrameModules = [];
-  frameCount = 0;
-  lastFpsUpdateTime = performance.now();
-  currentFps = 0;
-  frameStartTime = 0;
-  lastFrameTime = 0;
-}
-
-/**
- * Get the most recently calculated FPS value
- */
-export function getCurrentFps(): number {
-  return currentFps;
-}
-
-/**
- * Get the most recently calculated frame time
- */
-export function getLastFrameTime(): number {
-  return lastFrameTime;
+  // Clear module timings for the next frame
+  moduleTimings.length = 0;
 }

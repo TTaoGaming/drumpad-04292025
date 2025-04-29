@@ -72,10 +72,9 @@ export interface ModuleTiming {
 
 export interface PerformanceMetrics {
   fps: number;              // Current frames per second
-  totalFrameTime: number;   // Total time to process the frame in ms
-  frameStartTime: number;   // When the frame processing started
-  frameEndTime: number;     // When the frame processing ended
   timestamp: number;        // Timestamp when metrics were collected
+  frameTime?: number;       // Time since last frame in ms
+  totalTime?: number;       // Total processing time in ms
   moduleTimings: ModuleTiming[]; // Detailed timings for each module
 }
 
