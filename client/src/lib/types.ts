@@ -65,14 +65,20 @@ export interface HandData {
 // Performance metrics for tracking runtime performance
 export interface PerformanceMetrics {
   fps: number;
-  processingTime: number;
+  // Processing time can now be an object with breakdown data
+  processingTime: {
+    total: number;
+    breakdown?: {
+      [key: string]: number;
+    }
+  };
   // Module-specific timing metrics
   captureTime?: number;        // Time spent capturing frame
   handDetectionTime?: number;  // Time spent on hand detection
   contourTrackingTime?: number; // Time spent on contour tracking
   roiProcessingTime?: number;  // Time spent processing ROIs
   renderTime?: number;         // Time spent rendering
-  // Legacy module timings for backward compatibility
+  // Module timings for breakdown
   moduleTimings: {
     [moduleId: string]: number;
   };

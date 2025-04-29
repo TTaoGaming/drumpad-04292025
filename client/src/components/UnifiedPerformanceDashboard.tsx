@@ -213,6 +213,15 @@ const UnifiedPerformanceDashboard: React.FC<UnifiedPerformanceDashboardProps> = 
         console.log('Frame processed event received in dashboard:', data);
         if (data && data.performance) {
           console.log('Performance metrics received:', data.performance);
+          
+          // Log the individual timing values
+          console.log('Module Timings:', {
+            captureTime: data.performance.captureTime,
+            handDetectionTime: data.performance.handDetectionTime,
+            contourTrackingTime: data.performance.contourTrackingTime,
+            roiProcessingTime: data.performance.roiProcessingTime,
+            renderTime: data.performance.renderTime
+          });
           setPerformanceMetrics(data.performance);
           
           // Update FPS data
