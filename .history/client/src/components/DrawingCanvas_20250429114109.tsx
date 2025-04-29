@@ -46,18 +46,6 @@ interface ContourVisualization {
   visualizationData: ImageData;
   isOccluded: boolean;
   timestamp: number;
-  // Add extraction region data for precise alignment
-  roiRegion?: {
-    x: number;
-    y: number;
-    size: number;
-    centerX: number;
-    centerY: number;
-    radius: number;
-    extractedDiameter: number;
-    imageWidth: number;
-    imageHeight: number;
-  };
 }
 
 const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, initialPaths = [] }) => {
@@ -230,17 +218,12 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
               roiId: data.id,
               visualizationData: data.contourTracking.visualizationData,
               isOccluded: data.contourTracking.isOccluded === true,
-              timestamp: data.timestamp || Date.now(),
-              // Capture the ROI region data for precise alignment
-              roiRegion: data._roiRegion
+              timestamp: data.timestamp || Date.now()
             }
           }));
           
           if (Math.random() < 0.05) {
             console.log(`Updated contour visualization for ROI ${data.id}, occluded: ${data.contourTracking.isOccluded}`);
-            if (data._roiRegion) {
-              console.log(`ROI region: (${data._roiRegion.x}, ${data._roiRegion.y}) size: ${data._roiRegion.size}`);
-            }
           }
         }
       }
@@ -299,50 +282,33 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
               // Put the visualization data on the temp canvas
               tempCtx.putImageData(viz.visualizationData, 0, 0);
 
-              // Use the exact extraction region if available
-              if (viz.roiRegion) {
-                // Convert normalized coordinates to canvas pixels if needed
-                const scaleFactor = canvasSize.width / viz.roiRegion.imageWidth;
-                
-                // Calculate the exact position to place the visualization
-                // This ensures the extracted region lines up with the ROI circle
-                const vizX = center.x - radius;
-                const vizY = center.y - radius;
-                const vizSize = radius * 2;
-                
-                // Draw with proper compositing to maintain transparency
-                ctx.globalCompositeOperation = 'source-over';
-                
-                // Draw the visualization exactly matching the original extraction region
-                ctx.drawImage(
-                  tempCanvas,
-                  0, 0, viz.visualizationData.width, viz.visualizationData.height, // Source: entire visualization
-                  vizX, vizY, vizSize, vizSize // Destination: exact ROI size and position
-                );
-                
-                // For debugging, occasionally show info about positioning
-                if (Math.random() < 0.005) {
-                  console.log(`Drawing aligned contour viz at (${Math.round(vizX)}, ${Math.round(vizY)}) with diameter ${Math.round(vizSize)}`);
-                }
-              } else {
-                // Fallback to previous approach if no region data
-                const roiDiameter = radius * 2;
-                const vizX = center.x - radius;
-                const vizY = center.y - radius;
-                
-                // Draw with proper compositing to maintain transparency
-                ctx.globalCompositeOperation = 'source-over';
-                
-                // Draw the visualization exactly matching the ROI size
-                ctx.drawImage(
-                  tempCanvas, 
-                  0, 0, tempCanvas.width, tempCanvas.height, // Source: entire visualization
-                  vizX, vizY, roiDiameter, roiDiameter       // Destination: exact ROI size and position
-                );
-              }
+              // IMPORTANT: The contour visualization is created from a square ROI extraction
+              // where the ROI's diameter (2*radius) matches the size of the extracted square.
+              // So we need to scale and position it exactly to match the ROI circle.
+              
+              // The extraction in contourTracking.ts creates a square with sides equal to the ROI diameter
+              const roiDiameter = radius * 2;
+              
+              // Calculate the position to exactly match the ROI circle's bounds
+              const vizX = center.x - radius;
+              const vizY = center.y - radius;
+              
+              // Draw with proper compositing to maintain transparency
+              ctx.globalCompositeOperation = 'source-over';
+              
+              // Draw the visualization exactly matching the ROI size (no scaling distortion)
+              ctx.drawImage(
+                tempCanvas, 
+                0, 0, tempCanvas.width, tempCanvas.height, // Source: entire visualization
+                vizX, vizY, roiDiameter, roiDiameter       // Destination: exact ROI size and position
+              );
               
               // Reset composite operation
               ctx.globalCompositeOperation = 'source-over';
+              
+              if (Math.random() < 0.01) {
+                console.log(`Drawing contour viz for ROI ${path.id} at (${Math.round(vizX)}, ${Math.round(vizY)}) with diameter ${Math.round(roiDiameter)}`);
+              }
             }
           }
         }

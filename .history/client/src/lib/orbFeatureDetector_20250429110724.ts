@@ -465,8 +465,6 @@ export class ROIManager {
             visibilityRatio: contourResult.visibilityRatio,
             visualizationData: contourResult.visualizationData
           },
-          // Include the _roiRegion data for precise alignment in visualizations
-          _roiRegion: (roi as any)._roiRegion,
           timestamp: now,
           isCircleROI: true,
           center: roi.center,

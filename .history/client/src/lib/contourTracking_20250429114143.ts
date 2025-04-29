@@ -626,7 +626,6 @@ function extractROIImageData(roi: CircleROI, imageData: ImageData): ImageData | 
     const radius = roi.radius * imageData.width; // Radius is normalized relative to width
     
     // Define the square region containing the circle
-    // Round to integers to avoid fractional pixel issues
     const x = Math.max(0, Math.round(centerX - radius));
     const y = Math.max(0, Math.round(centerY - radius));
     const size = Math.min(
@@ -636,18 +635,7 @@ function extractROIImageData(roi: CircleROI, imageData: ImageData): ImageData | 
     );
     
     // Store ROI region information for coordinate transformation
-    // Include all relevant metrics for precise alignment during visualization
-    (roi as any)._roiRegion = { 
-      x, 
-      y, 
-      size, 
-      centerX,
-      centerY,
-      radius,
-      extractedDiameter: size,
-      imageWidth: imageData.width, 
-      imageHeight: imageData.height 
-    };
+    (roi as any)._roiRegion = { x, y, size, imageWidth: imageData.width, imageHeight: imageData.height };
     
     // Check for valid size
     if (size <= 0) {
@@ -675,10 +663,6 @@ function extractROIImageData(roi: CircleROI, imageData: ImageData): ImageData | 
         srcData.subarray(srcRowOffset, srcRowOffset + size * 4),
         dstRowOffset
       );
-    }
-    
-    if (Math.random() < 0.01) {
-      console.log(`[contourTracking] Extracted ROI from (${x}, ${y}) with size ${size}px`);
     }
     
     return roiData;
