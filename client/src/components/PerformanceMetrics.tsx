@@ -120,15 +120,18 @@ const PerformanceMetrics: React.FC = () => {
           ];
           
           // Go through all performance metrics and find timing data
-          Object.entries(perfData).forEach(([key, value]) => {
+          Object.entries(perfData).forEach(entry => {
+            const key = entry[0];
+            const value = entry[1];
+            
             // Skip metadata fields
             if (key === 'fps' || key === 'fpsRollingAvg' || key === 'timeBetweenFrames' || 
-                key === 'workerUptime' || key.includes('_start') || value <= 0) {
+                key === 'workerUptime' || key.includes('_start')) {
               return;
             }
             
             // Additional sanity check - look for plausible values
-            if (typeof value === 'number' && value < 500) {
+            if (typeof value === 'number' && value > 0 && value < 500) {
               const percentage = totalTime > 0 ? (value / totalTime) * 100 : 0;
               moduleData.push({
                 name: key,
@@ -224,7 +227,7 @@ const PerformanceMetrics: React.FC = () => {
               <div className="text-white/90 font-bold mb-2">Raw Performance Data</div>
               <div className="space-y-1 max-h-48 overflow-y-auto">
                 {Object.entries(performanceRef.current)
-                  .filter(([key, value]) => typeof value === 'number')
+                  .filter((entry): entry is [string, number] => typeof entry[1] === 'number')
                   .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
                   .map(([key, value], index) => (
                     <div key={index} className="grid grid-cols-12 gap-1">

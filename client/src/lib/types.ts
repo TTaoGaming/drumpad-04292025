@@ -64,11 +64,17 @@ export interface HandData {
 
 // Performance metrics for tracking runtime performance
 export interface PerformanceData {
-  fps: number;
-  processingTime: number;
-  moduleTimings: {
-    [moduleId: string]: number;
-  };
+  fps?: number;
+  fpsRollingAvg?: number;
+  processingTime?: number;
+  estimatedFps?: number;
+  timeBetweenFrames?: number;
+  totalProcessingMs?: number;
+  workerUptime?: number;
+  frameProcessing?: number;
+  processResults?: number;
+  // Allow any string-keyed number properties to support different module timings
+  [key: string]: number | undefined;
 }
 
 // Finger joint angles

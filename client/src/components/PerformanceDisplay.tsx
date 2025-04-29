@@ -2,7 +2,7 @@ import React from 'react';
 import { PerformanceData } from '@/lib/types';
 
 interface PerformanceDisplayProps {
-  performance?: PerformanceMetrics;
+  performance?: PerformanceData;
   className?: string;
 }
 
@@ -19,7 +19,8 @@ const PerformanceDisplay: React.FC<PerformanceDisplayProps> = ({
   if (!performance) return null;
   
   // Calculate FPS color based on threshold
-  const getFpsColor = (fps: number) => {
+  const getFpsColor = (fps: number | undefined) => {
+    if (!fps) return 'text-red-500';
     if (fps >= 55) return 'text-green-500';
     if (fps >= 30) return 'text-yellow-500';
     return 'text-red-500';
@@ -52,13 +53,17 @@ const PerformanceDisplay: React.FC<PerformanceDisplayProps> = ({
           .map(([moduleName, timeMs]) => (
             <div key={moduleName} className="flex justify-between">
               <span>{formatModuleName(moduleName)}:</span>
-              <span className="font-mono">{timeMs.toFixed(2)} ms</span>
+              <span className="font-mono">{typeof timeMs === 'number' ? timeMs.toFixed(2) : timeMs} ms</span>
             </div>
           ))}
         
         <div className="flex justify-between font-bold border-t border-white/30 pt-1 mt-1">
           <span>Total:</span>
-          <span className="font-mono">{performance.totalProcessingMs.toFixed(2)} ms</span>
+          <span className="font-mono">
+            {performance.totalProcessingMs !== undefined 
+              ? `${performance.totalProcessingMs.toFixed(2)} ms` 
+              : 'N/A'}
+          </span>
         </div>
       </div>
     </div>
