@@ -1089,22 +1089,22 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
               shouldProcessFullFrame = frameCountRef.current === 0;
             }
             
-            // Process ORB feature tracking for ROIs
+            // Process contour tracking for ROIs
             // This happens on every frame for smoother tracking
             const videoElement = videoRef.current;
             if (videoElement && videoElement.videoWidth) {
               try {
-                // Get the current frame for feature tracking
+                // Get the current frame for contour tracking
                 const frameData = getVideoFrame(videoElement);
                 if (frameData) {
-                  // Process frame with our updated ORB feature detector 
+                  // Process frame with our contour-based ROI tracking
                   orbFeatureDetector.processFrame(frameData);
                   
-                  // Draw the features and tracking results
-                  orbFeatureDetector.drawFeatures(ctx, canvas.width, canvas.height);
+                  // Draw the ROIs and tracking results
+                  orbFeatureDetector.drawROIs(ctx, canvas.width, canvas.height);
                 }
               } catch (error) {
-                console.error('[MediaPipeHandTracker] Error processing ORB features:', error);
+                console.error('[MediaPipeHandTracker] Error processing contour tracking:', error);
               }
             }
             
