@@ -1,25 +1,22 @@
 /**
- * [PLACEHOLDER] Enhanced Marker Tracking
+ * This file has been removed/deprecated
  * 
- * This is a placeholder for future marker tracking strategies.
- * We have removed the ORB-based tracking to simplify the system
- * and focus only on hand tracking with pinch lasso ROI functionality.
+ * The ORB feature tracking code has been completely removed
+ * in favor of contour detection in contourTracking.ts
+ *
+ * DO NOT USE THIS FILE - IMPORT FROM contourTracking.ts INSTEAD
  */
 
-// Declare OpenCV global for type checking
-declare const cv: any;
-
-// Import OpenCV loader for initialization (just for loading OpenCV)
+// Import OpenCV loader for initialization reference
 import { isOpenCVReady, loadOpenCV } from './opencvLoader';
 
-// Placeholder for marker tracking results
+// Include these empty interfaces to prevent import errors in files that haven't been updated yet
 export interface MarkerTrackingResult {
   isTracked: boolean;
   confidence: number;
   timestamp: number;
 }
 
-// Keep these interfaces to prevent import errors in other components
 export interface ORBFeature {
   keypoints: any;
   descriptors: any;
@@ -29,48 +26,44 @@ export interface ORBFeature {
 
 export interface TrackingResult {
   isTracked: boolean;
-  homography?: any;
   matchCount: number;
   inlierCount: number;
   confidence: number;
   center?: { x: number, y: number };
-  corners?: { x: number, y: number }[];
-  rotation?: number;
 }
 
-// Reference features map (empty - no longer used for tracking)
-export const referenceFeatures: Map<string, ORBFeature> = new Map();
+// Empty map to prevent null reference errors
+export const referenceFeatures: Map<string, any> = new Map();
+
+// All functions now return empty/null results and log warnings
 
 /**
- * Placeholder for future feature extraction method
- * Currently returns null as ORB is removed
+ * @deprecated - Use contour tracking instead
  */
-export async function extractORBFeatures(imageData: ImageData, maxFeatures: number = 500): Promise<ORBFeature | null> {
-  // Just load OpenCV but don't use it for feature extraction
-  const ready = await ensureOpenCV();
-  
-  console.log('[orbTracking] ORB tracking has been removed. Use pinch lasso for ROI only.');
+export async function extractORBFeatures(): Promise<null> {
+  console.warn('[DEPRECATED] ORB tracking has been removed. Use contour detection instead.');
   return null;
 }
 
 /**
- * Placeholder to save reference features - does nothing now
+ * @deprecated - Use contour tracking instead
  */
-export function saveReferenceFeatures(roiId: string, features: ORBFeature): void {
-  console.log(`[Placeholder] Reference features for ROI ${roiId} would be saved here in the future`);
+export function saveReferenceFeatures(): void {
+  console.warn('[DEPRECATED] ORB tracking has been removed. Use contour detection instead.');
 }
 
 /**
- * Placeholder to clear reference features - does nothing now
+ * @deprecated - Use contour tracking instead
  */
-export function clearReferenceFeatures(roiId: string): void {
-  console.log(`[Placeholder] Reference features for ROI ${roiId} would be cleared here in the future`);
+export function clearReferenceFeatures(): void {
+  console.warn('[DEPRECATED] ORB tracking has been removed. Use contour detection instead.');
 }
 
 /**
- * Placeholder for future feature matching - returns fixed result with no tracking
+ * @deprecated - Use contour tracking instead
  */
-export async function matchFeatures(roiId: string, currentFeatures: ORBFeature): Promise<TrackingResult> {
+export async function matchFeatures(): Promise<TrackingResult> {
+  console.warn('[DEPRECATED] ORB tracking has been removed. Use contour detection instead.');
   return {
     isTracked: false,
     matchCount: 0,
@@ -78,27 +71,3 @@ export async function matchFeatures(roiId: string, currentFeatures: ORBFeature):
     confidence: 0
   };
 }
-
-// Helper to ensure OpenCV is available (still needed for other components)
-async function ensureOpenCV(): Promise<boolean> {
-  if (isOpenCVReady()) {
-    return true;
-  }
-  
-  console.log('[orbTracking] OpenCV not ready, loading...');
-  try {
-    await loadOpenCV();
-    console.log('[orbTracking] OpenCV loaded successfully');
-    return true;
-  } catch (err) {
-    console.error('[orbTracking] Failed to load OpenCV:', err);
-    return false;
-  }
-}
-
-// Still initialize OpenCV for other components
-ensureOpenCV().then(ready => {
-  if (ready) {
-    console.log('[orbTracking] OpenCV is ready for future marker tracking strategies');
-  }
-});
