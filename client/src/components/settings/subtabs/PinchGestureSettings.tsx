@@ -19,7 +19,7 @@ const PinchGestureSettings = () => {
     threshold: 0.07, // Normalized distance threshold for pinch detection (0-1)
     releaseThreshold: 0.10, // Higher threshold to prevent flickering (hysteresis)
     stabilityFrames: 3, // Number of frames to confirm a pinch state change
-    activeFinger: 'index' as 'index' | 'middle' | 'ring' | 'pinky' // Which finger to use for pinching with thumb
+    activeFinger: 'index' // Always use index finger for pinching with thumb
   });
   
   // Pinch state info from the tracker
@@ -94,14 +94,6 @@ const PinchGestureSettings = () => {
     }));
   };
   
-  // Handle active finger change
-  const handleActiveFingerChange = (value: string) => {
-    setSettings(prev => ({
-      ...prev,
-      activeFinger: value as 'index' | 'middle' | 'ring' | 'pinky'
-    }));
-  };
-  
   return (
     <div className="space-y-6">
       <div>
@@ -143,24 +135,7 @@ const PinchGestureSettings = () => {
             />
           </div>
           
-          {/* Active Finger Selection */}
-          <div className="space-y-2">
-            <Label>Active Finger for Pinch</Label>
-            <Select value={settings.activeFinger} onValueChange={handleActiveFingerChange}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select finger" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="index">Index Finger</SelectItem>
-                <SelectItem value="middle">Middle Finger</SelectItem>
-                <SelectItem value="ring">Ring Finger</SelectItem>
-                <SelectItem value="pinky">Pinky Finger</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              Select which finger to use for pinching with the thumb
-            </p>
-          </div>
+          {/* We've removed the finger selection dropdown and are only using index finger */}
           
           {/* Threshold Slider */}
           <div className="space-y-2">

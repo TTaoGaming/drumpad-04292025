@@ -20,12 +20,19 @@ interface MPModulePerformance {
 // Track performance for different pipeline stages
 const mpPerformanceMetrics: Record<string, MPModulePerformance> = {};
 
-// Send log message to main thread
-function mpLog(message: string): void {
-  mpCtx.postMessage({
-    type: 'log',
-    message
-  });
+// Counter for throttling logs
+let logCounter = 0;
+const LOG_THROTTLE = 50; // Only send 1 out of every 50 logs
+
+// Send log message to main thread (with throttling)
+function mpLog(message: string, forceLog = false): void {
+  // Only log critical messages or throttled regular messages
+  if (forceLog || ++logCounter % LOG_THROTTLE === 0) {
+    mpCtx.postMessage({
+      type: 'log',
+      message
+    });
+  }
 }
 
 // Send status update to main thread
@@ -135,25 +142,20 @@ const HAND_LANDMARKS = {
   PINKY_TIP: 20
 };
 
-// Initialize MediaPipe Hands (we can't directly use it in a worker)
-// Instead, we'll process the raw data ourselves
+// Initialize Media Pipeline (we can't directly use MediaPipe in a worker)
+// Instead, we'll get the data from the main thread through message passing
 function mpInitMediaPipeline(): void {
   mpStartTiming('initMediaPipeline');
   mpLog('Creating Media Pipeline Worker...');
   
-  // In a real implementation, we would load MediaPipe Hands here
-  // For now, we'll simulate it with a setTimeout
-  setTimeout(() => {
-    mpLog('Media Pipeline Worker created successfully');
-    
-    // Simulate additional setup time
-    setTimeout(() => {
-      pipelineReady = true;
-      mpLog('Media Pipeline initialized and ready');
-      mpUpdateStatus(true);
-      mpEndTiming('initMediaPipeline');
-    }, 1000);
-  }, 1000);
+  // No need to simulate initialization anymore
+  // We're ready immediately since we're just processing data received from the main thread
+  mpLog('Media Pipeline Worker created successfully');
+  
+  pipelineReady = true;
+  mpLog('Media Pipeline initialized and ready');
+  mpUpdateStatus(true);
+  mpEndTiming('initMediaPipeline');
 }
 
 // Process hand landmarks and connections to create visualization data
@@ -161,52 +163,14 @@ function mpProcessHandLandmarks(landmarks: any[]): any {
   // Deep copy to avoid modifying the original data
   const handLandmarks = JSON.parse(JSON.stringify(landmarks));
   
-  // In a real implementation, this would process the landmarks
-  // For now, we'll simulate it with random hand positions
-  const simulatedLandmarks = [];
-  
-  // Use either real landmarks (if available) or generate simulated ones
-  // for demonstration purposes
+  // Just return the provided hand landmarks
+  // No need for simulation as we should be receiving real data from MediaPipeHandTracking component
   if (handLandmarks && handLandmarks.length > 0) {
     return handLandmarks;
   } else {
-    // For testing - create simulated hand landmarks
-    // Position them in the center with some random variation
-    for (let i = 0; i < 21; i++) {
-      // Create a plausible hand shape in the center of the frame
-      let x = 0.5; // center of frame
-      let y = 0.5; // center of frame
-      
-      // Adjust based on landmark type to create a hand-like shape
-      if (i === 0) { // Wrist
-        y += 0.2;
-      } else if (i >= 1 && i <= 4) { // Thumb
-        x -= 0.05 * (i - 1);
-        y += 0.15 - 0.03 * (i - 1);
-      } else if (i >= 5 && i <= 8) { // Index finger
-        x -= 0.02;
-        y += 0.1 - 0.05 * (i - 5);
-      } else if (i >= 9 && i <= 12) { // Middle finger
-        y += 0.1 - 0.05 * (i - 9);
-      } else if (i >= 13 && i <= 16) { // Ring finger
-        x += 0.02;
-        y += 0.1 - 0.05 * (i - 13);
-      } else if (i >= 17 && i <= 20) { // Pinky
-        x += 0.04;
-        y += 0.1 - 0.05 * (i - 17);
-      }
-      
-      // Add some randomness to make it look more natural
-      x += (Math.random() - 0.5) * 0.01;
-      y += (Math.random() - 0.5) * 0.01;
-      
-      simulatedLandmarks.push({
-        x: x,
-        y: y,
-        z: 0
-      });
-    }
-    return simulatedLandmarks;
+    // If no landmarks provided, return an empty array rather than simulated data
+    // This indicates no hands are currently detected
+    return [];
   }
 }
 
@@ -223,11 +187,22 @@ function mpProcessFrame(frameData: any): void {
   // Start timing hand detection
   mpStartTiming('handDetection');
   
-  // Process the frame to detect hands
-  // In a real implementation, we would use MediaPipe Hands here
+  // Check if we received hand data from the MediaPipeHandTracking component
+  // frameData can contain handLandmarks directly from the tracking component
+  let handLandmarks = [];
   
-  // Simulate hand detection
-  const handLandmarks = mpProcessHandLandmarks([]);
+  if (frameData && frameData.handLandmarks) {
+    // If we have hand landmarks from the main thread, use them
+    handLandmarks = mpProcessHandLandmarks(frameData.handLandmarks);
+    mpLog(`Received hand landmarks from main thread: ${handLandmarks.length} points`);
+  } else if (frameData && frameData.handData && frameData.handData.landmarks) {
+    // Alternative property structure
+    handLandmarks = mpProcessHandLandmarks(frameData.handData.landmarks);
+    mpLog(`Received hand landmarks from handData: ${handLandmarks.length} points`);
+  } else {
+    // No landmarks in this frame
+    handLandmarks = [];
+  }
   
   // End timing hand detection
   const handDetectionTime = mpEndTiming('handDetection');

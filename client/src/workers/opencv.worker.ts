@@ -1,6 +1,9 @@
 /**
- * Web Worker for OpenCV.js initialization and processing
+ * Simplified Web Worker for OpenCV.js initialization only - No ORB feature tracking
  */
+
+// Declare importScripts for TypeScript
+declare function importScripts(...urls: string[]): void;
 
 // Use self as the worker context
 const cvCtx: Worker = self as any;
@@ -8,23 +11,19 @@ const cvCtx: Worker = self as any;
 // Flag to track OpenCV loading status
 let opencvLoaded = false;
 
-// Performance metrics
-interface CVModulePerformance {
-  moduleId: string;
-  startTime: number;
-  endTime?: number;
-  duration?: number;
-}
+// Counter for throttling logs
+let cvLogCounter = 0;
+const CV_LOG_THROTTLE = 50; // Only send 1 out of every 50 logs
 
-// Track performance for different processing stages
-const cvPerformanceMetrics: Record<string, CVModulePerformance> = {};
-
-// Send log message to main thread
-function cvLog(message: string): void {
-  cvCtx.postMessage({
-    type: 'log',
-    message
-  });
+// Send log message to main thread (with throttling)
+function cvLog(message: string, forceLog = false): void {
+  // Only log critical messages or throttled regular messages
+  if (forceLog || ++cvLogCounter % CV_LOG_THROTTLE === 0) {
+    cvCtx.postMessage({
+      type: 'log',
+      message
+    });
+  }
 }
 
 // Send status update to main thread
@@ -35,134 +34,105 @@ function cvUpdateStatus(ready: boolean): void {
   });
 }
 
-// Start timing a module's performance
-function cvStartTiming(moduleId: string): void {
-  cvPerformanceMetrics[moduleId] = {
-    moduleId,
-    startTime: performance.now()
-  };
-}
-
-// End timing a module's performance
-function cvEndTiming(moduleId: string): number {
-  if (cvPerformanceMetrics[moduleId]) {
-    const endTime = performance.now();
-    const duration = endTime - cvPerformanceMetrics[moduleId].startTime;
+// Load the actual OpenCV library instead of using mocks
+function loadActualOpenCV(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    cvLog('Trying to load OpenCV.js from CDN');
     
-    cvPerformanceMetrics[moduleId].endTime = endTime;
-    cvPerformanceMetrics[moduleId].duration = duration;
-    
-    return duration;
-  }
-  return 0;
-}
-
-// Get performance metrics as a formatted object
-function cvGetPerformanceMetrics(): Record<string, number> {
-  const metrics: Record<string, number> = {};
-  
-  Object.values(cvPerformanceMetrics).forEach(metric => {
-    if (metric.duration !== undefined) {
-      metrics[metric.moduleId] = Math.round(metric.duration * 100) / 100; // Round to 2 decimal places
+    try {
+      // Attempt to load directly from CDN
+      importScripts('https://docs.opencv.org/4.7.0/opencv.js');
+      cvLog('Successfully loaded OpenCV.js directly via importScripts');
+      resolve();
+    } catch (err) {
+      cvLog(`Failed to load OpenCV directly: ${err}`);
+      // If import fails, try alternative loading methods here
+      reject(new Error(`Failed to load OpenCV: ${err}`));
     }
   });
-  
-  return metrics;
-}
-
-// Initialize OpenCV.js
-function cvInitOpenCV(): void {
-  cvStartTiming('cvInit');
-  cvLog('Loading OpenCV.js...');
-  
-  // For this MVP, we'll simulate the OpenCV initialization
-  // In a real implementation, we would use importScripts to load OpenCV.js
-  // but for now we'll simulate the loading process
-  
-  // Set up the Module for when OpenCV would be loaded
-  (self as any).Module = {
-    onRuntimeInitialized: cvOnOpenCVReady
-  };
-  
-  // Simulate loading time
-  setTimeout(() => {
-    cvLog('OpenCV.js loaded successfully');
-    setTimeout(() => {
-      cvOnOpenCVReady();
-      cvEndTiming('cvInit');
-    }, 1000);
-  }, 2000);
 }
 
 // Called when OpenCV is fully loaded and ready
 function cvOnOpenCVReady(): void {
   opencvLoaded = true;
   cvLog('OpenCV initialized and ready');
-  cvUpdateStatus(true);
-}
-
-// Process a frame using OpenCV
-function cvProcessFrame(frame: ImageData): void {
-  if (!opencvLoaded) {
-    cvLog('OpenCV not loaded yet, skipping frame processing');
-    return;
+  
+  // Debug log the actual cv object
+  const features = [];
+  if ((self as any).cv) {
+    const cv = (self as any).cv;
+    // Log which critical OpenCV components are available (just basic ones now)
+    features.push(
+      `Mat: ${typeof cv.Mat === 'function' ? 'Available ✓' : 'Missing ✗'}`,
+      `matFromImageData: ${typeof cv.matFromImageData === 'function' ? 'Available ✓' : 'Missing ✗'}`
+    );
   }
   
-  // Start timing overall OpenCV processing
-  cvStartTiming('cvTotalProcessing');
+  cvLog(`OpenCV features: ${features.join(', ')}`);
+  cvUpdateStatus(true);
   
-  // Start timing feature detection
-  cvStartTiming('cvFeatureDetection');
+  // Notify all interested parties that OpenCV is ready with full details
+  cvCtx.postMessage({
+    type: 'opencv-ready',
+    opencvFeatures: features,
+    loadTime: performance.now()
+  });
+}
+
+// Initialize OpenCV.js
+function cvInitOpenCV(): void {
+  cvLog('Loading OpenCV.js...');
   
-  // In a real implementation, we would use cv.Mat to process the frame
-  // This is a placeholder for the actual OpenCV processing
+  // List of OpenCV URLs to try
+  const urls = [
+    'https://docs.opencv.org/4.7.0/opencv.js',
+    'https://docs.opencv.org/4.5.5/opencv.js',
+    'https://docs.opencv.org/4.8.0/opencv.js'
+  ];
   
-  // Example processing workflow:
-  // 1. Convert ImageData to cv.Mat
-  // 2. Apply image processing operations
-  // 3. Convert result back to ImageData
-  // 4. Send processed data back to main thread
+  // Setup Module for OpenCV initialization
+  (self as any).Module = {
+    onRuntimeInitialized: function() {
+      cvLog('OpenCV runtime initialized callback triggered');
+      cvOnOpenCVReady();
+    }
+  };
   
-  // Simulate some processing time for feature detection
+  // Try loading with importScripts
+  let loaded = false;
+  
+  for (const url of urls) {
+    if (loaded) break;
+    
+    try {
+      importScripts(url);
+      cvLog(`Successfully loaded OpenCV from ${url}`);
+      loaded = true;
+    } catch (err) {
+      cvLog(`Failed to load from ${url}: ${(err as Error).message}`);
+    }
+  }
+  
+  // Set a timeout to check if OpenCV is loaded properly
   setTimeout(() => {
-    // End timing feature detection
-    const featureDetectionTime = cvEndTiming('cvFeatureDetection');
-    
-    // Start timing additional processing
-    cvStartTiming('cvAdditionalProcessing');
-    
-    // Simulate additional processing time
-    setTimeout(() => {
-      // End timing additional processing
-      const additionalProcessingTime = cvEndTiming('cvAdditionalProcessing');
+    if (!opencvLoaded) {
+      cvLog('OpenCV initialization timeout reached');
       
-      // End timing overall OpenCV processing
-      const totalProcessingTime = cvEndTiming('cvTotalProcessing');
-      
-      // Get complete performance metrics
-      const performanceData = cvGetPerformanceMetrics();
-      
-      // Send processed result back
-      cvCtx.postMessage({
-        type: 'processed-frame',
-        timestamp: Date.now(),
-        processingTimeMs: totalProcessingTime,
-        performance: performanceData
-      });
-    }, 2);
-  }, 8);
+      if ((self as any).cv && typeof (self as any).cv.Mat === 'function') {
+        cvLog('OpenCV appears to be loaded but the callback never fired, manually initializing');
+        cvOnOpenCVReady();
+      }
+    }
+  }, 5000);
 }
 
 // Handle messages from the main thread
 cvCtx.addEventListener('message', (e) => {
-  const { command, data } = e.data;
+  const { command } = e.data;
   
   switch (command) {
     case 'init':
       cvInitOpenCV();
-      break;
-    case 'process-frame':
-      cvProcessFrame(data);
       break;
     default:
       cvLog(`Unknown command: ${command}`);

@@ -1,11 +1,24 @@
 import React, { useEffect, useRef } from 'react';
-import { 
-  Hands, HAND_CONNECTIONS
-} from '@mediapipe/hands';
-import { Camera } from '@mediapipe/camera_utils';
-import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
+import { HandData, HandLandmark } from '@/lib/types';
 import { EventType, dispatch } from '@/lib/eventBus';
-import { HandData, HandLandmark, HandConnection } from '@/lib/types';
+
+// Helper function to load external script
+const loadExternalScript = (url: string): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = url;
+    script.onload = () => resolve();
+    script.onerror = (error) => reject(new Error(`Failed to load script: ${url}`));
+    document.head.appendChild(script);
+  });
+};
+
+// Define the HandConnection interface here if not found in types
+interface HandConnection {
+  start: number;
+  end: number;
+  colorIndex: number;
+}
 
 interface MediaPipeHandTrackingProps {
   videoRef: React.RefObject<HTMLVideoElement>;
@@ -97,9 +110,22 @@ const assignConnectionColors = () => {
 
 const MediaPipeHandTracking: React.FC<MediaPipeHandTrackingProps> = ({ videoRef }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const handsRef = useRef<Hands | null>(null);
-  const cameraRef = useRef<Camera | null>(null);
+  const handsRef = useRef<any>(null);
+  const cameraRef = useRef<any>(null);
   const lastFrameTimeRef = useRef<number | null>(null);
+  
+  // Define interfaces for MediaPipe types
+  interface HandsOptions {
+    selfieMode?: boolean;
+    maxNumHands?: number;
+    modelComplexity?: number;
+    minDetectionConfidence?: number;
+    minTrackingConfidence?: number;
+  }
+  
+  interface ResultsListener {
+    (results: any): void;
+  }
   
   // Initial MediaPipe Hands setup
   useEffect(() => {
@@ -118,15 +144,53 @@ const MediaPipeHandTracking: React.FC<MediaPipeHandTrackingProps> = ({ videoRef 
       }
       
       try {
-        // Configure MediaPipe Hands
-        const hands = new Hands({
-          locateFile: (file) => {
+        // Load directly from CDN instead of using the npm package
+        // Load all required scripts directly using latest working versions
+        await loadExternalScript('https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js');
+        await loadExternalScript('https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js');
+        await loadExternalScript('https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js');
+        
+        console.log('MediaPipe scripts loaded from CDN in HandTracking component');
+        
+        // Use global objects injected by the script
+        // @ts-ignore - TypeScript doesn't recognize window.Hands as we're loading it dynamically
+        const HandsClass = window.Hands;
+        
+        if (!HandsClass) {
+          console.error('MediaPipe Hands not found in global scope');
+          throw new Error('MediaPipe Hands class not found in global scope');
+        }
+        
+        // @ts-ignore - Using global variables from CDN scripts
+        const CameraClass = window.Camera;
+        
+        if (!CameraClass) {
+          console.error('MediaPipe Camera not found in global scope');
+          throw new Error('MediaPipe Camera class not found in global scope');
+        }
+        
+        // Get drawing utilities from global scope
+        // @ts-ignore - Using global variables from CDN scripts
+        const drawConnectors = window.drawConnectors;
+        // @ts-ignore - Using global variables from CDN scripts
+        const drawLandmarks = window.drawLandmarks;
+        // @ts-ignore - Using global variables from CDN scripts
+        const HAND_CONNECTIONS = window.HAND_CONNECTIONS || [];
+        
+        if (!drawConnectors || !drawLandmarks) {
+          console.error('MediaPipe drawing utilities not found in global scope');
+          throw new Error('MediaPipe drawing utilities not found in global scope');
+        }
+        
+        // Use the latest version of MediaPipe
+        const hands = new HandsClass({
+          locateFile: (file: string) => {
             return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
           }
         });
         
-        // Set up options
-        const options: HandsOptions = {
+        // Set up options with TypeScript interface for better structure
+        const options = {
           selfieMode: true, // Mirror mode for front camera
           maxNumHands: 2,
           modelComplexity: 1,
@@ -238,7 +302,10 @@ const MediaPipeHandTracking: React.FC<MediaPipeHandTrackingProps> = ({ videoRef 
         
         // Set up camera
         if (videoRef.current) {
-          const camera = new Camera(videoRef.current, {
+          // Use Camera class from global window object
+          console.log('Using Camera class from CDN global scope');
+          
+          const camera = new CameraClass(videoRef.current, {
             onFrame: async () => {
               if (videoRef.current && handsRef.current) {
                 await handsRef.current.send({image: videoRef.current});

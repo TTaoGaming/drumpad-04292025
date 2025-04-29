@@ -51,7 +51,7 @@ const CameraView = ({ isCameraRunning, videoRef }: CameraViewProps) => {
       <video 
         ref={videoRef}
         id="camera-feed" 
-        className="camera-feed w-full h-full object-cover" 
+        className="camera-view camera-feed w-full h-full object-cover" 
         autoPlay 
         playsInline
       />
