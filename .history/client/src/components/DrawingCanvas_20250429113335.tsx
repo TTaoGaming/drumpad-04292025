@@ -267,48 +267,26 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
           const center = calculateCenter(path.points);
           const radius = calculateAverageRadius(path.points, center);
           
-          // Only draw if we have visualization data and not occluded
-          if (viz.visualizationData && !viz.isOccluded) {
+          // Only draw if we have visualization data
+          if (viz.visualizationData) {
             // Create a temporary canvas to draw the visualization
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = viz.visualizationData.width;
             tempCanvas.height = viz.visualizationData.height;
-            const tempCtx = tempCanvas.getContext('2d', { alpha: true });
+            const tempCtx = tempCanvas.getContext('2d');
             
             if (tempCtx) {
-              // Clear the temporary canvas to ensure transparency
-              tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
-              
               // Put the visualization data on the temp canvas
               tempCtx.putImageData(viz.visualizationData, 0, 0);
               
-              // Scale the visualization to match the ROI size
-              // The ROI diameter is 2*radius
-              const roiDiameter = radius * 2;
-              
-              // Calculate the position to center the visualization on the ROI
-              // We want to scale the visualization to match the ROI size
-              const vizX = center.x - roiDiameter / 2;
-              const vizY = center.y - roiDiameter / 2;
-              
-              // Draw with proper compositing to maintain transparency
-              ctx.globalCompositeOperation = 'source-over';
-              
-              // Draw the visualization scaled to match the ROI size
+              // Draw the visualization centered on the ROI
               ctx.drawImage(
-                tempCanvas, 
-                vizX, 
-                vizY, 
-                roiDiameter, 
-                roiDiameter
+                tempCanvas,
+                center.x - radius, 
+                center.y - radius,
+                radius * 2,
+                radius * 2
               );
-              
-              // Reset composite operation
-              ctx.globalCompositeOperation = 'source-over';
-              
-              if (Math.random() < 0.01) {
-                console.log(`Drawing contour viz for ROI ${path.id} at (${Math.round(vizX)}, ${Math.round(vizY)}) with size ${Math.round(roiDiameter)}`);
-              }
             }
           }
         }

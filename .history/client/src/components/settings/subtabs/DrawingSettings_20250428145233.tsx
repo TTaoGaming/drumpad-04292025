@@ -8,7 +8,6 @@
  * - Path smoothing
  * - Auto-close for ROI paths
  * - Feature visualization options
- * - Contour visualization toggle
  */
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -34,7 +33,7 @@ const DrawingSettings: React.FC = () => {
     fillOpacity: 0.15, // More subtle transparency for professional look
     autoClose: true,
     smoothing: true,
-    showFeatures: true // Enable contour visualization by default
+    showFeatures: false // Kept for interface compatibility
   });
   
   // Long press delay in milliseconds (default: 500ms)
@@ -223,24 +222,7 @@ const DrawingSettings: React.FC = () => {
             </div>
           )}
           
-          {/* Add contour visualization toggle */}
-          {settings.mode === 'roi' && (
-            <div className="flex items-center justify-between">
-              <div>
-                <Label htmlFor="show-contours">Show Contour Tracking</Label>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Display blue contour shapes inside ROI circles
-                </p>
-              </div>
-              <Switch 
-                id="show-contours"
-                checked={settings.showFeatures}
-                onCheckedChange={(checked) => handleSettingChange('showFeatures', checked)}
-              />
-            </div>
-          )}
-          
-          {settings.mode === 'roi' && <Separator />}
+          <Separator />
           
           {/* Pinch Long Press Delay */}
           <div className="space-y-2">
@@ -262,6 +244,8 @@ const DrawingSettings: React.FC = () => {
               <span className="w-16 text-center">{longPressDelay}ms</span>
             </div>
           </div>
+          
+          {/* Feature detection section removed */}
           
           <Separator />
           

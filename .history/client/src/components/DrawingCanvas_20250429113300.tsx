@@ -44,7 +44,8 @@ export interface DrawingSettings {
 interface ContourVisualization {
   roiId: string;
   visualizationData: ImageData;
-  isOccluded: boolean;
+  shapeMatched: boolean;
+  shapeSimilarity: number;
   timestamp: number;
 }
 
@@ -62,6 +63,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
   
   // Add state for contour visualizations
   const [contourVisualizations, setContourVisualizations] = useState<Record<string, ContourVisualization>>({});
+  const contourCanvasRef = useRef<HTMLCanvasElement>(null);
   
   const [settings, setSettings] = useState<DrawingSettings>({
     enabled: enabled,
@@ -172,7 +174,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
       }
     );
     
-    // Listen for ROI_UPDATED events to update marker positions and capture contour data
+    // Listen for ROI_UPDATED events to update marker positions
     const roiUpdatedListener = addListener(EventType.ROI_UPDATED, (data) => {
       // Only update if we have valid data with id and center
       if (data && data.id && data.center) {
@@ -217,14 +219,11 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
             [data.id]: {
               roiId: data.id,
               visualizationData: data.contourTracking.visualizationData,
-              isOccluded: data.contourTracking.isOccluded === true,
+              shapeMatched: data.contourTracking.isOccluded !== true,
+              shapeSimilarity: data.trackingResult?.confidence || 0,
               timestamp: data.timestamp || Date.now()
             }
           }));
-          
-          if (Math.random() < 0.05) {
-            console.log(`Updated contour visualization for ROI ${data.id}, occluded: ${data.contourTracking.isOccluded}`);
-          }
         }
       }
     });
@@ -243,7 +242,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
     };
   }, [isDrawing, width, height, settings.enabled, currentPath, longPressDelay, canvasSize.width, canvasSize.height]);
   
-  // Drawing canvas renderer - now also handling contour visualization
+  // Drawing canvas renderer
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -259,68 +258,61 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
     
-    // First, draw contour visualizations when they're available and settings.showFeatures is enabled
-    if (settings.showFeatures) {
-      paths.forEach(path => {
-        if (path.isROI && path.isComplete && path.id && contourVisualizations[path.id]) {
-          const viz = contourVisualizations[path.id];
-          const center = calculateCenter(path.points);
-          const radius = calculateAverageRadius(path.points, center);
-          
-          // Only draw if we have visualization data and not occluded
-          if (viz.visualizationData && !viz.isOccluded) {
-            // Create a temporary canvas to draw the visualization
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = viz.visualizationData.width;
-            tempCanvas.height = viz.visualizationData.height;
-            const tempCtx = tempCanvas.getContext('2d', { alpha: true });
-            
-            if (tempCtx) {
-              // Clear the temporary canvas to ensure transparency
-              tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
-              
-              // Put the visualization data on the temp canvas
-              tempCtx.putImageData(viz.visualizationData, 0, 0);
-              
-              // Scale the visualization to match the ROI size
-              // The ROI diameter is 2*radius
-              const roiDiameter = radius * 2;
-              
-              // Calculate the position to center the visualization on the ROI
-              // We want to scale the visualization to match the ROI size
-              const vizX = center.x - roiDiameter / 2;
-              const vizY = center.y - roiDiameter / 2;
-              
-              // Draw with proper compositing to maintain transparency
-              ctx.globalCompositeOperation = 'source-over';
-              
-              // Draw the visualization scaled to match the ROI size
-              ctx.drawImage(
-                tempCanvas, 
-                vizX, 
-                vizY, 
-                roiDiameter, 
-                roiDiameter
-              );
-              
-              // Reset composite operation
-              ctx.globalCompositeOperation = 'source-over';
-              
-              if (Math.random() < 0.01) {
-                console.log(`Drawing contour viz for ROI ${path.id} at (${Math.round(vizX)}, ${Math.round(vizY)}) with size ${Math.round(roiDiameter)}`);
-              }
-            }
-          }
-        }
-      });
-    }
-    
     // Draw all completed paths
     paths.forEach(path => drawPath(ctx, path));
     
     // Draw the current active path
     if (currentPath) {
       drawPath(ctx, currentPath);
+    }
+    
+    // Draw contour visualizations if settings allow showing features
+    if (settings.showFeatures) {
+      // Use a temporary canvas for the contour visualizations
+      const contourCanvas = contourCanvasRef.current;
+      if (contourCanvas) {
+        contourCanvas.width = canvasSize.width;
+        contourCanvas.height = canvasSize.height;
+        const contourCtx = contourCanvas.getContext('2d', { willReadFrequently: true });
+        
+        if (contourCtx) {
+          // Clear previous drawings
+          contourCtx.clearRect(0, 0, canvasSize.width, canvasSize.height);
+          
+          // Draw each contour visualization
+          Object.values(contourVisualizations).forEach(viz => {
+            // Find corresponding path
+            const matchingPath = paths.find(p => p.id === viz.roiId);
+            if (matchingPath && viz.visualizationData) {
+              // Calculate center of path
+              const center = calculateCenter(matchingPath.points);
+              
+              // Get the average radius for positioning
+              const radius = calculateAverageRadius(matchingPath.points, center);
+              
+              // Create a temporary canvas to draw the visualization
+              const tempCanvas = document.createElement('canvas');
+              tempCanvas.width = viz.visualizationData.width;
+              tempCanvas.height = viz.visualizationData.height;
+              const tempCtx = tempCanvas.getContext('2d');
+              
+              if (tempCtx) {
+                // Put the visualization data on the temp canvas
+                tempCtx.putImageData(viz.visualizationData, 0, 0);
+                
+                // Draw the visualization centered on the ROI
+                contourCtx.drawImage(
+                  tempCanvas,
+                  center.x - radius, 
+                  center.y - radius,
+                  radius * 2,
+                  radius * 2
+                );
+              }
+            }
+          });
+        }
+      }
     }
     
     // Publish the current ROIs to the event bus
@@ -995,6 +987,18 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
         style={canvasStyle}
         className={!settings.enabled ? 'hidden' : ''}
       />
+      {settings.showFeatures && (
+        <canvas
+          ref={contourCanvasRef}
+          width={canvasSize.width}
+          height={canvasSize.height}
+          style={{
+            ...canvasStyle,
+            zIndex: 11 // Above the main drawing canvas
+          }}
+          className={!settings.enabled ? 'hidden' : ''}
+        />
+      )}
     </>
   );
 };

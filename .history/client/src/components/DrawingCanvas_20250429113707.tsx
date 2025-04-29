@@ -282,32 +282,21 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height, enabled, i
               // Put the visualization data on the temp canvas
               tempCtx.putImageData(viz.visualizationData, 0, 0);
               
-              // Scale the visualization to match the ROI size
-              // The ROI diameter is 2*radius
-              const roiDiameter = radius * 2;
-              
               // Calculate the position to center the visualization on the ROI
-              // We want to scale the visualization to match the ROI size
-              const vizX = center.x - roiDiameter / 2;
-              const vizY = center.y - roiDiameter / 2;
+              // We need to adjust the position because the contour visualization
+              // is created with the ROI at the center of its own coordinate system
+              const vizX = center.x - (viz.visualizationData.width / 2);
+              const vizY = center.y - (viz.visualizationData.height / 2);
               
               // Draw with proper compositing to maintain transparency
               ctx.globalCompositeOperation = 'source-over';
-              
-              // Draw the visualization scaled to match the ROI size
-              ctx.drawImage(
-                tempCanvas, 
-                vizX, 
-                vizY, 
-                roiDiameter, 
-                roiDiameter
-              );
+              ctx.drawImage(tempCanvas, vizX, vizY);
               
               // Reset composite operation
               ctx.globalCompositeOperation = 'source-over';
               
               if (Math.random() < 0.01) {
-                console.log(`Drawing contour viz for ROI ${path.id} at (${Math.round(vizX)}, ${Math.round(vizY)}) with size ${Math.round(roiDiameter)}`);
+                console.log(`Drawing contour viz for ROI ${path.id} at (${Math.round(vizX)}, ${Math.round(vizY)})`);
               }
             }
           }
