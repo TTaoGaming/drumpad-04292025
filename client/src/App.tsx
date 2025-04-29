@@ -470,79 +470,62 @@ function App() {
         frameProcessingRef.current = true;
         
         try {
-          // Start timing frame capture
-          const captureStartTime = performance.now();
-          
-          // Capture frame from video
-          const frameData = getVideoFrame(videoRef.current);
-          
-          // End timing frame capture
-          const captureEndTime = performance.now();
-          const captureTime = captureEndTime - captureStartTime;
-          
-          // Create performance metrics object for this frame
-          const framePerformanceMetrics: PerformanceMetrics = {
-            fps: Math.round(1000 / Math.max(1, elapsed)),
-            processingTime: {
-              total: elapsed,
-              breakdown: {
-                frameCapture: captureTime,
-                processing: elapsed - captureTime
-              }
-            },
-            captureTime: captureTime,
-            handDetectionTime: 5, // Temporarily set to realistic value
-            contourTrackingTime: 3, // Temporarily set to realistic value
-            roiProcessingTime: 2, // Temporarily set to realistic value
-            renderTime: 1, // Temporarily set to realistic value
-            moduleTimings: {
-              'frameCapture': captureTime,
-              'mainThreadProcessing': elapsed - captureTime
-            }
-          };
-          
-          // Update performance metrics even without worker processing
-          setPerformanceMetrics(framePerformanceMetrics);
-          
-          // Dispatch event for the performance dashboard
-          console.log('Dispatching performance metrics:', framePerformanceMetrics);
-          dispatch(EventType.FRAME_PROCESSED, {
-            performance: framePerformanceMetrics,
-            timestamp: Date.now()
-          });
-          
-          if (frameData) {
-            // Send frame to our new MediaPipe Hands worker for processing
-            // This offloads the expensive MediaPipe hand detection to a worker
-            if (mediaPipeHandsWorkerRef.current) {
-              mediaPipeHandsWorkerRef.current.postMessage({
-                command: 'process',
-                data: {
-                  frame: frameData,
-                  framePerformance: { 
-                    captureTime,
-                    frameTime: elapsed
+          // Import the performance tracking functionality
+          import('./lib/performanceTracker').then(({ startTiming, endTiming, endFrame }) => {
+            // Start overall frame timing
+            startTiming('frameProcessing');
+            
+            // Capture frame from video with timing
+            startTiming('frameCapture');
+            const frameData = getVideoFrame(videoRef.current);
+            endTiming('frameCapture');
+            
+            // We'll measure each processing step individually
+            startTiming('preprocessing');
+            // Any preprocessing code would go here
+            endTiming('preprocessing');
+            
+            // Process the captured frame and measure worker communication
+            if (frameData) {
+              startTiming('workerCommunication');
+              
+              // MediaPipe Hands worker processing
+              if (mediaPipeHandsWorkerRef.current) {
+                mediaPipeHandsWorkerRef.current.postMessage({
+                  command: 'process',
+                  data: {
+                    frame: frameData,
+                    framePerformance: { 
+                      frameTime: elapsed
+                    }
                   }
-                }
-              });
-            } else {
-              // Fallback to the old pipeline if the hands worker isn't ready
-              if (mediaPipelineWorkerRef.current) {
+                });
+              } else if (mediaPipelineWorkerRef.current) {
+                // Fallback to the old pipeline if the hands worker isn't ready
                 mediaPipelineWorkerRef.current.postMessage({
                   command: 'process-frame',
                   data: frameData
                 });
               }
+              
+              // OpenCV worker processing
+              if (opencvWorkerRef.current) {
+                opencvWorkerRef.current.postMessage({
+                  command: 'process-frame',
+                  data: frameData
+                });
+              }
+              
+              endTiming('workerCommunication');
             }
             
-            // We can still send to OpenCV worker in parallel for other processing
-            if (opencvWorkerRef.current) {
-              opencvWorkerRef.current.postMessage({
-                command: 'process-frame',
-                data: frameData
-              });
-            }
-          }
+            // End the frame timing and publish metrics
+            endFrame();
+          }).catch(err => {
+            console.error('Error importing performance tracker:', err);
+          });
+          
+          // Frame data is now handled inside the performance tracking block
         } catch (error) {
           console.error('Error processing video frame:', error);
           frameProcessingRef.current = false;

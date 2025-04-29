@@ -63,25 +63,20 @@ export interface HandData {
 }
 
 // Performance metrics for tracking runtime performance
+export interface ModuleTiming {
+  name: string;      // Name of the module
+  duration: number;  // Duration in milliseconds
+  startTime: number; // Performance.now() timestamp when the module started
+  endTime: number;   // Performance.now() timestamp when the module ended
+}
+
 export interface PerformanceMetrics {
-  fps: number;
-  // Processing time can now be an object with breakdown data
-  processingTime: {
-    total: number;
-    breakdown?: {
-      [key: string]: number;
-    }
-  };
-  // Module-specific timing metrics
-  captureTime?: number;        // Time spent capturing frame
-  handDetectionTime?: number;  // Time spent on hand detection
-  contourTrackingTime?: number; // Time spent on contour tracking
-  roiProcessingTime?: number;  // Time spent processing ROIs
-  renderTime?: number;         // Time spent rendering
-  // Module timings for breakdown
-  moduleTimings: {
-    [moduleId: string]: number;
-  };
+  fps: number;              // Current frames per second
+  totalFrameTime: number;   // Total time to process the frame in ms
+  frameStartTime: number;   // When the frame processing started
+  frameEndTime: number;     // When the frame processing ended
+  timestamp: number;        // Timestamp when metrics were collected
+  moduleTimings: ModuleTiming[]; // Detailed timings for each module
 }
 
 // Finger joint angles
