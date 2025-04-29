@@ -666,7 +666,7 @@ function App() {
       <PerformanceMonitor />
       
       {/* FPS Statistics with averages */}
-      {isCameraRunning && <PerformanceMetrics />}
+      {isCameraRunning && <PerformanceMetrics performance={performanceMetrics} />}
     </div>
   );
 }

@@ -16,6 +16,10 @@ interface ModuleTimings {
   percentage: number;
 }
 
+interface PerformanceMetricsProps {
+  performance?: PerformanceData;
+}
+
 /**
  * Enhanced Performance Metrics Component
  * 
@@ -24,7 +28,7 @@ interface ModuleTimings {
  * - Module-specific timing information
  * - Frame processing breakdown
  */
-const PerformanceMetrics: React.FC = () => {
+const PerformanceMetrics: React.FC<PerformanceMetricsProps> = ({ performance: perfData }) => {
   const [currentFps, setCurrentFps] = useState<number>(0);
   const [avg5sFps, setAvg5sFps] = useState<number>(0);
   const [avg10sFps, setAvg10sFps] = useState<number>(0);
@@ -37,6 +41,16 @@ const PerformanceMetrics: React.FC = () => {
   const fpsReadingsRef = useRef<FpsReading[]>([]);
   const performanceRef = useRef<PerformanceData>({});
   
+  // Update performance reference when prop changes
+  useEffect(() => {
+    if (perfData) {
+      performanceRef.current = {
+        ...performanceRef.current,
+        ...perfData
+      };
+    }
+  }, [perfData]);
+
   useEffect(() => {
     // Listen for frame processed events to calculate FPS
     const frameProcessedListener = addListener(
