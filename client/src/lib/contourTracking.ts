@@ -26,11 +26,6 @@ interface ContourData {
   isVisible: boolean; // Whether the contours are visible (not occluded)
   occlusionTimestamp?: number; // When the contours became occluded
   centerOfMass: Point; // Center of mass of the contours
-  
-  // Temporal tracking data (new)
-  positionHistory?: Point[]; // History of center positions for temporal filtering
-  smoothedCenter?: Point;    // Temporally filtered center position
-  stabilityScore?: number;   // 0-1 score of how stable the marker position is
 }
 
 // Storage for contour data
@@ -51,11 +46,6 @@ const contourConfig = {
   occlusionThreshold: 0.5, // If contour count falls below this percentage of initial, consider occluded
   occlusionDelayMs: 300,   // Delay before triggering occlusion event (reduces false positives)
   reappearanceDelayMs: 300, // Delay before triggering reappearance event
-  
-  // Temporal filtering (new)
-  temporalSmoothing: true, // Enable temporal smoothing for stability
-  smoothingAlpha: 0.8,     // Smoothing factor (0-1): higher = more smoothing
-  positionHistorySize: 5,  // Number of frames to average for center position
   
   // Debug
   drawContours: true,
@@ -255,11 +245,7 @@ export async function initializeContourTracking(roi: CircleROI, imageData: Image
       imageData: roiImageData,
       timestamp: Date.now(),
       isVisible: true,
-      centerOfMass: contourResult.centerOfMass,
-      // Initialize temporal tracking data
-      positionHistory: [contourResult.centerOfMass], // Start with current position
-      smoothedCenter: contourResult.centerOfMass,    // Start with unfiltered position
-      stabilityScore: 1.0                            // Start assuming stable
+      centerOfMass: contourResult.centerOfMass
     });
     
     // Send initialization event
@@ -387,57 +373,6 @@ export async function updateContourTracking(roi: CircleROI, imageData: ImageData
       }
     }
     
-    // Apply temporal filtering for position stability
-    if (contourConfig.temporalSmoothing && !isCurrentlyOccluded) {
-      // Ensure position history array exists
-      if (!initialData.positionHistory) {
-        initialData.positionHistory = [];
-      }
-      
-      // Add the new position to history
-      initialData.positionHistory.push(globalCenterOfMass);
-      
-      // Limit history size
-      if (initialData.positionHistory.length > contourConfig.positionHistorySize) {
-        initialData.positionHistory.shift();
-      }
-      
-      // Calculate stability score based on how much the position changes
-      // Compare current position with previous position
-      if (initialData.positionHistory.length >= 2) {
-        const prevPos = initialData.positionHistory[initialData.positionHistory.length - 2];
-        const currPos = globalCenterOfMass;
-        
-        // Simple Euclidean distance
-        const distance = Math.sqrt(
-          Math.pow(currPos.x - prevPos.x, 2) + 
-          Math.pow(currPos.y - prevPos.y, 2)
-        );
-        
-        // Movement more than 5% of the frame width is considered unstable
-        // Smaller values mean less movement (more stable)
-        const maxMovement = 0.05; // 5% of the image width is the max "normal" movement
-        const movementRatio = Math.min(1, distance / maxMovement);
-        
-        // Calculate stability (inverse of movement)
-        initialData.stabilityScore = 1 - movementRatio;
-      }
-      
-      // Apply exponential smoothing to the center position
-      if (initialData.smoothedCenter) {
-        const alpha = contourConfig.smoothingAlpha;
-        initialData.smoothedCenter = {
-          x: alpha * initialData.smoothedCenter.x + (1 - alpha) * globalCenterOfMass.x,
-          y: alpha * initialData.smoothedCenter.y + (1 - alpha) * globalCenterOfMass.y
-        };
-      } else {
-        initialData.smoothedCenter = { ...globalCenterOfMass };
-      }
-      
-      // Use the smoothed center instead of the raw center
-      globalCenterOfMass = { ...initialData.smoothedCenter };
-    }
-    
     // Return tracking result with visualization
     return {
       isInitialized: true,
@@ -446,10 +381,7 @@ export async function updateContourTracking(roi: CircleROI, imageData: ImageData
       originalContourCount: initialData.contourCount,
       visibilityRatio,
       centerOfMass: globalCenterOfMass,
-      visualizationData: visualization,
-      // Include temporal stability data
-      stabilityScore: initialData.stabilityScore || 1.0,
-      isStable: (initialData.stabilityScore || 1.0) > 0.7 // Consider stable if score is above 70%
+      visualizationData: visualization
     };
   } catch (error) {
     console.error('[contourTracking] Error updating contour tracking:', error);
