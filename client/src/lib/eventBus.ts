@@ -10,6 +10,8 @@ export enum EventType {
   NOTIFICATION = 'notification',
   OPENCV_STATUS = 'opencv-status',
   PIPELINE_STATUS = 'pipeline-status',
+  // Performance events
+  CANVAS_POOL_UPDATED = 'canvas-pool-updated',
   // Settings panel events
   SETTINGS_PANEL_OPEN = 'settings-panel-open',
   SETTINGS_PANEL_CLOSE = 'settings-panel-close',

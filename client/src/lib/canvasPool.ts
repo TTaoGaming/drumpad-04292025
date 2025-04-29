@@ -5,6 +5,8 @@
  * and garbage collection pressure in real-time processing.
  */
 
+import { dispatch, EventType } from './eventBus';
+
 // Store pre-created canvas elements that can be reused
 const canvasPool: HTMLCanvasElement[] = [];
 const contextPool = new Map<HTMLCanvasElement, CanvasRenderingContext2D>();
@@ -25,6 +27,28 @@ const poolMetrics = {
   created: 0,
   reused: 0
 };
+
+// Update metrics and emit event
+function updateMetrics() {
+  // Update window metrics
+  (window as any).canvasPoolInfo = {
+    size: canvasPool.length,
+    created: poolMetrics.created,
+    reused: poolMetrics.reused
+  };
+  
+  // Calculate efficiency
+  const total = poolMetrics.created + poolMetrics.reused;
+  const efficiency = total > 0 ? Math.round((poolMetrics.reused / total) * 100) : 0;
+  
+  // Dispatch event for performance monitoring
+  dispatch(EventType.CANVAS_POOL_UPDATED, {
+    size: canvasPool.length,
+    created: poolMetrics.created,
+    reused: poolMetrics.reused,
+    efficiency: efficiency
+  });
+}
 
 /**
  * Get a canvas from the pool or create a new one if none are available
@@ -47,19 +71,17 @@ export function getCanvas(width: number, height: number): HTMLCanvasElement {
     
     // Track created canvases
     poolMetrics.created++;
-    (window as any).canvasPoolInfo.created = poolMetrics.created;
   } else {
     // Track reused canvases
     poolMetrics.reused++;
-    (window as any).canvasPoolInfo.reused = poolMetrics.reused;
   }
   
   // Set dimensions (even if reused, we need to ensure correct dimensions)
   canvas.width = width;
   canvas.height = height;
   
-  // Update pool size for monitoring
-  (window as any).canvasPoolInfo.size = canvasPool.length;
+  // Update metrics and dispatch event
+  updateMetrics();
   
   return canvas;
 }
@@ -103,8 +125,8 @@ export function returnCanvas(canvas: HTMLCanvasElement): void {
     // Track returned canvases
     poolMetrics.returned++;
     
-    // Update pool size for monitoring
-    (window as any).canvasPoolInfo.size = canvasPool.length;
+    // Update metrics and dispatch event
+    updateMetrics();
   }
   // If pool is full, let the canvas be garbage collected
 }

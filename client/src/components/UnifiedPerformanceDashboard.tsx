@@ -189,31 +189,69 @@ const UnifiedPerformanceDashboard: React.FC<UnifiedPerformanceDashboardProps> = 
     const frameProcessedListener = addListener(
       EventType.FRAME_PROCESSED, 
       (data: {performance: PerformanceMetrics, timestamp: number}) => {
-        if (data.performance) {
+        console.log('Frame processed event received:', data);
+        if (data && data.performance) {
           setPerformanceMetrics(data.performance);
           
+          // Update FPS data
+          const newFps = data.performance.fps || 0;
+          setFpsData(prev => {
+            const newHistory = [...prev.history.slice(-59), newFps];
+            const sum = newHistory.reduce((a, b) => a + b, 0);
+            const avg = sum / Math.max(1, newHistory.length);
+            
+            return {
+              current: newFps,
+              average: Math.round(avg * 10) / 10,
+              min: Math.min(prev.min === Infinity ? newFps : prev.min, newFps || Infinity),
+              max: Math.max(prev.max, newFps || 0),
+              history: newHistory
+            };
+          });
+          
           // Update module timings based on performance data
-          const newModuleTimings = [...moduleTimings];
+          const newModuleTimings = [
+            { 
+              name: 'Frame Capture', 
+              duration: data.performance.captureTime || 0, 
+              color: moduleTimings[0].color 
+            },
+            { 
+              name: 'MediaPipe', 
+              duration: data.performance.handDetectionTime || 0, 
+              color: moduleTimings[1].color 
+            },
+            { 
+              name: 'Contour Tracking', 
+              duration: data.performance.contourTrackingTime || 0, 
+              color: moduleTimings[2].color 
+            },
+            { 
+              name: 'ROI Processing', 
+              duration: data.performance.roiProcessingTime || 0, 
+              color: moduleTimings[3].color 
+            },
+            { 
+              name: 'Rendering', 
+              duration: data.performance.renderTime || 0, 
+              color: moduleTimings[4].color 
+            }
+          ];
           
-          // Update specific module timings if available in data
-          if (data.performance.captureTime !== undefined) {
-            newModuleTimings[0].duration = data.performance.captureTime;
-          }
-          
-          if (data.performance.handDetectionTime !== undefined) {
-            newModuleTimings[1].duration = data.performance.handDetectionTime;
-          }
-          
-          if (data.performance.contourTrackingTime !== undefined) {
-            newModuleTimings[2].duration = data.performance.contourTrackingTime;
-          }
-          
-          if (data.performance.roiProcessingTime !== undefined) {
-            newModuleTimings[3].duration = data.performance.roiProcessingTime;
-          }
-          
-          if (data.performance.renderTime !== undefined) {
-            newModuleTimings[4].duration = data.performance.renderTime;
+          // Add any additional module timings from the moduleTimings object
+          if (data.performance.moduleTimings) {
+            console.log('Additional module timings:', data.performance.moduleTimings);
+            
+            Object.entries(data.performance.moduleTimings).forEach(([name, duration]) => {
+              // Only add if it's not one of our standard modules
+              if (!['frameCapture', 'handDetection', 'contourTracking', 'roiProcessing', 'rendering'].includes(name)) {
+                newModuleTimings.push({
+                  name: name.charAt(0).toUpperCase() + name.slice(1),
+                  duration: duration,
+                  color: '#' + Math.floor(Math.random()*16777215).toString(16) // Random color
+                });
+              }
+            });
           }
           
           setModuleTimings(newModuleTimings);

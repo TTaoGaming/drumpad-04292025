@@ -495,11 +495,7 @@ function App() {
           };
           
           // Update performance metrics even without worker processing
-          setPerformanceMetrics(prev => ({
-            ...(prev || {}),
-            captureTime: framePerformanceMetrics.captureTime,
-            fps: framePerformanceMetrics.fps
-          }));
+          setPerformanceMetrics(framePerformanceMetrics);
           
           // Dispatch event for the performance dashboard
           dispatch(EventType.FRAME_PROCESSED, {
