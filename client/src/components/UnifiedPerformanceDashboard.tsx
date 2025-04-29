@@ -70,6 +70,11 @@ const UnifiedPerformanceDashboard: React.FC<UnifiedPerformanceDashboardProps> = 
     { name: 'Rendering', duration: 0, color: '#8AB4F8' }
   ]);
   
+  // Debug current state
+  useEffect(() => {
+    console.log('Module timings updated:', moduleTimings);
+  }, [moduleTimings]);
+  
   // State for memory usage
   const [memoryUsage, setMemoryUsage] = useState({
     total: 0,
@@ -185,12 +190,29 @@ const UnifiedPerformanceDashboard: React.FC<UnifiedPerformanceDashboardProps> = 
       }
     }, 500);
     
+    // Set up event listeners for canvas pool metrics
+    const canvasPoolListener = addListener(
+      EventType.CANVAS_POOL_UPDATED,
+      (data) => {
+        console.log('Canvas pool event received:', data);
+        if (data) {
+          setCanvasPool({
+            size: data.size || 0,
+            created: data.created || 0,
+            reused: data.reused || 0,
+            efficiency: data.efficiency || 0
+          });
+        }
+      }
+    );
+    
     // Set up event listeners for performance metrics
     const frameProcessedListener = addListener(
       EventType.FRAME_PROCESSED, 
       (data: {performance: PerformanceMetrics, timestamp: number}) => {
-        console.log('Frame processed event received:', data);
+        console.log('Frame processed event received in dashboard:', data);
         if (data && data.performance) {
+          console.log('Performance metrics received:', data.performance);
           setPerformanceMetrics(data.performance);
           
           // Update FPS data
@@ -262,8 +284,9 @@ const UnifiedPerformanceDashboard: React.FC<UnifiedPerformanceDashboardProps> = 
     return () => {
       clearInterval(intervalId);
       frameProcessedListener.remove();
+      canvasPoolListener.remove();
     };
-  }, [calculateFPS, moduleTimings]);
+  }, [calculateFPS]);
   
   // Determine if we're meeting our target FPS
   const fpsPercentage = Math.min(100, (fpsData.average / targetFps) * 100);

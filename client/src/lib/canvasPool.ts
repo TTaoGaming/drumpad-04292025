@@ -30,16 +30,26 @@ const poolMetrics = {
 
 // Update metrics and emit event
 function updateMetrics() {
+  // Calculate efficiency
+  const total = poolMetrics.created + poolMetrics.reused;
+  const efficiency = total > 0 ? Math.round((poolMetrics.reused / total) * 100) : 0;
+  
   // Update window metrics
   (window as any).canvasPoolInfo = {
     size: canvasPool.length,
     created: poolMetrics.created,
-    reused: poolMetrics.reused
+    reused: poolMetrics.reused,
+    returned: poolMetrics.returned,
+    efficiency: efficiency
   };
   
-  // Calculate efficiency
-  const total = poolMetrics.created + poolMetrics.reused;
-  const efficiency = total > 0 ? Math.round((poolMetrics.reused / total) * 100) : 0;
+  // Debug log
+  console.log('Canvas pool metrics updated:', {
+    size: canvasPool.length,
+    created: poolMetrics.created,
+    reused: poolMetrics.reused,
+    efficiency: efficiency
+  });
   
   // Dispatch event for performance monitoring
   dispatch(EventType.CANVAS_POOL_UPDATED, {

@@ -498,6 +498,7 @@ function App() {
           setPerformanceMetrics(framePerformanceMetrics);
           
           // Dispatch event for the performance dashboard
+          console.log('Dispatching performance metrics:', framePerformanceMetrics);
           dispatch(EventType.FRAME_PROCESSED, {
             performance: framePerformanceMetrics,
             timestamp: Date.now()
