@@ -349,11 +349,91 @@ const ImprovedROIDebugCanvas: React.FC<ImprovedROIDebugCanvasProps> = ({
       : 'Initializing contours...';
     ctx.fillText(countText, width / 2, height - 26);
     
-    // Bottom line - Visibility ratio
-    const visibilityText = contourData 
-      ? `Visibility: ${((contourData.visibilityRatio ?? 0) * 100).toFixed(0)}%`
-      : 'Waiting for tracking data...';
-    ctx.fillText(visibilityText, width / 2, height - 10);
+    // Bottom line - Visibility ratio or marker info
+    let bottomText = 'Waiting for tracking data...';
+    
+    if (contourData) {
+      // If we have markers, show info about them instead of visibility
+      if (contourData.markers && contourData.markers.length > 0) {
+        const markerCount = contourData.markers.length;
+        bottomText = `${markerCount} marker${markerCount !== 1 ? 's' : ''} detected`;
+      } else {
+        // Otherwise show visibility info
+        bottomText = `Visibility: ${((contourData.visibilityRatio ?? 0) * 100).toFixed(0)}%`;
+      }
+    }
+    
+    ctx.fillText(bottomText, width / 2, height - 10);
+    
+    // If we have markers, draw a floating panel with marker information
+    if (contourData?.markers && contourData.markers.length > 0) {
+      // Create a floating panel on the right side
+      const panelWidth = 140;
+      const panelHeight = Math.min(height - 80, 30 + (contourData.markers.length * 45));
+      const panelX = width - panelWidth - 10;
+      const panelY = 40;
+      
+      // Draw panel background
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
+      
+      // Panel header
+      ctx.fillStyle = '#4CAF50';
+      ctx.fillRect(panelX, panelY, panelWidth, 24);
+      
+      ctx.fillStyle = 'white';
+      ctx.font = '12px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('Marker Measurements', panelX + panelWidth/2, panelY + 16);
+      
+      // Draw marker information
+      ctx.textAlign = 'left';
+      ctx.font = '10px Arial';
+      
+      const maxMarkers = Math.floor((panelHeight - 30) / 45); // Maximum visible markers
+      
+      for (let i = 0; i < Math.min(maxMarkers, contourData.markers.length); i++) {
+        const marker = contourData.markers[i];
+        const markerY = panelY + 30 + (i * 45);
+        
+        // Marker label
+        ctx.fillStyle = 'white';
+        ctx.font = '11px Arial';
+        ctx.fillText(marker.label, panelX + 8, markerY);
+        
+        // Marker shape and area
+        ctx.fillStyle = '#aaaaaa';
+        ctx.font = '9px Arial';
+        ctx.fillText(`Shape: ${marker.shape}`, panelX + 8, markerY + 15);
+        
+        // Size information if available
+        if (marker.sizeInCm) {
+          ctx.fillStyle = '#4CAF50';
+          ctx.font = '10px Arial';
+          ctx.fillText(
+            `Size: ${marker.sizeInCm.width.toFixed(1)} × ${marker.sizeInCm.height.toFixed(1)} cm`, 
+            panelX + 8, 
+            markerY + 30
+          );
+        } else {
+          ctx.fillStyle = '#aaaaaa';
+          ctx.font = '9px Arial';
+          ctx.fillText(`Area: ${marker.area.toFixed(0)} px²`, panelX + 8, markerY + 30);
+        }
+      }
+      
+      // If there are more markers than we can show
+      if (contourData.markers.length > maxMarkers) {
+        ctx.fillStyle = '#aaaaaa';
+        ctx.font = '9px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(
+          `+${contourData.markers.length - maxMarkers} more markers...`, 
+          panelX + panelWidth/2, 
+          panelY + panelHeight - 8
+        );
+      }
+    }
   };
 
   if (!visible) return null;

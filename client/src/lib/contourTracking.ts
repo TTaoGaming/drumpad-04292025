@@ -518,8 +518,8 @@ export async function initializeContourTracking(roi: CircleROI, imageData: Image
       return false;
     }
     
-    // Detect contours in the ROI
-    const contourResult = await detectContours(roiImageData);
+    // Detect contours in the ROI - use high contrast mode for better marker detection
+    const contourResult = await detectContours(roiImageData, contourConfig.highContrastMode);
     if (!contourResult || contourResult.contourCount === 0) {
       console.warn('[contourTracking] No contours detected in ROI');
       return false;
@@ -575,8 +575,8 @@ export async function updateContourTracking(roi: CircleROI, imageData: ImageData
       return { isInitialized: true, isOccluded: initialData.isVisible ? false : true };
     }
     
-    // Detect contours in the current ROI
-    const currentContours = await detectContours(roiImageData);
+    // Detect contours in the current ROI - use high contrast mode for better marker detection
+    const currentContours = await detectContours(roiImageData, contourConfig.highContrastMode);
     if (!currentContours) {
       console.warn('[contourTracking] Failed to detect contours in ROI update');
       return { isInitialized: true, isOccluded: initialData.isVisible ? false : true };
@@ -679,11 +679,10 @@ export async function updateContourTracking(roi: CircleROI, imageData: ImageData
           const widthPx = maxX - minX;
           const heightPx = maxY - minY;
           
-          // Calculate size in centimeters based on knuckle ruler calibration
-          // This is a simplified conversion - for a real app, we would need to account for perspective, etc.
-          const pixelsToCm = knuckleDistanceCm / (roiImageData.width * 0.25); // Assume knuckle is ~25% of view width
-          const widthCm = widthPx * pixelsToCm;
-          const heightCm = heightPx * pixelsToCm;
+          // Calculate size in centimeters based on the configured pixel-to-cm ratio
+          // Use our helper function that gets the ratio from contourConfig
+          const widthCm = pixelsToCm(widthPx);
+          const heightCm = pixelsToCm(heightPx);
           
           // Create the marker entry
           const marker: MarkerData = {
