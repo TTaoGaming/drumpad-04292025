@@ -1,13 +1,14 @@
 /**
- * Improved ROI Debug Canvas
+ * Improved ROI Debug Canvas with Contour Tracking Visualization
  * 
- * A simplified and more reliable debug canvas that displays the contents of a 
- * Region of Interest (ROI) and visualizes tracking state.
+ * A simplified and reliable debug canvas that displays the contents of a 
+ * Region of Interest (ROI) and visualizes contour tracking state.
  */
 import React, { useRef, useEffect, useState } from 'react';
 import { EventType, addListener, dispatch } from '@/lib/eventBus';
 import { RegionOfInterest, CircleROI } from '@/lib/types';
 import { getVideoFrame } from '@/lib/cameraManager';
+import { contourConfig } from '@/lib/contourTracking';
 
 interface ImprovedROIDebugCanvasProps {
   width: number;
@@ -25,6 +26,13 @@ const ImprovedROIDebugCanvas: React.FC<ImprovedROIDebugCanvasProps> = ({
   const [fps, setFps] = useState<number>(0);
   const [status, setStatus] = useState<string>('Waiting for ROI...');
   const [isOpenCVReady, setIsOpenCVReady] = useState<boolean>(false);
+  const [contourData, setContourData] = useState<{
+    isOccluded: boolean;
+    contourCount: number;
+    originalContourCount: number;
+    visibilityRatio: number;
+    visualizationData?: ImageData;
+  } | null>(null);
   const lastFrameTimeRef = useRef<number>(0);
   const frameCountRef = useRef<number>(0);
   const animationFrameRef = useRef<number | null>(null);
@@ -50,13 +58,39 @@ const ImprovedROIDebugCanvas: React.FC<ImprovedROIDebugCanvasProps> = ({
       console.log('Circle ROI detected:', circleROI);
       setRoi(circleROI);
       setStatus(`Circle ROI detected: ID ${circleROI.id}`);
+      // Reset contour data for new ROI
+      setContourData(null);
     });
     
     // Listen for ROI updates
-    const circleRoiUpdateListener = addListener(EventType.CIRCLE_ROI_UPDATED, (circleROI: CircleROI) => {
-      if (roi && roi.id === circleROI.id) {
-        setRoi(circleROI);
-        setStatus(`ROI updated: ID ${circleROI.id}`);
+    const circleRoiUpdateListener = addListener(EventType.ROI_UPDATED, (data: any) => {
+      if (roi && data.id === roi.id) {
+        // Update the ROI
+        if (data.isCircleROI) {
+          setRoi({
+            ...roi,
+            center: data.center || roi.center,
+            radius: data.radius || roi.radius
+          });
+        }
+        
+        // Check for contour tracking data
+        if (data.contourTracking) {
+          setContourData({
+            isOccluded: data.contourTracking.isOccluded || false,
+            contourCount: data.trackingResult?.matchCount || 0,
+            originalContourCount: data.trackingResult?.inlierCount || 0,
+            visibilityRatio: data.trackingResult?.confidence || 0,
+            visualizationData: data.contourTracking.visualizationData
+          });
+          
+          // Update status based on contour data
+          if (data.contourTracking.isOccluded) {
+            setStatus(`ROI occluded (${data.trackingResult?.confidence.toFixed(2)})`);
+          } else {
+            setStatus(`Tracking ${data.trackingResult?.matchCount || 0} contours`);
+          }
+        }
       }
     });
     
@@ -64,6 +98,7 @@ const ImprovedROIDebugCanvas: React.FC<ImprovedROIDebugCanvasProps> = ({
     const circleRoiDeleteListener = addListener(EventType.CIRCLE_ROI_DELETED, (circleROI: CircleROI) => {
       if (roi && roi.id === circleROI.id) {
         setRoi(null);
+        setContourData(null);
         setStatus('ROI deleted. Draw a new one.');
       }
     });
@@ -206,12 +241,40 @@ const ImprovedROIDebugCanvas: React.FC<ImprovedROIDebugCanvasProps> = ({
     const sourceWidth = Math.min(sourceSize, videoElement.videoWidth - sourceX);
     const sourceHeight = Math.min(sourceSize, videoElement.videoHeight - sourceY);
     
-    // Draw the extracted region to our debug canvas
-    ctx.drawImage(
-      tempCanvas, 
-      sourceX, sourceY, sourceWidth, sourceHeight,
-      0, 0, width, height
-    );
+    // If we have contour visualization data, show that instead of the original ROI
+    if (contourData?.visualizationData) {
+      // Create temp canvas for the contour visualization
+      const contourCanvas = document.createElement('canvas');
+      contourCanvas.width = contourData.visualizationData.width;
+      contourCanvas.height = contourData.visualizationData.height;
+      const contourCtx = contourCanvas.getContext('2d');
+      
+      if (contourCtx) {
+        // Draw the contour visualization data
+        contourCtx.putImageData(contourData.visualizationData, 0, 0);
+        
+        // Draw onto our main canvas
+        ctx.drawImage(
+          contourCanvas,
+          0, 0, contourCanvas.width, contourCanvas.height,
+          0, 0, width, height
+        );
+      } else {
+        // Fallback to original image if context creation fails
+        ctx.drawImage(
+          tempCanvas, 
+          sourceX, sourceY, sourceWidth, sourceHeight,
+          0, 0, width, height
+        );
+      }
+    } else {
+      // Draw the extracted region to our debug canvas
+      ctx.drawImage(
+        tempCanvas, 
+        sourceX, sourceY, sourceWidth, sourceHeight,
+        0, 0, width, height
+      );
+    }
     
     // Draw a circular mask to highlight the ROI
     ctx.globalCompositeOperation = 'destination-in';
@@ -221,7 +284,7 @@ const ImprovedROIDebugCanvas: React.FC<ImprovedROIDebugCanvasProps> = ({
     ctx.globalCompositeOperation = 'source-over';
     
     // Draw a circle to show the ROI boundary
-    ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+    ctx.strokeStyle = contourData?.isOccluded ? 'rgba(255, 100, 0, 0.8)' : 'rgba(0, 255, 0, 0.8)';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(width / 2, height / 2, width / 2 - 2, 0, Math.PI * 2);
@@ -236,22 +299,39 @@ const ImprovedROIDebugCanvas: React.FC<ImprovedROIDebugCanvasProps> = ({
     ctx.textAlign = 'left';
     // Show both normalized and video pixel radius
     const displayRadius = Math.round(videoRadius * 2);
-    ctx.fillText(`ROI: ${displayRadius}px (${roi.radius.toFixed(3)})`, 8, 20);
+    ctx.fillText(`ROI: ${displayRadius}px`, 8, 20);
     
     ctx.textAlign = 'right';
     ctx.fillText(`${fps} FPS`, width - 8, 20);
     
-    // Status box for ROI info instead of matching data
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-    ctx.fillRect(0, height - 20, width, 20);
+    // Status box for contour tracking info
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(0, height - 40, width, 40);
     
-    ctx.fillStyle = '#4CAF50'; // Always green now since we're not tracking
-    ctx.fillRect(0, height - 20, width, 4); // Just a thin green line at the top
+    // Status indicator line (color based on tracking state)
+    const statusColor = contourData?.isOccluded 
+      ? '#FF5722' // Orange for occluded
+      : ((contourData?.contourCount ?? 0) > 0 ? '#4CAF50' : '#FFC107'); // Green for tracking, yellow for no contours
     
-    // Info text about lasso mode
+    ctx.fillStyle = statusColor;
+    ctx.fillRect(0, height - 40, width, 4); // Indicator line
+    
+    // Contour tracking metrics
     ctx.fillStyle = 'white';
     ctx.textAlign = 'center';
-    ctx.fillText('Pinch Lasso ROI', width / 2, height - 6);
+    ctx.font = '10px Arial';
+    
+    // Top line - Contour count info
+    const countText = contourData 
+      ? `Contours: ${contourData.contourCount ?? 0}/${contourData.originalContourCount ?? 0}`
+      : 'Initializing contours...';
+    ctx.fillText(countText, width / 2, height - 26);
+    
+    // Bottom line - Visibility ratio
+    const visibilityText = contourData 
+      ? `Visibility: ${((contourData.visibilityRatio ?? 0) * 100).toFixed(0)}%`
+      : 'Waiting for tracking data...';
+    ctx.fillText(visibilityText, width / 2, height - 10);
   };
 
   if (!visible) return null;

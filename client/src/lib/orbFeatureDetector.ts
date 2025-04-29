@@ -420,7 +420,7 @@ export class ROIManager {
   }
   
   /**
-   * Process video frame to track features in each ROI
+   * Process video frame to track contours in each ROI
    * @param imageData Full frame image data from video
    */
   public async processFrame(imageData: ImageData): Promise<void> {
@@ -431,7 +431,7 @@ export class ROIManager {
     }
     this.lastFrameTime = now;
     
-    // Process each Circle ROI first (new simplified method)
+    // Process each Circle ROI using contour tracking
     for (const roi of this.activeCircleROIs) {
       // Only process ROIs that are due for an update
       if (now - (roi.lastProcessed || 0) < 50) { // Process each ROI at most every 50ms for smoother tracking
@@ -447,19 +447,14 @@ export class ROIManager {
       
       // Only log occasionally to reduce overhead
       if (this.logCounter % this.LOG_THROTTLE === 0) {
-        console.log(`[ROIManager] Processing Circle ROI ${roi.id} with center (${roi.center.x}, ${roi.center.y}) and radius ${roi.radius}`);
+        console.log(`[ROIManager] Processing Circle ROI ${roi.id} with center (${roi.center.x.toFixed(3)}, ${roi.center.y.toFixed(3)}) and radius ${roi.radius.toFixed(3)}`);
       }
       
-      // Extract the ROI image data
-      const roiImageData = this.extractCircleROIImageData(roi, videoElement);
-      if (!roiImageData) {
-        console.warn('[ROIManager] Failed to extract Circle ROI image data');
+      // Get full frame from video for contour tracking
+      const frameData = getVideoFrame(videoElement);
+      if (!frameData) {
+        console.warn('[ROIManager] Failed to get video frame');
         continue;
-      }
-      
-      // Only log occasionally to reduce overhead
-      if (this.logCounter % this.LOG_THROTTLE === 0) {
-        console.log(`[ROIManager] Extracted Circle ROI image data: ${roiImageData.width}x${roiImageData.height}`);
       }
       
       try {
