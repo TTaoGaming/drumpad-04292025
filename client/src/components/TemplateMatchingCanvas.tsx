@@ -104,8 +104,8 @@ const TemplateMatchingCanvas: React.FC<TemplateMatchingCanvasProps> = ({
     const videoElement = document.getElementById('camera-feed') as HTMLVideoElement;
     if (!videoElement || !videoElement.videoWidth) return;
     
-    // Get frame data
-    const frameData = getVideoFrame(videoElement);
+    // Get frame data from FrameManager
+    const frameData = getFrameManager().getCurrentFrame();
     if (!frameData) return;
     
     // Create a temporary canvas to draw the video frame
@@ -307,18 +307,33 @@ const TemplateMatchingCanvas: React.FC<TemplateMatchingCanvasProps> = ({
     setFrameCount(frameCount + 1);
   };
 
-  // Run extraction every frame
+  // Reference to the frame subscription
+  const frameSubscriptionRef = useRef<(() => void) | null>(null);
+  
+  // Run extraction by subscribing to FrameManager
   useEffect(() => {
     if (!visible) return;
     
-    const intervalId = setInterval(() => {
-      if (isOpenCVReady) {
-        extractROIContent();
-      }
-    }, 1000 / 20); // Update at 20 FPS for debugging
+    // Get frame manager singleton
+    const frameManager = getFrameManager();
+    
+    // Subscribe to frame updates with medium priority
+    frameSubscriptionRef.current = frameManager.subscribe(
+      'template_matching_canvas',
+      () => {
+        if (isOpenCVReady && visible && canvasRef.current) {
+          extractROIContent();
+        }
+      },
+      3 // Medium priority (higher than visualization, lower than main processing)
+    );
     
     return () => {
-      clearInterval(intervalId);
+      // Clean up subscription when component unmounts or visibility changes
+      if (frameSubscriptionRef.current) {
+        frameSubscriptionRef.current();
+        frameSubscriptionRef.current = null;
+      }
     };
   }, [visible, roi, isOpenCVReady, isTracking, templateImageData, currentImageData, trackingResult, frameCount]);
 

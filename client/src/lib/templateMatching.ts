@@ -6,6 +6,7 @@
  */
 
 import { loadOpenCV, isOpenCVReady } from './opencvLoader';
+import { getFrameManager } from './FrameManager';
 
 // TemplateMatcher result interface
 export interface TemplateMatchResult {
