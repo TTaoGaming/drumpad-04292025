@@ -1,38 +1,19 @@
 /**
- * Enhanced Contour Tracking System
+ * Simple Contour Tracking System
  * 
- * A contour detection and tracking system that works
+ * A lightweight contour detection and tracking system that works
  * with the Circle ROI created by pinch gestures.
  * 
- * This implementation identifies specific shapes (squares, rectangles)
- * and provides real-world measurements using knuckle ruler calibration.
+ * This implementation avoids complex feature matching and focuses
+ * on basic contour detection for performance and simplicity.
  */
 
 import { CircleROI, Point } from './types';
 import { isOpenCVReady, loadOpenCV } from './opencvLoader';
-import { EventType, dispatch, addListener } from './eventBus';
+import { EventType, dispatch } from './eventBus';
 
 // Declare OpenCV global
 declare const cv: any;
-
-// Define shape types that can be recognized
-export type ShapeType = 'square' | 'rectangle' | 'triangle' | 'circle' | 'unknown';
-
-// Interface for marker data (identified shapes)
-export interface MarkerData {
-  id: string;           // Unique ID for the marker
-  label: string;        // User-assigned label (e.g., "marker #1")
-  shape: ShapeType;     // Type of shape detected
-  area: number;         // Area of the contour in pixels²
-  perimeter: number;    // Perimeter of the contour in pixels
-  corners: Point[];     // Corner points for polygon shapes
-  center: Point;        // Center point of the marker
-  sizeInCm?: {          // Real-world size based on knuckle ruler calibration
-    width: number;      // Width in cm
-    height: number;     // Height in cm
-  };
-  timestamp: number;    // When the marker was detected
-}
 
 // Store initial contours for each ROI
 interface ContourData {
@@ -45,7 +26,6 @@ interface ContourData {
   isVisible: boolean; // Whether the contours are visible (not occluded)
   occlusionTimestamp?: number; // When the contours became occluded
   centerOfMass: Point; // Center of mass of the contours
-  markers: MarkerData[]; // Identified markers within this ROI
 }
 
 // Storage for contour data
@@ -58,33 +38,17 @@ const contourConfig = {
   cannyThreshold1: 50,
   cannyThreshold2: 150,
   
-  // High-contrast mode settings
-  highContrastMode: true,   // Enable by default for marker detection
-  thresholdValue: 120,      // Threshold value for binary image (0-255)
-  
   // Contour options
-  minContourArea: 100,      // Minimum contour area to consider
-  maxContours: 10,          // Maximum number of contours to track
-  
-  // Marker detection settings
-  prioritizeSquares: true,  // Prioritize square/rectangle shapes
-  
-  // Size calibration
-  pixelToCmRatio: 0.025,    // Default pixels to cm ratio (will be updated based on knuckle ruler)
+  minContourArea: 100, // Minimum contour area to consider
+  maxContours: 10,     // Maximum number of contours to track
   
   // Occlusion detection
-  occlusionThreshold: 0.5,  // If contour count falls below this percentage of initial, consider occluded
-  occlusionDelayMs: 300,    // Delay before triggering occlusion event (reduces false positives)
+  occlusionThreshold: 0.5, // If contour count falls below this percentage of initial, consider occluded
+  occlusionDelayMs: 300,   // Delay before triggering occlusion event (reduces false positives)
   reappearanceDelayMs: 300, // Delay before triggering reappearance event
   
-  // Persistence settings for marker tracking
-  trackMarkersBetweenFrames: true, // Enable tracking markers across frames
-  markerMatchThreshold: 0.2,       // Position change threshold for identifying same marker
-  
-  // Debug visualization
-  drawContours: true,             // Draw contour outlines
-  showMarkerLabels: true,         // Show marker labels and measurements
-  showMarkerMeasurements: true,   // Show real-world measurements
+  // Debug
+  drawContours: true,
 };
 
 /**
@@ -109,13 +73,9 @@ async function ensureOpenCV(): Promise<boolean> {
 /**
  * Extract contours from an image using OpenCV
  * @param imageData The image data to process
- * @param highContrastMode Enable optimization for high-contrast markers on white background
  * @returns Array of contours, or null if processing failed
  */
-export async function detectContours(
-  imageData: ImageData, 
-  highContrastMode: boolean = true
-): Promise<any | null> {
+export async function detectContours(imageData: ImageData): Promise<any | null> {
   const ready = await ensureOpenCV();
   if (!ready) return null;
   
@@ -129,38 +89,17 @@ export async function detectContours(
       // Convert to grayscale
       cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
       
-      if (highContrastMode) {
-        // For high-contrast markers on white background:
-        // 1. Apply threshold to separate dark markers from background
-        cv.threshold(gray, gray, 120, 255, cv.THRESH_BINARY_INV);
-        
-        // 2. Apply morphological operations to clean up noise
-        const kernel = cv.Mat.ones(3, 3, cv.CV_8U);
-        // Opening operation (erosion followed by dilation) to remove small noise
-        cv.morphologyEx(gray, gray, cv.MORPH_OPEN, kernel, new cv.Point(-1, -1), 1);
-        kernel.delete();
-      } else {
-        // Standard approach for general contour detection
-        // Apply gaussian blur to reduce noise
-        const blurSize = new cv.Size(contourConfig.blurSize, contourConfig.blurSize);
-        cv.GaussianBlur(gray, gray, blurSize, 0, 0, cv.BORDER_DEFAULT);
-        
-        // Apply Canny edge detection
-        cv.Canny(gray, dst, contourConfig.cannyThreshold1, contourConfig.cannyThreshold2);
-        // Copy dst to gray for consistent pipeline
-        dst.copyTo(gray);
-      }
+      // Apply gaussian blur to reduce noise
+      const blurSize = new cv.Size(contourConfig.blurSize, contourConfig.blurSize);
+      cv.GaussianBlur(gray, gray, blurSize, 0, 0, cv.BORDER_DEFAULT);
+      
+      // Apply Canny edge detection
+      cv.Canny(gray, dst, contourConfig.cannyThreshold1, contourConfig.cannyThreshold2);
       
       // Find contours
       const contours = new cv.MatVector();
       const hierarchy = new cv.Mat();
-      cv.findContours(
-        gray, // Use processed binary image for high-contrast mode
-        contours, 
-        hierarchy, 
-        cv.RETR_EXTERNAL, 
-        cv.CHAIN_APPROX_SIMPLE
-      );
+      cv.findContours(dst, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
       
       // Filter contours by size and keep only the largest ones
       const validContours = [];
@@ -169,39 +108,15 @@ export async function detectContours(
         const area = cv.contourArea(contour);
         
         if (area >= contourConfig.minContourArea) {
-          // Approximate the contour to reduce noise and identify shapes better
-          const perimeter = cv.arcLength(contour, true);
-          const approx = new cv.Mat();
-          cv.approxPolyDP(contour, approx, 0.04 * perimeter, true);
-          
-          // If in high-contrast mode, prioritize shapes with 4 corners (squares/rectangles)
-          const vertexCount = approx.rows;
-          const isLikelyMarker = highContrastMode ? (vertexCount === 4) : true;
-          
-          if (isLikelyMarker) {
-            validContours.push({
-              index: i,
-              area: area,
-              vertexCount: vertexCount
-            });
-          }
-          
-          approx.delete();
+          validContours.push({
+            index: i,
+            area: area
+          });
         }
       }
       
-      // If in high-contrast mode, prioritize 4-sided shapes (squares/rectangles) first
-      if (highContrastMode) {
-        validContours.sort((a, b) => {
-          // Sort 4-sided shapes first, then by area
-          if (a.vertexCount === 4 && b.vertexCount !== 4) return -1;
-          if (a.vertexCount !== 4 && b.vertexCount === 4) return 1;
-          return b.area - a.area; // Then by area (largest first)
-        });
-      } else {
-        // Standard sort by area
-        validContours.sort((a, b) => b.area - a.area);
-      }
+      // Sort by area (largest first)
+      validContours.sort((a, b) => b.area - a.area);
       
       // Keep only the top N contours
       const topContours = validContours.slice(0, contourConfig.maxContours);
@@ -242,7 +157,6 @@ export async function detectContours(
         hierarchy: hierarchy,
         contourCount: filteredContours.size(),
         centerOfMass: centerOfMass,
-        highContrastMode: highContrastMode // Include the mode in the result
       };
     } finally {
       // Clean up OpenCV matrices
@@ -262,119 +176,7 @@ export async function detectContours(
  * @param contourResult Result from detectContours
  * @returns New ImageData with contours drawn, or null if error
  */
-/**
- * Identify the shape of a contour
- * @param contour The contour to analyze
- * @returns Information about the identified shape
- */
-export function identifyShape(contour: any): { 
-  shape: ShapeType,
-  corners: Point[],
-  perimeter: number,
-  area: number,
-  center: Point
-} {
-  // Calculate basic contour features
-  const perimeter = cv.arcLength(contour, true);
-  const area = cv.contourArea(contour);
-  
-  // Calculate moments to find centroid
-  const M = cv.moments(contour);
-  const center = {
-    x: M.m10 / M.m00,
-    y: M.m01 / M.m00
-  };
-  
-  // Approximate the contour with fewer points
-  const epsilon = 0.04 * perimeter; // Precision parameter (smaller = more precise)
-  const approx = new cv.Mat();
-  cv.approxPolyDP(contour, approx, epsilon, true);
-  
-  // Extract the corner points
-  const corners: Point[] = [];
-  for (let i = 0; i < approx.rows; i++) {
-    corners.push({
-      x: approx.data32S[i * 2],
-      y: approx.data32S[i * 2 + 1]
-    });
-  }
-  
-  // Identify shape based on number of corners
-  let shape: ShapeType = 'unknown';
-  
-  if (approx.rows === 3) {
-    shape = 'triangle';
-  } 
-  else if (approx.rows === 4) {
-    // Calculate aspect ratio to distinguish between square and rectangle
-    // Find min/max X and Y to get width and height
-    let minX = Number.MAX_VALUE;
-    let minY = Number.MAX_VALUE;
-    let maxX = Number.MIN_VALUE;
-    let maxY = Number.MIN_VALUE;
-    
-    for (const corner of corners) {
-      minX = Math.min(minX, corner.x);
-      minY = Math.min(minY, corner.y);
-      maxX = Math.max(maxX, corner.x);
-      maxY = Math.max(maxY, corner.y);
-    }
-    
-    const width = maxX - minX;
-    const height = maxY - minY;
-    const aspectRatio = Math.max(width, height) / Math.min(width, height);
-    
-    // If aspect ratio is close to 1, it's a square
-    if (aspectRatio < 1.2) {
-      shape = 'square';
-    } else {
-      shape = 'rectangle';
-    }
-  } 
-  else if (approx.rows >= 8 && approx.rows <= 12) {
-    // Calculate circularity to check if it's circular
-    const circularity = (4 * Math.PI * area) / (perimeter * perimeter);
-    // Circle has circularity close to 1.0
-    if (circularity > 0.8) {
-      shape = 'circle';
-    }
-  }
-  
-  // Clean up the approximation matrix
-  approx.delete();
-  
-  return {
-    shape,
-    corners,
-    perimeter,
-    area,
-    center
-  };
-}
-
-/**
- * Generate a unique and consistent marker label
- * @param roiId The ROI ID
- * @param shape The shape type
- * @param index The index of the marker in the ROI
- * @returns A consistent marker label
- */
-function generateMarkerLabel(roiId: string, shape: ShapeType, index: number): string {
-  return `${shape} #${index + 1}`;
-}
-
-/**
- * Create a visual debug image showing the contours and identified shapes
- * @param imageData Original image data
- * @param contourResult Result from detectContours
- * @param markers Optional array of identified markers to visualize
- * @returns New ImageData with contours drawn, or null if error
- */
-export function createContourVisualization(
-  imageData: ImageData, 
-  contourResult: any, 
-  markers?: MarkerData[]
-): ImageData | null {
+export function createContourVisualization(imageData: ImageData, contourResult: any): ImageData | null {
   if (!contourResult || !contourConfig.drawContours) return null;
   
   try {
@@ -391,97 +193,6 @@ export function createContourVisualization(
       // Draw the center of mass
       const center = contourResult.centerOfMass;
       cv.circle(dst, new cv.Point(center.x, center.y), 5, centerColor, -1);
-      
-      // Draw identified markers if provided
-      if (markers && markers.length > 0) {
-        // Draw each marker with its label
-        for (const marker of markers) {
-          // Different color for each shape type
-          let shapeColor;
-          switch (marker.shape) {
-            case 'square': 
-              shapeColor = new cv.Scalar(255, 0, 0, 255); // Red
-              break;
-            case 'rectangle': 
-              shapeColor = new cv.Scalar(0, 0, 255, 255); // Blue
-              break;
-            case 'triangle': 
-              shapeColor = new cv.Scalar(255, 255, 0, 255); // Yellow
-              break;
-            case 'circle': 
-              shapeColor = new cv.Scalar(255, 0, 255, 255); // Magenta
-              break;
-            default: 
-              shapeColor = new cv.Scalar(128, 128, 128, 255); // Gray
-          }
-          
-          // Draw the corners as a polygon
-          if (marker.corners.length > 0) {
-            const points = new cv.Mat();
-            for (const corner of marker.corners) {
-              points.push_back(new cv.Mat([corner.x, corner.y], cv.CV_32SC1));
-            }
-            cv.polylines(dst, [points], true, shapeColor, 3);
-            points.delete();
-          }
-          
-          // Draw the center point of the marker
-          cv.circle(dst, new cv.Point(marker.center.x, marker.center.y), 4, shapeColor, -1);
-          
-          // Add a text label with the marker ID
-          const fontScale = 0.5;
-          const fontColor = new cv.Scalar(255, 255, 255, 255);
-          const textPoint = new cv.Point(marker.center.x - 30, marker.center.y - 10);
-          
-          // Add white background for text
-          const textSize = cv.getTextSize(marker.label, cv.FONT_HERSHEY_SIMPLEX, fontScale, 1);
-          cv.rectangle(
-            dst, 
-            new cv.Point(textPoint.x - 2, textPoint.y - textSize.height - 2), 
-            new cv.Point(textPoint.x + textSize.width + 2, textPoint.y + 2),
-            new cv.Scalar(0, 0, 0, 128),
-            cv.FILLED
-          );
-          
-          // Draw the marker label
-          cv.putText(
-            dst, 
-            marker.label, 
-            textPoint, 
-            cv.FONT_HERSHEY_SIMPLEX, 
-            fontScale, 
-            fontColor, 
-            1
-          );
-          
-          // Draw size in centimeters if available
-          if (marker.sizeInCm) {
-            const sizeText = `${marker.sizeInCm.width.toFixed(1)}cm × ${marker.sizeInCm.height.toFixed(1)}cm`;
-            const sizePoint = new cv.Point(marker.center.x - 40, marker.center.y + 15);
-            
-            // Add white background for size text
-            const sizeTextSize = cv.getTextSize(sizeText, cv.FONT_HERSHEY_SIMPLEX, fontScale, 1);
-            cv.rectangle(
-              dst, 
-              new cv.Point(sizePoint.x - 2, sizePoint.y - sizeTextSize.height - 2), 
-              new cv.Point(sizePoint.x + sizeTextSize.width + 2, sizePoint.y + 2),
-              new cv.Scalar(0, 0, 0, 128),
-              cv.FILLED
-            );
-            
-            // Draw the size text
-            cv.putText(
-              dst, 
-              sizeText, 
-              sizePoint, 
-              cv.FONT_HERSHEY_SIMPLEX, 
-              fontScale, 
-              fontColor, 
-              1
-            );
-          }
-        }
-      }
       
       // Convert back to ImageData
       const tempCanvas = document.createElement('canvas');
@@ -518,8 +229,8 @@ export async function initializeContourTracking(roi: CircleROI, imageData: Image
       return false;
     }
     
-    // Detect contours in the ROI - use high contrast mode for better marker detection
-    const contourResult = await detectContours(roiImageData, contourConfig.highContrastMode);
+    // Detect contours in the ROI
+    const contourResult = await detectContours(roiImageData);
     if (!contourResult || contourResult.contourCount === 0) {
       console.warn('[contourTracking] No contours detected in ROI');
       return false;
@@ -534,8 +245,7 @@ export async function initializeContourTracking(roi: CircleROI, imageData: Image
       imageData: roiImageData,
       timestamp: Date.now(),
       isVisible: true,
-      centerOfMass: contourResult.centerOfMass,
-      markers: [] // Initialize empty markers array
+      centerOfMass: contourResult.centerOfMass
     });
     
     // Send initialization event
@@ -575,8 +285,8 @@ export async function updateContourTracking(roi: CircleROI, imageData: ImageData
       return { isInitialized: true, isOccluded: initialData.isVisible ? false : true };
     }
     
-    // Detect contours in the current ROI - use high contrast mode for better marker detection
-    const currentContours = await detectContours(roiImageData, contourConfig.highContrastMode);
+    // Detect contours in the current ROI
+    const currentContours = await detectContours(roiImageData);
     if (!currentContours) {
       console.warn('[contourTracking] Failed to detect contours in ROI update');
       return { isInitialized: true, isOccluded: initialData.isVisible ? false : true };
@@ -637,82 +347,8 @@ export async function updateContourTracking(roi: CircleROI, imageData: ImageData
       initialData.occlusionTimestamp = undefined;
     }
     
-    // Identify specific shapes (markers) in the contours
-    const identifiedMarkers: MarkerData[] = [];
-    
-    // Convert normalized knuckle distance to pixels for this region
-    // Get knuckle distance settings from global state (default to 8cm if not available)
-    const knuckleDistanceCm = 8.0; // We'll update this with the actual setting later
-    
-    // Process each contour to identify shapes
-    for (let i = 0; i < currentContours.contours.size(); i++) {
-      try {
-        const contour = currentContours.contours.get(i);
-        
-        // Skip very small contours
-        const area = cv.contourArea(contour);
-        if (area < contourConfig.minContourArea) {
-          continue;
-        }
-        
-        // Identify the shape
-        const shapeInfo = identifyShape(contour);
-        
-        // We're particularly interested in squares and rectangles (high-contrast markers)
-        if (shapeInfo.shape === 'square' || shapeInfo.shape === 'rectangle') {
-          // Create a marker entry
-          const markerId = `${roi.id}-${shapeInfo.shape}-${i}`;
-          
-          // Find min/max X and Y to calculate width and height in pixels
-          let minX = Number.MAX_VALUE;
-          let minY = Number.MAX_VALUE;
-          let maxX = Number.MIN_VALUE;
-          let maxY = Number.MIN_VALUE;
-          
-          for (const corner of shapeInfo.corners) {
-            minX = Math.min(minX, corner.x);
-            minY = Math.min(minY, corner.y);
-            maxX = Math.max(maxX, corner.x);
-            maxY = Math.max(maxY, corner.y);
-          }
-          
-          const widthPx = maxX - minX;
-          const heightPx = maxY - minY;
-          
-          // Calculate size in centimeters based on the configured pixel-to-cm ratio
-          // Use our helper function that gets the ratio from contourConfig
-          const widthCm = pixelsToCm(widthPx);
-          const heightCm = pixelsToCm(heightPx);
-          
-          // Create the marker entry
-          const marker: MarkerData = {
-            id: markerId,
-            label: `${shapeInfo.shape} #${i+1}`,
-            shape: shapeInfo.shape,
-            area: shapeInfo.area,
-            perimeter: shapeInfo.perimeter,
-            corners: shapeInfo.corners,
-            center: shapeInfo.center,
-            sizeInCm: {
-              width: widthCm,
-              height: heightCm
-            },
-            timestamp: Date.now()
-          };
-          
-          // Add to our list of identified markers
-          identifiedMarkers.push(marker);
-        }
-      } catch (error) {
-        console.error(`[contourTracking] Error processing contour ${i}:`, error);
-      }
-    }
-    
-    // Update the markers in our data map
-    initialData.markers = identifiedMarkers;
-    
-    // Create contour visualization for debugging with identified markers
-    const visualization = createContourVisualization(roiImageData, currentContours, identifiedMarkers);
+    // Create contour visualization for debugging
+    const visualization = createContourVisualization(roiImageData, currentContours);
     
     // Get region information stored during extraction
     const roiInfo = (roi as any)._roiRegion;
@@ -737,7 +373,7 @@ export async function updateContourTracking(roi: CircleROI, imageData: ImageData
       }
     }
     
-    // Return tracking result with visualization and marker information
+    // Return tracking result with visualization
     return {
       isInitialized: true,
       isOccluded: !initialData.isVisible,
@@ -745,8 +381,7 @@ export async function updateContourTracking(roi: CircleROI, imageData: ImageData
       originalContourCount: initialData.contourCount,
       visibilityRatio,
       centerOfMass: globalCenterOfMass,
-      visualizationData: visualization,
-      markers: identifiedMarkers
+      visualizationData: visualization
     };
   } catch (error) {
     console.error('[contourTracking] Error updating contour tracking:', error);
@@ -843,73 +478,6 @@ function extractROIImageData(roi: CircleROI, imageData: ImageData): ImageData | 
     return null;
   }
 }
-
-/**
- * Update the pixel-to-cm ratio based on knuckle ruler measurements
- * @param knuckleDistanceCm The actual distance between knuckles in centimeters
- * @param pixelDistance The distance between knuckles in pixels
- */
-export function updatePixelToCmRatio(knuckleDistanceCm: number, pixelDistance: number): void {
-  if (knuckleDistanceCm <= 0 || pixelDistance <= 0) {
-    console.warn('[contourTracking] Invalid knuckle measurements, cannot update pixel-to-cm ratio');
-    return;
-  }
-  
-  // Calculate the new ratio
-  const newRatio = knuckleDistanceCm / pixelDistance;
-  
-  // Update the config
-  contourConfig.pixelToCmRatio = newRatio;
-  
-  console.log(`[contourTracking] Updated pixel-to-cm ratio: ${newRatio.toFixed(6)} cm/pixel`);
-  console.log(`[contourTracking] Knuckle distance: ${knuckleDistanceCm}cm = ${pixelDistance}px`);
-}
-
-/**
- * Convert a measurement in pixels to centimeters using the current calibration
- * @param pixelValue The measurement in pixels
- * @returns The measurement in centimeters
- */
-export function pixelsToCm(pixelValue: number): number {
-  return pixelValue * contourConfig.pixelToCmRatio;
-}
-
-/**
- * Get markers from an ROI by ID
- * @param roiId The ID of the ROI
- * @returns Array of markers, or empty array if none
- */
-export function getMarkersFromROI(roiId: string): MarkerData[] {
-  const data = contourDataMap.get(roiId);
-  if (!data || !data.markers) {
-    return [];
-  }
-  return [...data.markers]; // Return a copy to prevent direct modification
-}
-
-/**
- * Initialize listeners for external events that impact contour tracking
- */
-function initializeEventListeners(): void {
-  // Listen for knuckle ruler updates to calibrate our measurements
-  addListener(EventType.SETTINGS_VALUE_CHANGE, (data: any) => {
-    if (data.section === 'calibration' && data.setting === 'knuckleRulerRealtime') {
-      // Extract knuckle distance measurement data
-      const pixelDistance = data.value.pixelDistance;
-      // Get the current knuckle distance in cm from configuration
-      // In a real implementation, we'd get this from a global settings store
-      const knuckleDistanceCm = 8.0; // Default value, should be replaced with actual value
-      
-      // Update our calibration
-      if (pixelDistance > 0) {
-        updatePixelToCmRatio(knuckleDistanceCm, pixelDistance);
-      }
-    }
-  });
-}
-
-// Set up the event listeners
-initializeEventListeners();
 
 // Initialize OpenCV
 ensureOpenCV().then(ready => {
