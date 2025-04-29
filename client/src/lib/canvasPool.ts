@@ -36,17 +36,30 @@ export function getCanvas(width: number, height: number): HTMLCanvasElement {
   let canvas = canvasPool.pop();
   
   if (!canvas) {
+    // Create a new canvas if none are available in the pool
     canvas = document.createElement('canvas');
+    
     // Create and store the context to avoid repeated calls to getContext
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (ctx) {
       contextPool.set(canvas, ctx);
     }
+    
+    // Track created canvases
+    poolMetrics.created++;
+    (window as any).canvasPoolInfo.created = poolMetrics.created;
+  } else {
+    // Track reused canvases
+    poolMetrics.reused++;
+    (window as any).canvasPoolInfo.reused = poolMetrics.reused;
   }
   
   // Set dimensions (even if reused, we need to ensure correct dimensions)
   canvas.width = width;
   canvas.height = height;
+  
+  // Update pool size for monitoring
+  (window as any).canvasPoolInfo.size = canvasPool.length;
   
   return canvas;
 }
@@ -86,6 +99,12 @@ export function returnCanvas(canvas: HTMLCanvasElement): void {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
     canvasPool.push(canvas);
+    
+    // Track returned canvases
+    poolMetrics.returned++;
+    
+    // Update pool size for monitoring
+    (window as any).canvasPoolInfo.size = canvasPool.length;
   }
   // If pool is full, let the canvas be garbage collected
 }

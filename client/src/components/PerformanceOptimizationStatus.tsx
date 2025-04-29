@@ -1,4 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Card } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
 
 interface PerformanceOptimizationStatusProps {
   targetFps: number;
@@ -13,116 +15,140 @@ interface PerformanceOptimizationStatusProps {
 const PerformanceOptimizationStatus: React.FC<PerformanceOptimizationStatusProps> = ({ 
   targetFps 
 }) => {
-  const [stats, setStats] = useState({
-    fps: 0,
-    fpsHistory: [] as number[],
-    canvasPoolSize: 0,
-    framesCaptured: 0,
-    memoryUsageMB: 0
+  const [canvasPool, setCanvasPool] = useState({
+    size: 0,
+    created: 0,
+    reused: 0
   });
-
+  
+  const [currentFps, setCurrentFps] = useState(0);
+  const [fpsHistory, setFpsHistory] = useState<number[]>([]);
+  
   useEffect(() => {
-    let frameCount = 0;
-    let lastTime = performance.now();
-    let rafId: number;
-
-    // Monitor FPS and memory usage
-    const updateStats = () => {
-      frameCount++;
-      const now = performance.now();
-      const elapsed = now - lastTime;
-      
-      if (elapsed >= 1000) {
-        // Calculate FPS
-        const fps = Math.round((frameCount * 1000) / elapsed);
-        
-        // Estimate memory usage (if available)
-        let memoryUsageMB = 0;
-        if (window.performance && (performance as any).memory) {
-          memoryUsageMB = Math.round((performance as any).memory.usedJSHeapSize / (1024 * 1024));
-        }
-        
-        // Try to get canvas pool size from any global variable (this is just for display)
-        const canvasPoolInfo = (window as any).canvasPoolInfo || { size: '—', created: 0 };
-        
-        // Update state with new stats
-        setStats(prev => {
-          const fpsHistory = [...prev.fpsHistory, fps].slice(-20);
-          return {
-            fps,
-            fpsHistory,
-            canvasPoolSize: canvasPoolInfo.size,
-            framesCaptured: prev.framesCaptured + frameCount,
-            memoryUsageMB
-          };
+    // Poll canvas pool info and FPS data every 500ms
+    const intervalId = setInterval(() => {
+      // Update canvas pool metrics
+      if ((window as any).canvasPoolInfo) {
+        setCanvasPool({
+          size: (window as any).canvasPoolInfo.size || 0,
+          created: (window as any).canvasPoolInfo.created || 0,
+          reused: (window as any).canvasPoolInfo.reused || 0
         });
-        
-        // Reset counters
-        frameCount = 0;
-        lastTime = now;
       }
       
-      rafId = requestAnimationFrame(updateStats);
-    };
+      // Get current FPS from performance.now() if available
+      const now = performance.now();
+      const fps = calculateFPS(now);
+      if (fps > 0) {
+        setCurrentFps(fps);
+        setFpsHistory(prev => {
+          const newHistory = [...prev, fps];
+          // Keep the last 20 readings
+          return newHistory.slice(-20);
+        });
+      }
+    }, 500);
     
-    // Start monitoring
-    rafId = requestAnimationFrame(updateStats);
-    
-    // Clean up on unmount
-    return () => {
-      cancelAnimationFrame(rafId);
-    };
+    return () => clearInterval(intervalId);
   }, []);
-
-  // Calculate frame time
-  const frameTimeMs = stats.fps > 0 ? (1000 / stats.fps).toFixed(1) : '—';
+  
+  // Calculate FPS based on time difference
+  const calculateFPS = (now: number): number => {
+    // Store the last timestamp to calculate FPS
+    const lastTimestamp = (window as any)._lastFpsTimestamp || 0;
+    const frameCount = (window as any)._frameCount || 0;
+    
+    if (lastTimestamp === 0) {
+      // First call, just store the timestamp
+      (window as any)._lastFpsTimestamp = now;
+      (window as any)._frameCount = 0;
+      return 0;
+    }
+    
+    // Calculate time difference
+    const elapsed = now - lastTimestamp;
+    
+    // If more than 1 second has passed, calculate FPS
+    if (elapsed > 1000) {
+      const fps = Math.round((frameCount * 1000) / elapsed);
+      
+      // Reset counters
+      (window as any)._lastFpsTimestamp = now;
+      (window as any)._frameCount = 0;
+      
+      return fps;
+    }
+    
+    // Increment frame count
+    (window as any)._frameCount = frameCount + 1;
+    return 0;
+  };
+  
+  // Calculate an efficiency score based on canvas pool reuse rate
+  const calculateEfficiency = (): number => {
+    const total = canvasPool.created + canvasPool.reused;
+    if (total === 0) return 0;
+    return Math.round((canvasPool.reused / total) * 100);
+  };
+  
+  // Format large numbers with commas
+  const formatNumber = (num: number): string => {
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  };
   
   // Calculate average FPS
-  const avgFps = stats.fpsHistory.length > 0 
-    ? (stats.fpsHistory.reduce((sum, fps) => sum + fps, 0) / stats.fpsHistory.length).toFixed(1) 
-    : '—';
-  
-  // Calculate percentage of target FPS
-  const fpsPercentage = stats.fps > 0 
-    ? Math.min(100, Math.round((stats.fps / targetFps) * 100))
+  const averageFps = fpsHistory.length > 0 
+    ? Math.round(fpsHistory.reduce((a, b) => a + b, 0) / fpsHistory.length) 
     : 0;
   
-  // Determine status color
-  const getStatusColor = () => {
-    if (stats.fps >= targetFps * 0.9) return 'text-green-500'; // 90%+ of target is green
-    if (stats.fps >= targetFps * 0.7) return 'text-yellow-500'; // 70%+ of target is yellow
-    return 'text-red-500'; // Below 70% is red
-  };
-
+  const efficiency = calculateEfficiency();
+  
+  // Determine if we're meeting our target FPS
+  const fpsPercentage = Math.min(100, (averageFps / targetFps) * 100);
+  
   return (
-    <div className="fixed bottom-0 left-0 z-40 p-2 bg-black/80 text-white rounded-tr-lg text-xs font-mono">
-      <h3 className="font-bold mb-1 text-blue-300">Canvas Pool Performance</h3>
-      <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-        <div>Current FPS:</div>
-        <div className={getStatusColor()}>{stats.fps} FPS ({frameTimeMs} ms)</div>
-        
-        <div>Average FPS:</div>
-        <div>{avgFps} FPS</div>
-        
-        <div>Target:</div>
-        <div className="flex items-center gap-1">
-          <span>{targetFps} FPS</span>
-          <div className="w-20 h-2 bg-gray-700 rounded-full ml-1">
-            <div 
-              className={`h-full rounded-full ${getStatusColor().replace('text-', 'bg-')}`}
-              style={{ width: `${fpsPercentage}%` }}
-            />
-          </div>
+    <Card className="fixed bottom-4 right-4 p-3 text-xs w-64 z-50 bg-opacity-95 bg-black text-white shadow-lg border-gray-700">
+      <div className="font-bold text-sm mb-1">Performance Optimization</div>
+      
+      <div className="mb-2">
+        <div className="flex justify-between">
+          <span>FPS (Target: {targetFps})</span>
+          <span className={averageFps >= targetFps * 0.9 ? 'text-green-400' : 'text-yellow-400'}>
+            {averageFps} FPS
+          </span>
         </div>
-        
-        {stats.memoryUsageMB > 0 && (
-          <>
-            <div>Memory:</div>
-            <div>{stats.memoryUsageMB} MB</div>
-          </>
-        )}
+        <Progress value={fpsPercentage} className="h-1 mt-1" />
       </div>
-    </div>
+      
+      <div className="mb-2">
+        <div className="flex justify-between">
+          <span>Canvas Pooling Efficiency</span>
+          <span className={efficiency > 70 ? 'text-green-400' : 'text-yellow-400'}>
+            {efficiency}%
+          </span>
+        </div>
+        <Progress value={efficiency} className="h-1 mt-1" />
+      </div>
+      
+      <div className="grid grid-cols-3 gap-1 text-xs mt-3">
+        <div className="bg-gray-800 p-1 rounded">
+          <div className="text-gray-400">Pool Size</div>
+          <div className="font-mono text-right">{canvasPool.size}</div>
+        </div>
+        <div className="bg-gray-800 p-1 rounded">
+          <div className="text-gray-400">Created</div>
+          <div className="font-mono text-right">{formatNumber(canvasPool.created)}</div>
+        </div>
+        <div className="bg-gray-800 p-1 rounded">
+          <div className="text-gray-400">Reused</div>
+          <div className="font-mono text-right">{formatNumber(canvasPool.reused)}</div>
+        </div>
+      </div>
+      
+      <div className="text-xs text-gray-500 mt-2">
+        Optimization: Direct pixel copy, canvas pooling
+      </div>
+    </Card>
   );
 };
 
