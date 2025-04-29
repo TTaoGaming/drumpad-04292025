@@ -46,11 +46,20 @@ export interface HandLandmark {
   z: number;
 }
 
+// Hand connection (line between landmarks)
+export interface HandConnection {
+  start: number;
+  end: number;
+  colorIndex: number;
+}
+
 // Detected hand data with landmarks and metadata
 export interface HandData {
   landmarks: HandLandmark[];
-  handedness: 'Left' | 'Right';
-  timestamp: number;
+  handedness?: 'Left' | 'Right';
+  timestamp?: number;
+  connections?: HandConnection[];
+  colors?: string[];
 }
 
 // Performance metrics for tracking runtime performance
