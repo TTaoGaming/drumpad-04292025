@@ -136,8 +136,14 @@ function App() {
               colors: []      // Will be filled in by MediaPipeHandTracker
             };
             
-            // ONLY set state once (don't dispatch redundant event with handData)
+            // Update state with hand data
             setHandData(handData);
+            
+            // Dispatch event for other components
+            dispatch(EventType.FRAME_PROCESSED, {
+              handData: handData,
+              timestamp: Date.now()
+            });
           }
           
           // Update performance metrics
@@ -148,7 +154,7 @@ function App() {
               mediapigeHandsWorker: e.data.performance
             }));
             
-            // Dispatch ONLY performance metrics, not duplicate handData
+            // Dispatch performance metrics event
             dispatch(EventType.FRAME_PROCESSED, {
               performance: e.data.performance,
               timestamp: Date.now()
@@ -197,6 +203,25 @@ function App() {
 
     const notificationListener = addListener(EventType.NOTIFICATION, (data) => {
       addNotification(data.message, data.type);
+    });
+    
+    // Listen for frame processing events from MediaPipeHandTracking
+    const frameProcessedListener = addListener(EventType.FRAME_PROCESSED, (data) => {
+      if (data.handData) {
+        // Update the hand data in App state
+        setHandData(data.handData);
+        
+        // If we have a media pipeline worker, send the hand data to it as well
+        if (mediaPipeHandsWorkerRef.current) {
+          mediaPipeHandsWorkerRef.current.postMessage({
+            command: 'process-frame',
+            data: {
+              handLandmarks: data.handData.landmarks,
+              handData: data.handData
+            }
+          });
+        }
+      }
     });
     
     // Listen for new drawing paths from DrawingCanvas
@@ -253,6 +278,7 @@ function App() {
       fullscreenListener.remove();
       logListener.remove();
       notificationListener.remove();
+      frameProcessedListener.remove();
       drawingListener.remove();
       circleRoiListener.remove();
     };
