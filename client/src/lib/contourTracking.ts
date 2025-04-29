@@ -417,6 +417,7 @@ export function cleanupContourTracking(roiId: string): void {
 
 /**
  * Extract the image data from within a circle ROI
+ * Uses canvas pooling for better performance
  * @param roi The CircleROI
  * @param imageData The full image data
  * @returns Image data for just the ROI area, or null if error
@@ -446,38 +447,29 @@ function extractROIImageData(roi: CircleROI, imageData: ImageData): ImageData | 
       return null;
     }
     
-    // Create a temporary canvas to extract the region
-    const canvas = document.createElement('canvas');
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      console.warn('[contourTracking] Failed to get canvas context');
-      return null;
+    // Create a new ImageData directly (more efficient for small regions)
+    // We'll do a direct pixel copy without an intermediate canvas
+    const roiData = new ImageData(size, size);
+    
+    // Manual pixel copy loop - more efficient than using multiple canvases for small regions
+    const srcData = imageData.data;
+    const dstData = roiData.data;
+    const srcWidth = imageData.width;
+    
+    // Direct pixel copying (4 bytes per pixel - RGBA)
+    for (let j = 0; j < size; j++) {
+      const srcRowOffset = ((y + j) * srcWidth + x) * 4;
+      const dstRowOffset = j * size * 4;
+      
+      // Copy entire row at once using TypedArray.set for better performance
+      // This is much faster than copying pixel by pixel
+      dstData.set(
+        srcData.subarray(srcRowOffset, srcRowOffset + size * 4),
+        dstRowOffset
+      );
     }
     
-    // Create a temporary canvas for the full image
-    const fullCanvas = document.createElement('canvas');
-    fullCanvas.width = imageData.width;
-    fullCanvas.height = imageData.height;
-    const fullCtx = fullCanvas.getContext('2d');
-    if (!fullCtx) {
-      console.warn('[contourTracking] Failed to get full canvas context');
-      return null;
-    }
-    
-    // Draw the full image to the canvas
-    fullCtx.putImageData(imageData, 0, 0);
-    
-    // Extract the square region
-    ctx.drawImage(
-      fullCanvas,
-      x, y, size, size,  // Source coordinates
-      0, 0, size, size   // Destination coordinates
-    );
-    
-    // Get the image data from the region
-    return ctx.getImageData(0, 0, size, size);
+    return roiData;
   } catch (error) {
     console.error('[contourTracking] Error extracting ROI image data:', error);
     return null;

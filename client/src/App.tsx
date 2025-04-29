@@ -13,6 +13,7 @@ import DrawingCanvas from "@/components/DrawingCanvas";
 import ImprovedROIDebugCanvas from "@/components/ImprovedROIDebugCanvas";
 import TrackingVisualization from "@/components/TrackingVisualization";
 import SettingsPanel from "@/components/settings/SettingsPanel";
+import PerformanceOptimizationStatus from "@/components/PerformanceOptimizationStatus";
 import { EventType, addListener, dispatch } from "@/lib/eventBus";
 import { Notification, HandData, PerformanceMetrics, DrawingPath, CircleROI } from "@/lib/types";
 import { getVideoFrame } from "@/lib/cameraManager";
@@ -636,6 +637,9 @@ function App() {
       
       {/* FPS Statistics with averages */}
       {isCameraRunning && <FpsStats />}
+      
+      {/* Canvas Pool Performance Monitor */}
+      {isCameraRunning && <PerformanceOptimizationStatus targetFps={60} />}
     </div>
   );
 }

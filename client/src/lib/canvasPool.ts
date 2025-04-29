@@ -12,6 +12,20 @@ const contextPool = new Map<HTMLCanvasElement, CanvasRenderingContext2D>();
 // Maximum size of the pool to prevent excessive memory usage
 const MAX_POOL_SIZE = 10;
 
+// Store metrics for monitoring
+const poolMetrics = {
+  created: 0,
+  reused: 0,
+  returned: 0
+};
+
+// Make metrics available to the window for the performance monitor
+(window as any).canvasPoolInfo = {
+  size: 0,
+  created: 0,
+  reused: 0
+};
+
 /**
  * Get a canvas from the pool or create a new one if none are available
  * @param width Desired width of the canvas
