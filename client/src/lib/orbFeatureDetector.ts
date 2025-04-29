@@ -2,13 +2,12 @@
  * Region of Interest (ROI) Manager
  * 
  * Manages circle regions of interest created by pinch gestures.
- * This is a simplified version that focuses only on ROI creation/tracking
- * without feature extraction or matching.
+ * Now uses simplified contour tracking instead of ORB feature detection.
  */
 
 import { DrawingPath, Point, RegionOfInterest, CircleROI } from './types';
 import { 
-  // Import placeholder functions but they won't do any actual feature tracking
+  // Keeping these imports for backward compatibility
   extractORBFeatures, 
   matchFeatures, 
   ORBFeature, 
@@ -18,6 +17,13 @@ import {
 } from './orbTracking';
 import { getVideoFrame } from './cameraManager';
 import { EventType, dispatch } from './eventBus';
+// Import the new contour tracking functionality
+import { 
+  initializeContourTracking, 
+  updateContourTracking, 
+  cleanupContourTracking,
+  contourConfig
+} from './contourTracking';
 
 // Interface to store ROI with its feature information
 interface ROIWithFeatures extends RegionOfInterest {
@@ -31,6 +37,16 @@ interface CircleROIWithFeatures extends CircleROI {
   features?: ORBFeature;
   trackingResult?: TrackingResult;
   lastProcessed?: number;
+  // Add contour tracking properties
+  contourTracking?: {
+    isInitialized: boolean;
+    isOccluded: boolean;
+    contourCount?: number;
+    originalContourCount?: number;
+    visibilityRatio?: number;
+    centerOfMass?: Point;
+    visualizationData?: ImageData;
+  };
 }
 
 /**
