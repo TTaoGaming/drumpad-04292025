@@ -170,6 +170,8 @@ export async function detectContours(imageData: ImageData): Promise<any | null> 
   }
 }
 
+import { getCanvas, getContext, returnCanvas } from './canvasPool';
+
 /**
  * Create a visual debug image showing the contours
  * @param imageData Original image data
@@ -194,16 +196,19 @@ export function createContourVisualization(imageData: ImageData, contourResult: 
       const center = contourResult.centerOfMass;
       cv.circle(dst, new cv.Point(center.x, center.y), 5, centerColor, -1);
       
-      // Convert back to ImageData
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = imageData.width;
-      tempCanvas.height = imageData.height;
-      const ctx = tempCanvas.getContext('2d');
+      // Convert back to ImageData using canvas pool
+      const tempCanvas = getCanvas(imageData.width, imageData.height);
+      const ctx = getContext(tempCanvas);
       if (!ctx) return null;
       
       // Put the contour image on canvas and read back as ImageData
       cv.imshow(tempCanvas, dst);
-      return ctx.getImageData(0, 0, imageData.width, imageData.height);
+      const resultImageData = ctx.getImageData(0, 0, imageData.width, imageData.height);
+      
+      // Return the canvas to the pool
+      returnCanvas(tempCanvas);
+      
+      return resultImageData;
     } finally {
       src.delete();
       dst.delete();

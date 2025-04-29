@@ -416,61 +416,97 @@ function App() {
     }
   };
 
+  // Frame rate throttling configuration
+  const targetFPS = 60; // Target 60 FPS for smooth performance
+  const frameInterval = 1000 / targetFPS; // Time between frames in ms
+  const lastFrameTimeRef = useRef(0);
+  const performanceCounterRef = useRef({ frames: 0, startTime: 0, lastFpsUpdate: 0 });
+  
   // Throttle console logs related to frame processing
   const frameLogCountRef = useRef(0);
   const LOG_EVERY_N_FRAMES = 300; // Only log every 300 frames (approx. every 5 seconds at 60fps)
   
   const processVideoFrame = () => {
-    // Only process if workers are ready and camera is running
-    if (
-      isOpenCVReady && 
-      isMediaPipelineReady && 
-      isCameraRunning && 
-      videoRef.current && 
-      !frameProcessingRef.current
-    ) {
-      frameProcessingRef.current = true;
+    // Calculate time since last frame
+    const now = performance.now();
+    const elapsed = now - lastFrameTimeRef.current;
+    
+    // Track actual FPS
+    if (performanceCounterRef.current.startTime === 0) {
+      performanceCounterRef.current.startTime = now;
+    }
+    
+    // Only process frame if enough time has elapsed
+    if (elapsed >= frameInterval) {
+      // Update last frame time, adjusting for any extra time beyond the frame interval
+      lastFrameTimeRef.current = now - (elapsed % frameInterval);
+      performanceCounterRef.current.frames++;
       
-      try {
-        // Capture frame from video
-        const frameData = getVideoFrame(videoRef.current);
+      // Update FPS counter every second
+      if (now - performanceCounterRef.current.lastFpsUpdate > 1000) {
+        const seconds = (now - performanceCounterRef.current.startTime) / 1000;
+        const fps = performanceCounterRef.current.frames / seconds;
         
-        if (frameData) {
-          // Only log occasionally to reduce overhead
-          if (++frameLogCountRef.current % LOG_EVERY_N_FRAMES === 0) {
-            console.log('Frame processing active');
-          }
+        // Only log occasionally to reduce overhead
+        if (++frameLogCountRef.current % LOG_EVERY_N_FRAMES === 0) {
+          console.log(`Actual FPS: ${fps.toFixed(1)}`);
+        }
+        
+        // Reset counters to avoid decreasing average over long periods
+        if (performanceCounterRef.current.frames > 1000) {
+          performanceCounterRef.current.frames = 0;
+          performanceCounterRef.current.startTime = now;
+        }
+        
+        performanceCounterRef.current.lastFpsUpdate = now;
+      }
+    
+      // Only process if workers are ready and camera is running
+      if (
+        isOpenCVReady && 
+        isMediaPipelineReady && 
+        isCameraRunning && 
+        videoRef.current && 
+        !frameProcessingRef.current
+      ) {
+        frameProcessingRef.current = true;
+        
+        try {
+          // Capture frame from video
+          const frameData = getVideoFrame(videoRef.current);
           
-          // Send frame to our new MediaPipe Hands worker for processing
-          // This offloads the expensive MediaPipe hand detection to a worker
-          if (mediaPipeHandsWorkerRef.current) {
-            mediaPipeHandsWorkerRef.current.postMessage({
-              command: 'process',
-              data: {
-                frame: frameData
+          if (frameData) {
+            // Send frame to our new MediaPipe Hands worker for processing
+            // This offloads the expensive MediaPipe hand detection to a worker
+            if (mediaPipeHandsWorkerRef.current) {
+              mediaPipeHandsWorkerRef.current.postMessage({
+                command: 'process',
+                data: {
+                  frame: frameData
+                }
+              });
+            } else {
+              // Fallback to the old pipeline if the hands worker isn't ready
+              if (mediaPipelineWorkerRef.current) {
+                mediaPipelineWorkerRef.current.postMessage({
+                  command: 'process-frame',
+                  data: frameData
+                });
               }
-            });
-          } else {
-            // Fallback to the old pipeline if the hands worker isn't ready
-            if (mediaPipelineWorkerRef.current) {
-              mediaPipelineWorkerRef.current.postMessage({
+            }
+            
+            // We can still send to OpenCV worker in parallel for other processing
+            if (opencvWorkerRef.current) {
+              opencvWorkerRef.current.postMessage({
                 command: 'process-frame',
                 data: frameData
               });
             }
           }
-          
-          // We can still send to OpenCV worker in parallel for other processing
-          if (opencvWorkerRef.current) {
-            opencvWorkerRef.current.postMessage({
-              command: 'process-frame',
-              data: frameData
-            });
-          }
+        } catch (error) {
+          console.error('Error processing video frame:', error);
+          frameProcessingRef.current = false;
         }
-      } catch (error) {
-        console.error('Error processing video frame:', error);
-        frameProcessingRef.current = false;
       }
     }
     

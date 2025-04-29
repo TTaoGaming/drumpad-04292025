@@ -55,12 +55,16 @@ export function stopCamera(videoElement?: HTMLVideoElement): void {
   }
 }
 
+import { getCanvas, getContext, returnCanvas } from './canvasPool';
+
 /**
  * Takes a snapshot from the current camera feed
+ * Note: Creates a new canvas that the caller is responsible for
  * @param videoElement The video element with the camera feed
  * @returns A canvas with the snapshot
  */
 export function takeSnapshot(videoElement: HTMLVideoElement): HTMLCanvasElement {
+  // We create a new canvas (not from pool) since this function returns the canvas
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
   
@@ -75,6 +79,7 @@ export function takeSnapshot(videoElement: HTMLVideoElement): HTMLCanvasElement 
 
 /**
  * Gets a frame from the video as ImageData for processing
+ * Uses canvas pooling for better performance
  * @param videoElement The video element to capture from
  * @returns ImageData object containing the frame pixels
  */
@@ -93,24 +98,25 @@ export function getVideoFrame(videoElement: HTMLVideoElement): ImageData | null 
     return null;
   }
   
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
+  // Get a canvas from the pool instead of creating a new one each time
+  const canvas = getCanvas(videoElement.videoWidth, videoElement.videoHeight);
+  const ctx = getContext(canvas);
   
   if (!ctx) {
     console.error("getVideoFrame: Could not get 2D context from canvas");
+    returnCanvas(canvas); // Return canvas to pool even on error
     return null;
   }
-  
-  canvas.width = videoElement.videoWidth;
-  canvas.height = videoElement.videoHeight;
   
   // Attempt to draw the current frame
   try {
     ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    returnCanvas(canvas); // Return canvas to pool after use
     return imageData;
   } catch (error) {
     console.error("getVideoFrame: Error capturing frame", error);
+    returnCanvas(canvas); // Return canvas to pool even on error
     return null;
   }
 }
