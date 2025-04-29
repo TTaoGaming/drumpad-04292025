@@ -6,15 +6,6 @@
  */
 
 import { DrawingPath, Point, RegionOfInterest, CircleROI } from './types';
-import { 
-  // Keeping these imports for backward compatibility
-  extractORBFeatures, 
-  matchFeatures, 
-  ORBFeature, 
-  TrackingResult,
-  saveReferenceFeatures,
-  referenceFeatures 
-} from './orbTracking';
 import { getVideoFrame } from './cameraManager';
 import { EventType, dispatch } from './eventBus';
 // Import the new contour tracking functionality
@@ -27,15 +18,11 @@ import {
 
 // Interface to store ROI with its feature information
 interface ROIWithFeatures extends RegionOfInterest {
-  features?: ORBFeature;
-  trackingResult?: TrackingResult;
   lastProcessed?: number;
 }
 
 // Interface to store CircleROI with its feature information
 interface CircleROIWithFeatures extends CircleROI {
-  features?: ORBFeature;
-  trackingResult?: TrackingResult;
   lastProcessed?: number;
   // Add contour tracking properties
   contourTracking?: {
@@ -50,12 +37,12 @@ interface CircleROIWithFeatures extends CircleROI {
 }
 
 /**
- * ROI manager with ORB feature tracking
+ * ROI manager with contour tracking
  */
 export class ROIManager {
   private static instance: ROIManager;
   private activeROIs: ROIWithFeatures[] = [];
-  private activeCircleROIs: CircleROIWithFeatures[] = []; // New array for circle ROIs
+  private activeCircleROIs: CircleROIWithFeatures[] = []; // Array for circle ROIs
   private processingEnabled: boolean = true;
   private lastFrameTime: number = 0;
   private frameInterval: number = 33; // Process at ~30fps for smoother tracking
@@ -98,29 +85,11 @@ export class ROIManager {
       id,
       points: [...path.points],
       timestamp: Date.now(),
-      // Initialize features and tracking as undefined
-      features: undefined,
-      trackingResult: undefined,
       lastProcessed: 0
     };
     
     this.activeROIs.push(roi);
     console.log(`[ROIManager] Added new ROI with ID ${id} and ${roi.points.length} points`);
-    
-    // Attempt to extract features right away from the current frame
-    this.extractFeaturesForNewROI(roi);
-    
-    return id;
-  }
-  
-  /**
-   * Process a newly created ROI (without feature extraction)
-   * This method has been simplified to only display ROIs without feature tracking.
-   * @param roi The ROI to process
-   */
-  private async extractFeaturesForNewROI(roi: ROIWithFeatures): Promise<void> {
-    // Just update the lastProcessed timestamp
-    roi.lastProcessed = Date.now();
     
     // Dispatch a notification that the ROI was created
     dispatch(EventType.LOG, {
@@ -130,6 +99,8 @@ export class ROIManager {
     
     // No feature extraction anymore - just visual representation
     console.log(`[ROIManager] ROI created with ID ${roi.id} (no feature extraction)`);
+    
+    return id;
   }
   
   /**
@@ -236,78 +207,6 @@ export class ROIManager {
   }
   
   /**
-   * Remove a ROI by ID
-   * @param id The ID of the ROI to remove
-   */
-  public removeROI(id: string): void {
-    this.activeROIs = this.activeROIs.filter(roi => roi.id !== id);
-    console.log(`[ROIManager] Removed ROI ${id}`);
-  }
-  
-  // Counter for throttling logs
-  private logCounter = 0;
-  private readonly LOG_THROTTLE = 50; // Only log every 50 calls
-
-  /**
-   * Add a new CircleROI directly with center and radius
-   * @param circleROI The circle ROI with center and radius
-   * @returns The ID of the created ROI
-   */
-  public addCircleROI(circleROI: CircleROI): string {
-    // Use the provided ID or generate a new one
-    const id = circleROI.id || Date.now().toString();
-    
-    // Check if this ROI already exists
-    if (this.activeCircleROIs.some(roi => roi.id === id)) {
-      // Only log occasionally
-      if (++this.logCounter % this.LOG_THROTTLE === 0) {
-        console.log(`[ROIManager] Circle ROI ${id} already exists, skipping add`);
-      }
-      return id; // Return the existing ID if already added
-    }
-    
-    const roi: CircleROIWithFeatures = {
-      ...circleROI,
-      id,
-      timestamp: Date.now(),
-      features: undefined,
-      trackingResult: undefined,
-      lastProcessed: 0
-    };
-    
-    this.activeCircleROIs.push(roi);
-    
-    // Only log occasionally
-    if (++this.logCounter % this.LOG_THROTTLE === 0) {
-      console.log(`[ROIManager] Added new Circle ROI with ID ${id}, center (${roi.center.x}, ${roi.center.y}), radius ${roi.radius}`);
-    }
-    
-    // Attempt to extract features right away from the current frame
-    this.extractFeaturesForNewCircleROI(roi);
-    
-    return id;
-  }
-  
-  /**
-   * Process a newly created CircleROI (without feature extraction)
-   * This method has been simplified to only display ROIs without feature tracking.
-   * @param roi The CircleROI to process
-   */
-  private async extractFeaturesForNewCircleROI(roi: CircleROIWithFeatures): Promise<void> {
-    // Just update the lastProcessed timestamp
-    roi.lastProcessed = Date.now();
-    
-    // Dispatch a notification that the ROI was created
-    dispatch(EventType.LOG, {
-      message: `Circle ROI created with radius ${(roi.radius * 100).toFixed(1)}%`,
-      type: 'success'
-    });
-    
-    // No feature extraction anymore - just visual representation
-    console.log(`[ROIManager] Circle ROI created with ID ${roi.id} (no feature extraction)`);
-  }
-  
-  /**
    * Extract image data for a specific CircleROI
    * @param roi The CircleROI to extract image data for
    * @param videoElement Video element to capture from
@@ -329,36 +228,20 @@ export class ROIManager {
       // Draw the video frame to temp canvas
       tempCtx.putImageData(frameData, 0, 0);
       
-      // Calculate scaling factors between display size and actual video size
-      const displayElement = document.querySelector('.camera-view') as HTMLElement;
-      if (!displayElement) {
-        console.warn("[ROIManager] Could not find camera display element for scaling calculation");
-        return null;
-      }
+      // Since we now use normalized coordinates (0.0-1.0), we can directly
+      // translate to video coordinates without a scaling factor
       
-      const displayWidth = displayElement.clientWidth;
-      const displayHeight = displayElement.clientHeight;
+      // Calculate the center and radius in video pixel coordinates
+      const videoCenterX = roi.center.x * videoElement.videoWidth;
+      const videoCenterY = roi.center.y * videoElement.videoHeight;
+      const videoRadius = roi.radius * videoElement.videoWidth; // Radius is normalized relative to width
       
-      // Scale the center and radius from display coordinates to video frame coordinates
-      const scaleX = videoElement.videoWidth / displayWidth;
-      const scaleY = videoElement.videoHeight / displayHeight;
-      
-      const centerX = roi.center.x * scaleX;
-      const centerY = roi.center.y * scaleY;
-      const radius = roi.radius * Math.max(scaleX, scaleY); // Use the larger scale to ensure the full circle is captured
-      
-      // Only log occasionally to reduce overhead
-      if (this.logCounter % this.LOG_THROTTLE === 0) {
-        console.log(`[ROIManager] Display to video scaling: ${scaleX.toFixed(2)}x, ${scaleY.toFixed(2)}y`);
-        console.log(`[ROIManager] Circle ROI center: Display (${roi.center.x}, ${roi.center.y}) => Video (${centerX.toFixed(1)}, ${centerY.toFixed(1)})`);
-      }
-      
-      // Extract the ROI region with circular mask
-      const extractSize = radius * 2;
-      const sourceX = Math.max(0, centerX - radius);
-      const sourceY = Math.max(0, centerY - radius);
-      const sourceWidth = Math.min(extractSize, videoElement.videoWidth - sourceX);
-      const sourceHeight = Math.min(extractSize, videoElement.videoHeight - sourceY);
+      // Extract the ROI region as a square that contains the circle
+      const sourceX = Math.max(0, videoCenterX - videoRadius);
+      const sourceY = Math.max(0, videoCenterY - videoRadius);
+      const sourceSize = videoRadius * 2;
+      const sourceWidth = Math.min(sourceSize, videoElement.videoWidth - sourceX);
+      const sourceHeight = Math.min(sourceSize, videoElement.videoHeight - sourceY);
       
       // Create a circular masked version of the ROI
       // 1. Get the square region containing our circle
@@ -395,9 +278,71 @@ export class ROIManager {
   }
   
   /**
+   * Remove a ROI by ID
+   * @param id The ID of the ROI to remove
+   */
+  public removeROI(id: string): void {
+    this.activeROIs = this.activeROIs.filter(roi => roi.id !== id);
+    console.log(`[ROIManager] Removed ROI ${id}`);
+  }
+  
+  // Counter for throttling logs
+  private logCounter = 0;
+  private readonly LOG_THROTTLE = 50; // Only log every 50 calls
+
+  /**
+   * Add a new CircleROI directly with center and radius
+   * @param circleROI The circle ROI with center and radius
+   * @returns The ID of the created ROI
+   */
+  public addCircleROI(circleROI: CircleROI): string {
+    // Use the provided ID or generate a new one
+    const id = circleROI.id || Date.now().toString();
+    
+    // Check if this ROI already exists
+    if (this.activeCircleROIs.some(roi => roi.id === id)) {
+      // Only log occasionally
+      if (++this.logCounter % this.LOG_THROTTLE === 0) {
+        console.log(`[ROIManager] Circle ROI ${id} already exists, skipping add`);
+      }
+      return id; // Return the existing ID if already added
+    }
+    
+    const roi: CircleROIWithFeatures = {
+      ...circleROI,
+      id,
+      timestamp: Date.now(),
+      lastProcessed: 0
+    };
+    
+    this.activeCircleROIs.push(roi);
+    
+    // Only log occasionally
+    if (++this.logCounter % this.LOG_THROTTLE === 0) {
+      console.log(`[ROIManager] Added new Circle ROI with ID ${id}, center (${roi.center.x}, ${roi.center.y}), radius ${roi.radius}`);
+    }
+    
+    // Send a log message for user feedback
+    dispatch(EventType.LOG, {
+      message: `Circle ROI created with radius ${(roi.radius * 100).toFixed(1)}%`,
+      type: 'success'
+    });
+    
+    // No feature extraction anymore - just visual representation
+    console.log(`[ROIManager] Circle ROI created with ID ${roi.id} (no feature extraction)`);
+    
+    return id;
+  }
+  
+  /**
    * Clear all ROIs
    */
   public clearROIs(): void {
+    // Clean up any contour tracking resources
+    for (const roi of this.activeCircleROIs) {
+      cleanupContourTracking(roi.id);
+    }
+    
     this.activeROIs = [];
     this.activeCircleROIs = [];
     console.log('[ROIManager] Cleared all ROIs');
@@ -430,6 +375,7 @@ export class ROIManager {
       return;
     }
     this.lastFrameTime = now;
+    this.logCounter++;
     
     // Process each Circle ROI using contour tracking
     for (const roi of this.activeCircleROIs) {
@@ -458,150 +404,74 @@ export class ROIManager {
       }
       
       try {
-        // Check if we have reference features for this ROI
-        if (!referenceFeatures.has(roi.id)) {
-          console.log(`[ROIManager] No reference features for Circle ROI ${roi.id}, extracting...`);
-          
-          // Extract features and save as reference
-          console.log('[ROIManager] Calling extractORBFeatures for Circle ROI...');
-          const features = await extractORBFeatures(roiImageData, 500);
-          
-          if (features) {
-            console.log(`[ROIManager] Feature extraction result for Circle ROI ${roi.id}:`, {
-              success: true,
-              keypoints: features.keypoints.size(),
-              descriptorSize: features.descriptors.rows
-            });
-          } else {
-            console.warn('[ROIManager] Feature extraction returned null for Circle ROI');
-          }
-          
-          if (features && features.keypoints.size() > 10) {
-            saveReferenceFeatures(roi.id, features);
-            roi.features = features;
-            roi.lastProcessed = now;
-            
-            // Create a public event to notify other components
-            dispatch(EventType.ROI_UPDATED, {
-              id: roi.id,
-              status: 'reference-captured',
-              featureCount: features.keypoints.size(),
-              timestamp: now,
-              isCircleROI: true, // Flag to identify this as a circle ROI
-              center: roi.center,
-              radius: roi.radius
-            });
-            
-            console.log(`[ROIManager] Extracted ${features.keypoints.size()} reference features for Circle ROI ${roi.id}`);
-          } else {
-            console.warn(`[ROIManager] Failed to extract enough features for Circle ROI ${roi.id}. Found: ${features?.keypoints.size() || 0}, needed: 10`);
-            
-            // Update lastProcessed to avoid hammering with extraction attempts
-            roi.lastProcessed = now;
-            
-            // Create a public event to notify other components
-            dispatch(EventType.ROI_UPDATED, {
-              id: roi.id,
-              status: 'extraction-failed',
-              featureCount: features?.keypoints.size() || 0,
-              timestamp: now,
-              isCircleROI: true,
-              center: roi.center,
-              radius: roi.radius
-            });
-          }
-          continue;
-        }
+        // Use contour tracking for this ROI
+        const contourResult = await updateContourTracking(roi, frameData);
         
-        // Extract current features to match against reference
-        const currentFeatures = await extractORBFeatures(roiImageData, 500);
-        if (!currentFeatures || currentFeatures.keypoints.size() < 10) {
-          console.warn(`[ROIManager] Not enough features in current frame for Circle ROI ${roi.id}. Found: ${currentFeatures?.keypoints.size() || 0}, needed: 10`);
-          roi.lastProcessed = now;
-          
-          // Create a public event to notify other components
-          dispatch(EventType.ROI_UPDATED, {
-            id: roi.id,
-            status: 'tracking-insufficient-features',
-            featureCount: currentFeatures?.keypoints.size() || 0,
-            timestamp: now,
-            isCircleROI: true,
-            center: roi.center,
-            radius: roi.radius
-          });
-          
-          continue;
-        }
-        
-        // Match current features with reference features
-        // Only log occasionally to reduce overhead
-        if (this.logCounter % this.LOG_THROTTLE === 0) {
-          console.log(`[ROIManager] Matching ${currentFeatures.keypoints.size()} features against reference for Circle ROI ${roi.id}`);
-        }
-        
-        const trackingResult = await matchFeatures(roi.id, currentFeatures);
-        
-        // Only log occasionally or when tracking status changes
-        if (this.logCounter % this.LOG_THROTTLE === 0) {
-          console.log(`[ROIManager] Matching result for Circle ROI ${roi.id}:`, {
-            isTracked: trackingResult.isTracked,
-            matchCount: trackingResult.matchCount,
-            inlierCount: trackingResult.inlierCount,
-            confidence: trackingResult.confidence
-          });
-        }
-        
-        // Update tracking result
-        roi.trackingResult = trackingResult;
+        // Update the ROI with the tracking result
+        roi.contourTracking = contourResult;
         roi.lastProcessed = now;
         
-        // Update the ROI center coordinates if tracking is successful
-        if (trackingResult.isTracked && trackingResult.center) {
+        // Only log occasionally to reduce overhead
+        if (this.logCounter % this.LOG_THROTTLE === 0 && contourResult.contourCount !== undefined) {
+          console.log(`[ROIManager] Contour tracking for ROI ${roi.id}: ${contourResult.contourCount} contours (${contourResult.visibilityRatio?.toFixed(2) || 0} visibility)`);
+        }
+        
+        // Update tracking status
+        const trackingStatus = contourResult.isOccluded ? 'contour-occluded' : 'contour-visible';
+        
+        // Update the ROI center coordinates if tracking has centerOfMass data
+        if (contourResult.centerOfMass && !contourResult.isOccluded) {
           // Get the scaling factors from video coordinates back to screen coordinates
-          const videoElement = document.getElementById('camera-feed') as HTMLVideoElement;
           const displayElement = document.querySelector('.camera-view') as HTMLElement;
           
-          if (videoElement && displayElement) {
+          if (videoElement && displayElement && contourResult.centerOfMass) {
             const scaleX = displayElement.clientWidth / videoElement.videoWidth;
             const scaleY = displayElement.clientHeight / videoElement.videoHeight;
             
-            // Update the ROI position with the new tracked position (convert back to screen coordinates)
+            // Update the ROI position with the new tracked position
             const newCenter = {
-              x: trackingResult.center.x * scaleX,
-              y: trackingResult.center.y * scaleY
+              x: roi.center.x, // Keep x position the same for now
+              y: roi.center.y  // Keep y position the same for now
+              // Note: We could use contourResult.centerOfMass to update position
+              // but that might cause too much movement, so keeping stable for now
             };
             
-            console.log(`[ROIManager] Updating Circle ROI ${roi.id} position: (${roi.center.x}, ${roi.center.y}) => (${newCenter.x}, ${newCenter.y})`);
-            
-            // Update the ROI center coordinates
-            roi.center = newCenter;
+            // Only log occasionally
+            if (this.logCounter % this.LOG_THROTTLE === 0) {
+              console.log(`[ROIManager] ROI ${roi.id} center of mass: (${contourResult.centerOfMass.x.toFixed(3)}, ${contourResult.centerOfMass.y.toFixed(3)})`);
+            }
           }
         }
         
-        // Create a public event to notify other components like ROIDebugCanvas
+        // Create a public event to notify other components
         dispatch(EventType.ROI_UPDATED, {
           id: roi.id,
-          status: trackingResult.isTracked ? 'tracking-success' : 'tracking-lost',
+          status: trackingStatus,
           trackingResult: {
-            isTracked: trackingResult.isTracked,
-            matchCount: trackingResult.matchCount,
-            inlierCount: trackingResult.inlierCount,
-            confidence: trackingResult.confidence,
-            center: trackingResult.center,
-            rotation: trackingResult.rotation,
+            isTracked: contourResult.isInitialized,
+            matchCount: contourResult.contourCount || 0,
+            inlierCount: contourResult.originalContourCount || 0,
+            confidence: contourResult.visibilityRatio || 0,
+            // Added for backward compatibility
+            center: {
+              x: contourResult.centerOfMass?.x || roi.center.x,
+              y: contourResult.centerOfMass?.y || roi.center.y
+            },
+            rotation: 0 // No rotation in contour tracking
+          },
+          contourTracking: {
+            isOccluded: contourResult.isOccluded,
+            visibilityRatio: contourResult.visibilityRatio,
+            visualizationData: contourResult.visualizationData
           },
           timestamp: now,
           isCircleROI: true,
-          center: roi.center, // Send updated center position
+          center: roi.center,
           radius: roi.radius
         });
         
-        // Clean up OpenCV resources
-        currentFeatures.keypoints.delete();
-        currentFeatures.descriptors.delete();
-        
       } catch (error) {
-        console.error(`[ROIManager] Error processing Circle ROI ${roi.id}:`, error);
+        console.error(`[ROIManager] Error processing Circle ROI ${roi.id} with contour tracking:`, error);
         roi.lastProcessed = now; // Mark as processed even if there was an error
         
         // Create a public event to notify other components
@@ -616,152 +486,6 @@ export class ROIManager {
         });
       }
     }
-    
-    // Process each legacy ROI
-    for (const roi of this.activeROIs) {
-      // Only process ROIs that are due for an update
-      if (now - (roi.lastProcessed || 0) < 50) { // Process each ROI at most every 50ms for smoother tracking
-        continue;
-      }
-      
-      // Get the video element to capture ROI from
-      const videoElement = document.getElementById('camera-feed') as HTMLVideoElement;
-      if (!videoElement || !videoElement.videoWidth) {
-        console.warn('[ROIManager] No video element found or video not started');
-        continue;
-      }
-      
-      // Only log occasionally to reduce overhead
-      if (this.logCounter % this.LOG_THROTTLE === 0) {
-        console.log(`[ROIManager] Processing ROI ${roi.id} with ${roi.points.length} points`);
-      }
-      
-      // Extract the ROI image data
-      const roiImageData = this.extractROIImageData(roi, videoElement);
-      if (!roiImageData) {
-        console.warn('[ROIManager] Failed to extract ROI image data');
-        continue;
-      }
-      
-      // Only log occasionally
-      if (this.logCounter % this.LOG_THROTTLE === 0) {
-        console.log(`[ROIManager] Extracted ROI image data: ${roiImageData.width}x${roiImageData.height}`);
-      }
-      
-      try {
-        // Check if we have reference features for this ROI
-        if (!referenceFeatures.has(roi.id)) {
-          console.log(`[ROIManager] No reference features for ROI ${roi.id}, extracting...`);
-          
-          // Extract features and save as reference
-          console.log('[ROIManager] Calling extractORBFeatures...');
-          const features = await extractORBFeatures(roiImageData, 500);
-          
-          if (features) {
-            console.log(`[ROIManager] Feature extraction result for ROI ${roi.id}:`, {
-              success: true,
-              keypoints: features.keypoints.size(),
-              descriptorSize: features.descriptors.rows
-            });
-          } else {
-            console.warn('[ROIManager] Feature extraction returned null');
-          }
-          
-          if (features && features.keypoints.size() > 10) {
-            saveReferenceFeatures(roi.id, features);
-            roi.features = features;
-            roi.lastProcessed = now;
-            
-            // Create a public event to notify other components
-            dispatch(EventType.ROI_UPDATED, {
-              id: roi.id,
-              status: 'reference-captured',
-              featureCount: features.keypoints.size(),
-              timestamp: now
-            });
-            
-            console.log(`[ROIManager] Extracted ${features.keypoints.size()} reference features for ROI ${roi.id}`);
-          } else {
-            console.warn(`[ROIManager] Failed to extract enough features for ROI ${roi.id}. Found: ${features?.keypoints.size() || 0}, needed: 10`);
-            
-            // Update lastProcessed to avoid hammering with extraction attempts
-            roi.lastProcessed = now;
-            
-            // Create a public event to notify other components
-            dispatch(EventType.ROI_UPDATED, {
-              id: roi.id,
-              status: 'extraction-failed',
-              featureCount: features?.keypoints.size() || 0,
-              timestamp: now
-            });
-          }
-          continue;
-        }
-        
-        // Extract current features to match against reference
-        const currentFeatures = await extractORBFeatures(roiImageData, 500);
-        if (!currentFeatures || currentFeatures.keypoints.size() < 10) {
-          console.warn(`[ROIManager] Not enough features in current frame for ROI ${roi.id}. Found: ${currentFeatures?.keypoints.size() || 0}, needed: 10`);
-          roi.lastProcessed = now;
-          
-          // Create a public event to notify other components
-          dispatch(EventType.ROI_UPDATED, {
-            id: roi.id,
-            status: 'tracking-insufficient-features',
-            featureCount: currentFeatures?.keypoints.size() || 0,
-            timestamp: now
-          });
-          
-          continue;
-        }
-        
-        // Match current features with reference features
-        console.log(`[ROIManager] Matching ${currentFeatures.keypoints.size()} features against reference for ROI ${roi.id}`);
-        const trackingResult = await matchFeatures(roi.id, currentFeatures);
-        
-        console.log(`[ROIManager] Matching result for ROI ${roi.id}:`, {
-          isTracked: trackingResult.isTracked,
-          matchCount: trackingResult.matchCount,
-          inlierCount: trackingResult.inlierCount,
-          confidence: trackingResult.confidence
-        });
-        
-        // Update tracking result
-        roi.trackingResult = trackingResult;
-        roi.lastProcessed = now;
-        
-        // Create a public event to notify other components like ROIDebugCanvas
-        dispatch(EventType.ROI_UPDATED, {
-          id: roi.id,
-          status: trackingResult.isTracked ? 'tracking-success' : 'tracking-lost',
-          trackingResult: {
-            isTracked: trackingResult.isTracked,
-            matchCount: trackingResult.matchCount,
-            inlierCount: trackingResult.inlierCount,
-            confidence: trackingResult.confidence,
-            center: trackingResult.center,
-            rotation: trackingResult.rotation,
-          },
-          timestamp: now
-        });
-        
-        // Clean up OpenCV resources
-        currentFeatures.keypoints.delete();
-        currentFeatures.descriptors.delete();
-        
-      } catch (error) {
-        console.error(`[ROIManager] Error processing ROI ${roi.id}:`, error);
-        roi.lastProcessed = now; // Mark as processed even if there was an error
-        
-        // Create a public event to notify other components
-        dispatch(EventType.ROI_UPDATED, {
-          id: roi.id,
-          status: 'processing-error',
-          error: error instanceof Error ? error.message : String(error),
-          timestamp: now
-        });
-      }
-    }
   }
   
   /**
@@ -770,109 +494,99 @@ export class ROIManager {
    * @param width Canvas width
    * @param height Canvas height
    */
-  public drawFeatures(ctx: CanvasRenderingContext2D, width: number, height: number): void {
-    // Draw each legacy ROI with tracking information
+  public drawROIs(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+    // Increment log counter
+    this.logCounter++;
+    
+    // Draw all polygon ROIs
     this.activeROIs.forEach(roi => {
-      // Draw ROI outline
       ctx.beginPath();
       
-      // Points are already in pixel coordinates from the drawing canvas
-      ctx.moveTo(roi.points[0].x, roi.points[0].y);
-      for (let i = 1; i < roi.points.length; i++) {
-        ctx.lineTo(roi.points[i].x, roi.points[i].y);
+      // Draw the polygon
+      if (roi.points.length > 0) {
+        ctx.moveTo(roi.points[0].x, roi.points[0].y);
+        
+        for (let i = 1; i < roi.points.length; i++) {
+          ctx.lineTo(roi.points[i].x, roi.points[i].y);
+        }
+        
+        // Close the path back to the first point
+        ctx.lineTo(roi.points[0].x, roi.points[0].y);
       }
-      ctx.closePath();
       
       // Style based on tracking status
-      if (roi.trackingResult?.isTracked) {
-        // Successfully tracked - green
-        ctx.strokeStyle = 'rgba(0, 255, 0, 0.8)';
+      if (roi.lastProcessed) {
+        ctx.strokeStyle = 'rgba(0, 200, 0, 0.8)';
         ctx.lineWidth = 2;
         ctx.stroke();
-        
-        // Draw confidence level
-        const confidence = roi.trackingResult.confidence;
-        const confidenceText = `${(confidence * 100).toFixed(0)}%`;
-        ctx.font = '12px sans-serif';
-        ctx.fillStyle = 'rgba(0, 255, 0, 0.9)';
-        
-        // Calculate text position
-        const center = this.calculateCenter(roi.points);
-        ctx.fillText(confidenceText, center.x + 5, center.y - 5);
-        
-        // Draw feature points if available
-        if (roi.trackingResult.corners && roi.trackingResult.corners.length === 4) {
-          ctx.beginPath();
-          const corners = roi.trackingResult.corners;
-          
-          // Draw the transformed corners
-          ctx.moveTo(corners[0].x, corners[0].y);
-          for (let i = 1; i < corners.length; i++) {
-            ctx.lineTo(corners[i].x, corners[i].y);
-          }
-          ctx.closePath();
-          ctx.strokeStyle = 'rgba(0, 200, 255, 0.6)';
-          ctx.lineWidth = 1;
-          ctx.stroke();
-        }
       } else {
-        // Not tracked or no tracking result - red
-        ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
-        ctx.lineWidth = 1;
+        // Not yet processed - yellow
+        ctx.strokeStyle = 'rgba(200, 200, 0, 0.8)';
+        ctx.lineWidth = 2;
         ctx.stroke();
       }
     });
     
-    // Draw each Circle ROI with tracking information
+    // Draw all circular ROIs
     this.activeCircleROIs.forEach(roi => {
-      // Draw Circle ROI outline
-      ctx.beginPath();
-      ctx.arc(roi.center.x, roi.center.y, roi.radius, 0, Math.PI * 2);
-      ctx.closePath();
+      // Calculate center and radius in display coordinates
+      const centerX = roi.center.x * width;
+      const centerY = roi.center.y * height;
+      const radius = roi.radius * width; // Radius is normalized relative to width
       
-      // Style based on tracking status
-      if (roi.trackingResult?.isTracked) {
-        // Successfully tracked - green
-        ctx.strokeStyle = 'rgba(0, 255, 0, 0.8)';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        
-        // Draw confidence level
-        const confidence = roi.trackingResult.confidence;
-        const confidenceText = `${(confidence * 100).toFixed(0)}%`;
-        ctx.font = '12px sans-serif';
-        ctx.fillStyle = 'rgba(0, 255, 0, 0.9)';
-        ctx.fillText(confidenceText, roi.center.x + 5, roi.center.y - 5);
-        
-        // Draw tracking center point
-        if (roi.trackingResult.center) {
-          ctx.beginPath();
-          ctx.arc(roi.trackingResult.center.x, roi.trackingResult.center.y, 4, 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(0, 200, 255, 0.8)';
-          ctx.fill();
+      // Draw circle outline
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+      
+      // Style based on tracking status (using the contour tracking results)
+      if (roi.contourTracking) {
+        if (roi.contourTracking.isOccluded) {
+          // Occluded - orange
+          ctx.strokeStyle = 'rgba(255, 165, 0, 0.8)';
+        } else if (roi.contourTracking.isInitialized) {
+          // Tracked - green
+          ctx.strokeStyle = 'rgba(0, 200, 0, 0.8)';
           
-          // Draw line from original center to tracked center
-          ctx.beginPath();
-          ctx.moveTo(roi.center.x, roi.center.y);
-          ctx.lineTo(roi.trackingResult.center.x, roi.trackingResult.center.y);
-          ctx.strokeStyle = 'rgba(0, 200, 255, 0.6)';
-          ctx.lineWidth = 1;
-          ctx.stroke();
+          // Draw tracking status visualization
+          if (roi.contourTracking.visibilityRatio !== undefined) {
+            const confidenceLevel = Math.min(1, Math.max(0, roi.contourTracking.visibilityRatio));
+            
+            // Draw an arc that shows the visibility ratio
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius + 5, 0, Math.PI * 2 * confidenceLevel);
+            ctx.strokeStyle = `rgba(0, ${Math.round(255 * confidenceLevel)}, ${Math.round(255 * (1 - confidenceLevel))}, 0.9)`;
+            ctx.lineWidth = 3;
+            ctx.stroke();
+          }
+        } else {
+          // Initialized but not yet tracked - yellow
+          ctx.strokeStyle = 'rgba(200, 200, 0, 0.8)';
         }
       } else {
-        // Not tracked - red
-        ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        
-        // Draw ROI ID
-        ctx.font = 'bold 14px sans-serif';
-        ctx.fillStyle = 'rgba(255, 0, 0, 0.9)';
-        const shortId = typeof roi.id === 'string' && roi.id.length > 3 
-                      ? roi.id.slice(-3) 
-                      : roi.id;
-        ctx.fillText(`#${shortId}`, roi.center.x - 15, roi.center.y);
+        // Not yet processed - gray
+        ctx.strokeStyle = 'rgba(150, 150, 150, 0.8)';
       }
+      
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      
+      // Draw ROI ID in small font
+      ctx.font = '10px sans-serif';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.textAlign = 'center';
+      const shortId = typeof roi.id === 'string' && roi.id.length > 3 
+                    ? roi.id.slice(-3) 
+                    : roi.id;
+      
+      // Add a background for better readability
+      const textMetrics = ctx.measureText(`#${shortId}`);
+      const textWidth = textMetrics.width;
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.fillRect(centerX - textWidth/2 - 2, centerY - 10, textWidth + 4, 14);
+      
+      // Draw text
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.fillText(`#${shortId}`, centerX, centerY);
     });
   }
   
@@ -883,21 +597,6 @@ export class ROIManager {
   public setProcessingEnabled(enabled: boolean): void {
     this.processingEnabled = enabled;
     console.log(`[ROIManager] Feature processing ${enabled ? 'enabled' : 'disabled'}`);
-  }
-  
-  /**
-   * Calculate the center of a set of points
-   * @param points Array of points
-   * @returns Center point
-   */
-  private calculateCenter(points: Point[]): Point {
-    if (points.length === 0) return { x: 0, y: 0 };
-    
-    const sum = points.reduce((acc, point) => {
-      return { x: acc.x + point.x, y: acc.y + point.y };
-    }, { x: 0, y: 0 });
-    
-    return { x: sum.x / points.length, y: sum.y / points.length };
   }
 }
 
