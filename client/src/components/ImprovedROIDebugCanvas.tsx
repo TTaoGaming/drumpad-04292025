@@ -32,6 +32,8 @@ const ImprovedROIDebugCanvas: React.FC<ImprovedROIDebugCanvasProps> = ({
     originalContourCount: number;
     visibilityRatio: number;
     visualizationData?: ImageData;
+    stabilityScore?: number;
+    isStable?: boolean;
   } | null>(null);
   const lastFrameTimeRef = useRef<number>(0);
   const frameCountRef = useRef<number>(0);
@@ -81,14 +83,18 @@ const ImprovedROIDebugCanvas: React.FC<ImprovedROIDebugCanvasProps> = ({
             contourCount: data.trackingResult?.matchCount || 0,
             originalContourCount: data.trackingResult?.inlierCount || 0,
             visibilityRatio: data.trackingResult?.confidence || 0,
-            visualizationData: data.contourTracking.visualizationData
+            visualizationData: data.contourTracking.visualizationData,
+            stabilityScore: data.contourTracking.stabilityScore || 1.0,
+            isStable: data.contourTracking.isStable || true
           });
           
           // Update status based on contour data
           if (data.contourTracking.isOccluded) {
             setStatus(`ROI occluded (${data.trackingResult?.confidence.toFixed(2)})`);
+          } else if (data.contourTracking.isStable) {
+            setStatus(`Tracking ${data.trackingResult?.matchCount || 0} contours (stable)`);
           } else {
-            setStatus(`Tracking ${data.trackingResult?.matchCount || 0} contours`);
+            setStatus(`Tracking ${data.trackingResult?.matchCount || 0} contours (moving)`);
           }
         }
       }
@@ -306,15 +312,22 @@ const ImprovedROIDebugCanvas: React.FC<ImprovedROIDebugCanvasProps> = ({
     
     // Status box for contour tracking info
     ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-    ctx.fillRect(0, height - 40, width, 40);
+    ctx.fillRect(0, height - 60, width, 60); // Increased height for more info
     
     // Status indicator line (color based on tracking state)
-    const statusColor = contourData?.isOccluded 
-      ? '#FF5722' // Orange for occluded
-      : ((contourData?.contourCount ?? 0) > 0 ? '#4CAF50' : '#FFC107'); // Green for tracking, yellow for no contours
+    let statusColor;
+    if (contourData?.isOccluded) {
+      statusColor = '#FF5722'; // Orange for occluded
+    } else if (contourData?.isStable) {
+      statusColor = '#4CAF50'; // Green for stable tracking
+    } else if ((contourData?.contourCount ?? 0) > 0) {
+      statusColor = '#2196F3'; // Blue for tracking but not stable
+    } else {
+      statusColor = '#FFC107'; // Yellow for no contours
+    }
     
     ctx.fillStyle = statusColor;
-    ctx.fillRect(0, height - 40, width, 4); // Indicator line
+    ctx.fillRect(0, height - 60, width, 4); // Indicator line
     
     // Contour tracking metrics
     ctx.fillStyle = 'white';
@@ -325,13 +338,19 @@ const ImprovedROIDebugCanvas: React.FC<ImprovedROIDebugCanvasProps> = ({
     const countText = contourData 
       ? `Contours: ${contourData.contourCount ?? 0}/${contourData.originalContourCount ?? 0}`
       : 'Initializing contours...';
-    ctx.fillText(countText, width / 2, height - 26);
+    ctx.fillText(countText, width / 2, height - 45);
     
-    // Bottom line - Visibility ratio
+    // Middle line - Visibility ratio
     const visibilityText = contourData 
       ? `Visibility: ${((contourData.visibilityRatio ?? 0) * 100).toFixed(0)}%`
       : 'Waiting for tracking data...';
-    ctx.fillText(visibilityText, width / 2, height - 10);
+    ctx.fillText(visibilityText, width / 2, height - 30);
+    
+    // Bottom line - Stability score
+    const stabilityText = contourData?.stabilityScore !== undefined
+      ? `Stability: ${(contourData.stabilityScore * 100).toFixed(0)}%${contourData.isStable ? ' ✓' : ''}`
+      : 'Calculating stability...';
+    ctx.fillText(stabilityText, width / 2, height - 15);
   };
 
   if (!visible) return null;
