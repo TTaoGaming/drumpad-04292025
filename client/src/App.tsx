@@ -7,14 +7,14 @@ import ConsoleOutput from "@/components/ConsoleOutput";
 import HandVisualization from "@/components/HandVisualization";
 import PerformanceDisplay from "@/components/PerformanceDisplay";
 import PerformanceMonitor from "@/components/PerformanceMonitor";
-import PerformanceMetrics from "@/components/PerformanceMetrics";
+import FpsStats from "@/components/PerformanceMetrics";
 import MediaPipeHandTracker from "@/components/MediaPipeHandTracker";
 import DrawingCanvas from "@/components/DrawingCanvas";
 import ImprovedROIDebugCanvas from "@/components/ImprovedROIDebugCanvas";
 import TrackingVisualization from "@/components/TrackingVisualization";
 import SettingsPanel from "@/components/settings/SettingsPanel";
 import { EventType, addListener, dispatch } from "@/lib/eventBus";
-import { Notification, HandData, PerformanceData, DrawingPath, CircleROI } from "@/lib/types";
+import { Notification, HandData, PerformanceMetrics, DrawingPath, CircleROI } from "@/lib/types";
 import { getVideoFrame } from "@/lib/cameraManager";
 import { loadOpenCV, setupOpenCVEventListener } from "./lib/opencvLoader";
 
@@ -26,7 +26,7 @@ function App() {
   const [logs, setLogs] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [handData, setHandData] = useState<HandData | undefined>(undefined);
-  const [performanceMetrics, setPerformanceMetrics] = useState<PerformanceData | undefined>(undefined);
+  const [performanceMetrics, setPerformanceMetrics] = useState<PerformanceMetrics | undefined>(undefined);
   const [resolution, setResolution] = useState({ width: 640, height: 480 });
   const [drawingPaths, setDrawingPaths] = useState<DrawingPath[]>([]);
   const [showDebugCanvas, setShowDebugCanvas] = useState(true);
@@ -163,7 +163,6 @@ function App() {
         // We got hand tracking results from the worker
         if (e.data.data) {
           const handLandmarks = e.data.data.landmarks || [];
-          const frameData = frameDataCacheRef.current;
           
           // Only continue processing if we have landmarks
           if (handLandmarks.length > 0) {
@@ -188,34 +187,13 @@ function App() {
             }
           }
           
-          // Once MediaPipe hands processing is complete, we can process with OpenCV
-          // for marker tracking using the same cached frame
-          if (frameData && opencvWorkerRef.current) {
-            opencvWorkerRef.current.postMessage({
-              command: 'process-frame',
-              data: frameData
-            });
-          }
-          
           // Update performance metrics
           if (e.data.performance) {
             setPerformanceMetrics(prev => ({
               ...(prev || {}),
               ...e.data.performance,
-              mediaPipeHandsWorker: e.data.performance
+              mediapigeHandsWorker: e.data.performance
             }));
-          }
-          
-          // Continue processing frames
-          frameProcessingRef.current = false;
-        } else {
-          // If there are no landmarks but we still have a frame, process with OpenCV
-          const frameData = frameDataCacheRef.current;
-          if (frameData && opencvWorkerRef.current) {
-            opencvWorkerRef.current.postMessage({
-              command: 'process-frame',
-              data: frameData
-            });
           }
           
           // Continue processing frames
@@ -327,7 +305,6 @@ function App() {
     return () => {
       stopFrameProcessing();
       
-      // Terminate all worker threads
       if (opencvWorkerRef.current) {
         opencvWorkerRef.current.terminate();
       }
@@ -336,22 +313,6 @@ function App() {
         mediaPipelineWorkerRef.current.terminate();
       }
       
-      if (mediaPipeHandsWorkerRef.current) {
-        // First try sending a terminate command to allow clean shutdown
-        try {
-          mediaPipeHandsWorkerRef.current.postMessage({ command: 'terminate' });
-        } catch (e) {
-          console.error('Error during mediaPipeHandsWorker terminate command:', e);
-        }
-        
-        // Then force terminate
-        mediaPipeHandsWorkerRef.current.terminate();
-      }
-      
-      // Release cached frame data to free memory
-      frameDataCacheRef.current = null;
-      
-      // Remove all event listeners
       cameraListener.remove();
       fullscreenListener.remove();
       logListener.remove();
@@ -459,11 +420,6 @@ function App() {
   const frameLogCountRef = useRef(0);
   const LOG_EVERY_N_FRAMES = 300; // Only log every 300 frames (approx. every 5 seconds at 60fps)
   
-  // Cache the last frame data to avoid multiple getVideoFrame calls
-  const frameDataCacheRef = useRef<ImageData | null>(null);
-  const frameCacheTimestampRef = useRef<number>(0);
-  const FRAME_CACHE_MAX_AGE = 16; // ~16ms for 60fps
-
   const processVideoFrame = () => {
     // Only process if workers are ready and camera is running
     if (
@@ -476,24 +432,8 @@ function App() {
       frameProcessingRef.current = true;
       
       try {
-        // Get current timestamp
-        const now = performance.now();
-        
-        // Reuse cached frame data if it's recent enough (within our target fps time window)
-        // This avoids multiple expensive getImageData calls for the same frame
-        let frameData: ImageData | null = null;
-        if (frameDataCacheRef.current && (now - frameCacheTimestampRef.current) < FRAME_CACHE_MAX_AGE) {
-          frameData = frameDataCacheRef.current;
-        } else {
-          // Capture new frame from video only when needed
-          frameData = getVideoFrame(videoRef.current);
-          
-          // Cache the frame data for potential reuse
-          if (frameData) {
-            frameDataCacheRef.current = frameData;
-            frameCacheTimestampRef.current = now;
-          }
-        }
+        // Capture frame from video
+        const frameData = getVideoFrame(videoRef.current);
         
         if (frameData) {
           // Only log occasionally to reduce overhead
@@ -501,13 +441,13 @@ function App() {
             console.log('Frame processing active');
           }
           
-          // Process with hand tracking first - this is our primary processing pipeline
+          // Send frame to our new MediaPipe Hands worker for processing
+          // This offloads the expensive MediaPipe hand detection to a worker
           if (mediaPipeHandsWorkerRef.current) {
             mediaPipeHandsWorkerRef.current.postMessage({
               command: 'process',
               data: {
-                frame: frameData,
-                timestamp: now
+                frame: frameData
               }
             });
           } else {
@@ -517,23 +457,16 @@ function App() {
                 command: 'process-frame',
                 data: frameData
               });
-              
-              // Only after processing with the primary pipeline, send to OpenCV for marker tracking
-              // This ensures we're not doing duplicate work on the same frame simultaneously
-              if (opencvWorkerRef.current) {
-                opencvWorkerRef.current.postMessage({
-                  command: 'process-frame',
-                  data: frameData
-                });
-              }
-              
-              // Mark frame as processed after sending to both workers
-              frameProcessingRef.current = false;
             }
           }
-        } else {
-          // If we couldn't get a frame, reset the processing flag
-          frameProcessingRef.current = false;
+          
+          // We can still send to OpenCV worker in parallel for other processing
+          if (opencvWorkerRef.current) {
+            opencvWorkerRef.current.postMessage({
+              command: 'process-frame',
+              data: frameData
+            });
+          }
         }
       } catch (error) {
         console.error('Error processing video frame:', error);
@@ -666,7 +599,7 @@ function App() {
       <PerformanceMonitor />
       
       {/* FPS Statistics with averages */}
-      {isCameraRunning && <PerformanceMetrics performance={performanceMetrics} />}
+      {isCameraRunning && <FpsStats />}
     </div>
   );
 }

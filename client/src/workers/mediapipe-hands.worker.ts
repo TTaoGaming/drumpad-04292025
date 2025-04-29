@@ -14,9 +14,6 @@ let mediaPipeHands: any = null;
 const startTime = performance.now();
 let lastFrameTime = 0;
 const performanceData: {[key: string]: number} = {};
-// Rolling array of the last 60 frame timings (1 second @ 60fps)
-const frameTimings: number[] = [];
-const MAX_FRAME_HISTORY = 120; // Store 2 seconds of frame history at 60fps
 
 // Log message to main thread
 function log(message: string, level: 'info' | 'error' | 'debug' = 'info'): void {
@@ -54,34 +51,11 @@ function getPerformanceMetrics(): {[key: string]: number} {
   const now = performance.now();
   const metrics = {...performanceData};
   
-  // Calculate instantaneous frame rate
+  // Calculate frame rate
   if (lastFrameTime > 0) {
-    const frameDuration = now - lastFrameTime;
-    metrics.timeBetweenFrames = frameDuration;
-    
-    // Add to rolling frame timings array
-    frameTimings.push(frameDuration);
-    
-    // Keep array at reasonable size
-    if (frameTimings.length > MAX_FRAME_HISTORY) {
-      frameTimings.shift();
-    }
-    
-    // Calculate instantaneous FPS (smoother with a small window)
-    const lastFewFrames = frameTimings.slice(-5); // Last 5 frames
-    const avgRecentFrameDuration = lastFewFrames.reduce((sum, time) => sum + time, 0) / lastFewFrames.length;
-    metrics.fps = Math.round(1000 / avgRecentFrameDuration);
-    
-    // Calculate 1 second rolling average (60 frames at 60fps)
-    if (frameTimings.length >= 30) {
-      const recentFrames = frameTimings.slice(-60);
-      const avgFrameDuration = recentFrames.reduce((sum, time) => sum + time, 0) / recentFrames.length;
-      metrics.fpsRollingAvg = Math.round(1000 / avgFrameDuration);
-    } else {
-      metrics.fpsRollingAvg = metrics.fps;
-    }
+    metrics.timeBetweenFrames = now - lastFrameTime;
+    metrics.fps = 1000 / metrics.timeBetweenFrames;
   }
-  
   lastFrameTime = now;
   
   // Add worker lifetime
