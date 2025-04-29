@@ -2,6 +2,17 @@ import React, { useEffect, useRef } from 'react';
 import { HandData, HandLandmark } from '@/lib/types';
 import { EventType, dispatch } from '@/lib/eventBus';
 
+// Helper function to load external script
+const loadExternalScript = (url: string): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = url;
+    script.onload = () => resolve();
+    script.onerror = (error) => reject(new Error(`Failed to load script: ${url}`));
+    document.head.appendChild(script);
+  });
+};
+
 // Define the HandConnection interface here if not found in types
 interface HandConnection {
   start: number;
@@ -133,84 +144,42 @@ const MediaPipeHandTracking: React.FC<MediaPipeHandTrackingProps> = ({ videoRef 
       }
       
       try {
-        // Dynamically import MediaPipe libraries
-        const mpHands = await import('@mediapipe/hands');
-        const mpCamera = await import('@mediapipe/camera_utils');
-        const mpDrawing = await import('@mediapipe/drawing_utils');
+        // Load directly from CDN instead of using the npm package
+        // Load all required scripts directly using latest working versions
+        await loadExternalScript('https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js');
+        await loadExternalScript('https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js');
+        await loadExternalScript('https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js');
         
-        // Debug the MediaPipe import structure to understand what we're working with
-        console.log('MediaPipe Hands dynamic import structure:', mpHands);
+        console.log('MediaPipe scripts loaded from CDN in HandTracking component');
         
-        // More comprehensive approach to handle various export structures
-        let HandsClass;
-        
-        // Check if Hands is directly available as a named export
-        if (typeof mpHands.Hands === 'function') {
-          HandsClass = mpHands.Hands;
-          console.log('Using named export Hands');
-        } 
-        // Check if Hands is available as a property of the default export
-        else if (typeof mpHands.default === 'object' && typeof mpHands.default.Hands === 'function') {
-          HandsClass = mpHands.default.Hands;
-          console.log('Using default.Hands export');
-        } 
-        // Check if the default export itself is the Hands constructor
-        else if (typeof mpHands.default === 'function') {
-          HandsClass = mpHands.default;
-          console.log('Using default export directly as Hands constructor');
-        }
-        // Try extracting from the raw module if it's an ES module with a 'default' getter
-        else if (mpHands && typeof mpHands === 'object') {
-          // Try to look for any property that might be the Hands class
-          for (const key in mpHands) {
-            if (typeof mpHands[key] === 'function' && key !== '__esModule') {
-              console.log(`Found potential Hands class as '${key}'`);
-              HandsClass = mpHands[key];
-              break;
-            }
-          }
-        }
+        // Use global objects injected by the script
+        // @ts-ignore - TypeScript doesn't recognize window.Hands as we're loading it dynamically
+        const HandsClass = window.Hands;
         
         if (!HandsClass) {
-          console.error('MediaPipe Hands export structure:', mpHands);
-          throw new Error('MediaPipe Hands class not found');
+          console.error('MediaPipe Hands not found in global scope');
+          throw new Error('MediaPipe Hands class not found in global scope');
         }
         
-        // Same process for Camera class
-        let CameraClass;
-        
-        if (typeof mpCamera.Camera === 'function') {
-          CameraClass = mpCamera.Camera;
-          console.log('Using named export Camera');
-        } else if (typeof mpCamera.default?.Camera === 'function') {
-          CameraClass = mpCamera.default.Camera;
-          console.log('Using default.Camera export');
-        } else if (typeof mpCamera.default === 'function') {
-          CameraClass = mpCamera.default;
-          console.log('Using default export directly as Camera constructor');
-        } else if (mpCamera && typeof mpCamera === 'object') {
-          for (const key in mpCamera) {
-            if (typeof mpCamera[key] === 'function' && key !== '__esModule') {
-              console.log(`Found potential Camera class as '${key}'`);
-              CameraClass = mpCamera[key];
-              break;
-            }
-          }
-        }
+        // @ts-ignore - Using global variables from CDN scripts
+        const CameraClass = window.Camera;
         
         if (!CameraClass) {
-          console.error('MediaPipe Camera export structure:', mpCamera);
-          throw new Error('MediaPipe Camera class not found');
+          console.error('MediaPipe Camera not found in global scope');
+          throw new Error('MediaPipe Camera class not found in global scope');
         }
         
-        // Get drawing utilities
-        const drawConnectors = mpDrawing.drawConnectors || mpDrawing.default?.drawConnectors;
-        const drawLandmarks = mpDrawing.drawLandmarks || mpDrawing.default?.drawLandmarks;
-        const HAND_CONNECTIONS = mpHands.HAND_CONNECTIONS || mpHands.default?.HAND_CONNECTIONS || [];
+        // Get drawing utilities from global scope
+        // @ts-ignore - Using global variables from CDN scripts
+        const drawConnectors = window.drawConnectors;
+        // @ts-ignore - Using global variables from CDN scripts
+        const drawLandmarks = window.drawLandmarks;
+        // @ts-ignore - Using global variables from CDN scripts
+        const HAND_CONNECTIONS = window.HAND_CONNECTIONS || [];
         
         if (!drawConnectors || !drawLandmarks) {
-          console.error('MediaPipe drawing utilities not found:', mpDrawing);
-          throw new Error('MediaPipe drawing utilities not found');
+          console.error('MediaPipe drawing utilities not found in global scope');
+          throw new Error('MediaPipe drawing utilities not found in global scope');
         }
         
         // Use a specific version in the CDN URL that we know works

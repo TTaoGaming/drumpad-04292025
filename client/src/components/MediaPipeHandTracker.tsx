@@ -563,10 +563,10 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
         });
         
         // Load directly from CDN instead of using the npm package
-        // Load all required scripts directly
-        await loadExternalScript('https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js');
-        await loadExternalScript('https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1620248734/camera_utils.js');
-        await loadExternalScript('https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1620248734/drawing_utils.js');
+        // Load all required scripts directly using latest working versions
+        await loadExternalScript('https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js');
+        await loadExternalScript('https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js');
+        await loadExternalScript('https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js');
         
         console.log('MediaPipe scripts loaded from CDN');
         
@@ -579,11 +579,11 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
           throw new Error('MediaPipe Hands class not found in global scope');
         }
         
-        // Use a specific version in the CDN URL that we know works
+        // Use the latest version of MediaPipe
         // @ts-ignore - TypeScript doesn't like the locateFile, but it's required
         const hands = new HandsClass({
           locateFile: (file: string) => {
-            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`;
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
           }
         });
         
@@ -1291,7 +1291,8 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
         
         // Initialize camera if video element is available
         if (videoRef.current) {
-          const camera = new mpCamera.Camera(videoRef.current, {
+          // @ts-ignore - Using global variables from CDN scripts
+          const camera = new window.Camera(videoRef.current, {
             onFrame: async () => {
               if (videoRef.current) {
                 await hands.send({image: videoRef.current});
