@@ -277,7 +277,8 @@ const UnifiedPerformanceDashboard: React.FC<UnifiedPerformanceDashboardProps> = 
               // Format module name for display
               const displayName = timing.name
                 .replace(/([A-Z])/g, ' $1') // Add space before capitals
-                .replace(/^./, str => str.toUpperCase()); // Capitalize first letter
+                .replace(/^./, str => str.toUpperCase()) // Capitalize first letter
+                .trim(); // Remove any leading/trailing spaces
                 
               newModuleTimings.push({
                 name: displayName,
@@ -459,27 +460,37 @@ const UnifiedPerformanceDashboard: React.FC<UnifiedPerformanceDashboardProps> = 
         <TabsContent value="modules" className="m-0">
           <div className="text-xs text-gray-400 mb-2">Module Processing Times</div>
           
-          {moduleTimings.map((module, index) => (
-            <div key={index} className="mb-3">
-              <div className="flex justify-between">
-                <span className="text-gray-300">{module.name}</span>
-                <span 
-                  className={module.duration > 10 ? 'text-yellow-400' : 'text-green-400'}
-                >
-                  {formatTime(module.duration)}
-                </span>
+          {moduleTimings.length > 0 ? (
+            // Render module timings
+            moduleTimings.map((module, index) => (
+              <div key={index} className="mb-3">
+                <div className="flex justify-between">
+                  <span className="text-gray-300">{module.name}</span>
+                  <span 
+                    className={module.duration > 10 ? 'text-yellow-400' : 'text-green-400'}
+                  >
+                    {formatTime(module.duration)}
+                  </span>
+                </div>
+                <div className="mt-1 h-1 bg-gray-800 rounded-sm overflow-hidden">
+                  <div 
+                    style={{ 
+                      width: `${Math.min(100, (module.duration / (1000/60)) * 100)}%`,
+                      backgroundColor: module.color,
+                      height: '100%'
+                    }} 
+                  />
+                </div>
               </div>
-              <div className="mt-1 h-1 bg-gray-800 rounded-sm overflow-hidden">
-                <div 
-                  style={{ 
-                    width: `${Math.min(100, (module.duration / (1000/60)) * 100)}%`,
-                    backgroundColor: module.color,
-                    height: '100%'
-                  }} 
-                />
-              </div>
+            ))
+          ) : (
+            // No module timings found
+            <div className="text-center py-4 text-gray-400">
+              <RefreshCwIcon className="h-8 w-8 mx-auto mb-2 animate-spin opacity-20" />
+              <p>Waiting for module timing data...</p>
+              <p className="text-2xs mt-1">Start processing frames to see timing data</p>
             </div>
-          ))}
+          )}
           
           <Separator className="my-2 bg-gray-700" />
           
@@ -496,7 +507,7 @@ const UnifiedPerformanceDashboard: React.FC<UnifiedPerformanceDashboardProps> = 
               Budget: {formatTime(1000 / targetFps)} per frame
             </div>
             <div className="mt-1 text-2xs">
-              * Hover over bars to see timing details
+              * All times shown in milliseconds
             </div>
           </div>
         </TabsContent>
