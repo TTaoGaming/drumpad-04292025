@@ -470,8 +470,42 @@ function App() {
         frameProcessingRef.current = true;
         
         try {
+          // Start timing frame capture
+          const captureStartTime = performance.now();
+          
           // Capture frame from video
           const frameData = getVideoFrame(videoRef.current);
+          
+          // End timing frame capture
+          const captureEndTime = performance.now();
+          const captureTime = captureEndTime - captureStartTime;
+          
+          // Create performance metrics object for this frame
+          const framePerformanceMetrics: PerformanceMetrics = {
+            fps: Math.round(1000 / Math.max(1, elapsed)),
+            processingTime: 0,
+            captureTime: captureTime,
+            handDetectionTime: 0, // Will be populated by worker
+            contourTrackingTime: 0, // Will be populated by worker
+            roiProcessingTime: 0, // Will be populated by worker
+            renderTime: 0, // Will be populated by worker
+            moduleTimings: {
+              'frameCapture': captureTime
+            }
+          };
+          
+          // Update performance metrics even without worker processing
+          setPerformanceMetrics(prev => ({
+            ...(prev || {}),
+            captureTime: framePerformanceMetrics.captureTime,
+            fps: framePerformanceMetrics.fps
+          }));
+          
+          // Dispatch event for the performance dashboard
+          dispatch(EventType.FRAME_PROCESSED, {
+            performance: framePerformanceMetrics,
+            timestamp: Date.now()
+          });
           
           if (frameData) {
             // Send frame to our new MediaPipe Hands worker for processing
@@ -480,7 +514,11 @@ function App() {
               mediaPipeHandsWorkerRef.current.postMessage({
                 command: 'process',
                 data: {
-                  frame: frameData
+                  frame: frameData,
+                  framePerformance: { 
+                    captureTime,
+                    frameTime: elapsed
+                  }
                 }
               });
             } else {
