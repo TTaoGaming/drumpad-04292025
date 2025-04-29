@@ -220,7 +220,7 @@ const UnifiedPerformanceDashboard: React.FC<UnifiedPerformanceDashboardProps> = 
           setPerformanceMetrics(metrics);
           
           // Update FPS data
-          const newFps = metrics.fps || 0;
+          const newFps = metrics ? metrics.fps || 0 : 0;
           setFpsData(prev => {
             const newHistory = [...prev.history.slice(-59), newFps];
             const sum = newHistory.reduce((a, b) => a + b, 0);
@@ -257,7 +257,7 @@ const UnifiedPerformanceDashboard: React.FC<UnifiedPerformanceDashboardProps> = 
           const newModuleTimings: ModuleTimingData[] = [];
           
           // Process the module timings from the performance metrics
-          if (metrics.moduleTimings && metrics.moduleTimings.length > 0) {
+          if (metrics && metrics.moduleTimings && metrics.moduleTimings.length > 0) {
             console.log('Processing module timings:', metrics.moduleTimings);
             
             metrics.moduleTimings.forEach((timing, index) => {
