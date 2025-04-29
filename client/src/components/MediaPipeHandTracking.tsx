@@ -1,11 +1,13 @@
 import React, { useEffect, useRef } from 'react';
-import { 
-  Hands, HAND_CONNECTIONS
-} from '@mediapipe/hands';
-import { Camera } from '@mediapipe/camera_utils';
-import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
+import { HandData, HandLandmark } from '@/lib/types';
 import { EventType, dispatch } from '@/lib/eventBus';
-import { HandData, HandLandmark, HandConnection } from '@/lib/types';
+
+// Define the HandConnection interface here if not found in types
+interface HandConnection {
+  start: number;
+  end: number;
+  colorIndex: number;
+}
 
 interface MediaPipeHandTrackingProps {
   videoRef: React.RefObject<HTMLVideoElement>;

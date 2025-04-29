@@ -556,20 +556,37 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
         const mpCamera = await import('@mediapipe/camera_utils');
         const mpDrawing = await import('@mediapipe/drawing_utils');
         
-        // Initialize MediaPipe Hands with CDN and debug the export structure
-        console.log('MediaPipe import structure:', Object.keys(mpHands));
+        // Debug the MediaPipe import structure to understand what we're working with
+        console.log('MediaPipe import structure:', mpHands);
         
-        // Use a more flexible approach to handle various export structures
+        // More comprehensive approach to handle various export structures
         let HandsClass;
+        
+        // Check if Hands is directly available as a named export
         if (typeof mpHands.Hands === 'function') {
           HandsClass = mpHands.Hands;
           console.log('Using named export Hands');
-        } else if (typeof mpHands.default?.Hands === 'function') {
+        } 
+        // Check if Hands is available as a property of the default export
+        else if (typeof mpHands.default === 'object' && typeof mpHands.default.Hands === 'function') {
           HandsClass = mpHands.default.Hands;
-          console.log('Using default export Hands');
-        } else if (typeof mpHands.default === 'function') {
+          console.log('Using default.Hands export');
+        } 
+        // Check if the default export itself is the Hands constructor
+        else if (typeof mpHands.default === 'function') {
           HandsClass = mpHands.default;
-          console.log('Using default export directly as Hands');
+          console.log('Using default export directly as Hands constructor');
+        }
+        // Try extracting from the raw module if it's an ES module with a 'default' getter
+        else if (mpHands && typeof mpHands === 'object') {
+          // Try to look for any property that might be the Hands class
+          for (const key in mpHands) {
+            if (typeof mpHands[key] === 'function' && key !== '__esModule') {
+              console.log(`Found potential Hands class as '${key}'`);
+              HandsClass = mpHands[key];
+              break;
+            }
+          }
         }
         
         if (!HandsClass) {
@@ -577,6 +594,7 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
           throw new Error('MediaPipe Hands class not found');
         }
         
+        // Use a specific version in the CDN URL that we know works
         // @ts-ignore - TypeScript doesn't like the locateFile, but it's required
         const hands = new HandsClass({
           locateFile: (file: string) => {
