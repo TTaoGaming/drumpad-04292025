@@ -7,7 +7,6 @@
 
 import { DrawingPath, Point, RegionOfInterest, CircleROI } from './types';
 import { getVideoFrame } from './cameraManager';
-import { getFrameManager } from './FrameManager';
 import { EventType, dispatch } from './eventBus';
 // Import the new contour tracking functionality
 import { 
@@ -112,8 +111,8 @@ export class ROIManager {
    */
   private extractROIImageData(roi: ROIWithFeatures, videoElement: HTMLVideoElement): ImageData | null {
     try {
-      // Get the current video frame from FrameManager
-      const frameData = getFrameManager().getCurrentFrame();
+      // Get the current video frame
+      const frameData = getVideoFrame(videoElement);
       if (!frameData) return null;
       
       // Create a temporary canvas to draw the video frame
@@ -215,8 +214,8 @@ export class ROIManager {
    */
   private extractCircleROIImageData(roi: CircleROIWithFeatures, videoElement: HTMLVideoElement): ImageData | null {
     try {
-      // Get the current video frame from FrameManager
-      const frameData = getFrameManager().getCurrentFrame();
+      // Get the current video frame
+      const frameData = getVideoFrame(videoElement);
       if (!frameData) return null;
       
       // Create a temporary canvas to draw the video frame
@@ -397,10 +396,10 @@ export class ROIManager {
         console.log(`[ROIManager] Processing Circle ROI ${roi.id} with center (${roi.center.x.toFixed(3)}, ${roi.center.y.toFixed(3)}) and radius ${roi.radius.toFixed(3)}`);
       }
       
-      // Get current frame from FrameManager for contour tracking
-      const frameData = getFrameManager().getCurrentFrame();
+      // Get full frame from video for contour tracking
+      const frameData = getVideoFrame(videoElement);
       if (!frameData) {
-        console.warn('[ROIManager] Failed to get video frame from FrameManager');
+        console.warn('[ROIManager] Failed to get video frame');
         continue;
       }
       

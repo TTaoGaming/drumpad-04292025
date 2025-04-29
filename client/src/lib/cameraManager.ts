@@ -1,9 +1,6 @@
 /**
  * Camera Manager - Handles webcam access and control
- * 
- * This module has been updated to use FrameManager for more efficient frame captures.
  */
-import { getFrameManager } from './FrameManager';
 
 // Configuration for camera resolution (480p)
 const CAMERA_CONSTRAINTS = {
@@ -24,12 +21,6 @@ export async function startCamera(videoElement?: HTMLVideoElement): Promise<Medi
     
     if (videoElement) {
       videoElement.srcObject = stream;
-      
-      // Register the video element with FrameManager
-      getFrameManager().setVideoElement(videoElement);
-      
-      // Start the frame capturing process when camera starts
-      getFrameManager().startCapturing();
     }
     
     return stream;
@@ -44,10 +35,6 @@ export async function startCamera(videoElement?: HTMLVideoElement): Promise<Medi
  * @param videoElement Optional video element to clear
  */
 export function stopCamera(videoElement?: HTMLVideoElement): void {
-  // Stop frame capturing when camera stops
-  getFrameManager().stopCapturing();
-  getFrameManager().setVideoElement(null);
-  
   if (videoElement) {
     const stream = videoElement.srcObject as MediaStream | null;
     
@@ -88,14 +75,42 @@ export function takeSnapshot(videoElement: HTMLVideoElement): HTMLCanvasElement 
 
 /**
  * Gets a frame from the video as ImageData for processing
- * This is now a wrapper around FrameManager to maintain compatibility
- * with existing code while avoiding redundant frame captures
- * 
  * @param videoElement The video element to capture from
  * @returns ImageData object containing the frame pixels
  */
 export function getVideoFrame(videoElement: HTMLVideoElement): ImageData | null {
-  // Get the current frame from the FrameManager
-  // This will return the cached frame instead of capturing a new one
-  return getFrameManager().getCurrentFrame();
+  if (!videoElement) {
+    console.error("getVideoFrame: No video element provided");
+    return null;
+  }
+  
+  if (!videoElement.videoWidth || !videoElement.videoHeight) {
+    console.warn("getVideoFrame: Video dimensions not available yet", {
+      videoWidth: videoElement.videoWidth,
+      videoHeight: videoElement.videoHeight,
+      readyState: videoElement.readyState
+    });
+    return null;
+  }
+  
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  
+  if (!ctx) {
+    console.error("getVideoFrame: Could not get 2D context from canvas");
+    return null;
+  }
+  
+  canvas.width = videoElement.videoWidth;
+  canvas.height = videoElement.videoHeight;
+  
+  // Attempt to draw the current frame
+  try {
+    ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    return imageData;
+  } catch (error) {
+    console.error("getVideoFrame: Error capturing frame", error);
+    return null;
+  }
 }

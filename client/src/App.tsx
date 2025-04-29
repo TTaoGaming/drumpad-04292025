@@ -16,7 +16,6 @@ import SettingsPanel from "@/components/settings/SettingsPanel";
 import { EventType, addListener, dispatch } from "@/lib/eventBus";
 import { Notification, HandData, PerformanceMetrics, DrawingPath, CircleROI } from "@/lib/types";
 import { getVideoFrame } from "@/lib/cameraManager";
-import { getFrameManager } from "@/lib/FrameManager";
 import { loadOpenCV, setupOpenCVEventListener } from "./lib/opencvLoader";
 
 function App() {
@@ -421,112 +420,62 @@ function App() {
   const frameLogCountRef = useRef(0);
   const LOG_EVERY_N_FRAMES = 300; // Only log every 300 frames (approx. every 5 seconds at 60fps)
   
-  // Reference to keep track of subscriber IDs
-  const frameManagerSubscribersRef = useRef<{[key: string]: boolean}>({});
-  
-  useEffect(() => {
-    // Set up FrameManager subscribers when component mounts
-    const frameManager = getFrameManager();
-    
-    // Subscribe MediaPipe Hands worker to FrameManager
-    if (!frameManagerSubscribersRef.current['mediapipe_hands']) {
-      const unsubscribeMediaPipeHands = frameManager.subscribe(
-        'mediapipe_hands',
-        (frameData) => {
-          if (
-            isOpenCVReady && 
-            isMediaPipelineReady && 
-            isCameraRunning && 
-            !frameProcessingRef.current &&
-            mediaPipeHandsWorkerRef.current
-          ) {
-            frameProcessingRef.current = true;
-            
-            try {
-              // Only log occasionally to reduce overhead
-              if (++frameLogCountRef.current % LOG_EVERY_N_FRAMES === 0) {
-                console.log('MediaPipe Hands processing active');
-              }
-              
-              // Send frame to our MediaPipe Hands worker for processing
-              mediaPipeHandsWorkerRef.current.postMessage({
-                command: 'process',
-                data: {
-                  frame: frameData
-                }
-              });
-            } catch (error) {
-              console.error('Error sending frame to MediaPipe Hands worker:', error);
-              frameProcessingRef.current = false;
-            }
+  const processVideoFrame = () => {
+    // Only process if workers are ready and camera is running
+    if (
+      isOpenCVReady && 
+      isMediaPipelineReady && 
+      isCameraRunning && 
+      videoRef.current && 
+      !frameProcessingRef.current
+    ) {
+      frameProcessingRef.current = true;
+      
+      try {
+        // Capture frame from video
+        const frameData = getVideoFrame(videoRef.current);
+        
+        if (frameData) {
+          // Only log occasionally to reduce overhead
+          if (++frameLogCountRef.current % LOG_EVERY_N_FRAMES === 0) {
+            console.log('Frame processing active');
           }
-        },
-        10 // Higher priority for this subscriber
-      );
-      
-      frameManagerSubscribersRef.current['mediapipe_hands'] = true;
-      
-      // Clean up subscription on unmount
-      return () => {
-        unsubscribeMediaPipeHands();
-        frameManagerSubscribersRef.current['mediapipe_hands'] = false;
-      };
-    }
-    
-    // Additional subscribers can be added here for other components
-  }, [isOpenCVReady, isMediaPipelineReady, isCameraRunning]);
-  
-  useEffect(() => {
-    // Set up FrameManager subscribers for OpenCV worker
-    const frameManager = getFrameManager();
-    
-    // Subscribe OpenCV worker to FrameManager
-    if (!frameManagerSubscribersRef.current['opencv_worker']) {
-      const unsubscribeOpenCV = frameManager.subscribe(
-        'opencv_worker',
-        (frameData) => {
-          if (
-            isOpenCVReady && 
-            isCameraRunning && 
-            opencvWorkerRef.current
-          ) {
-            try {
-              // Only log occasionally to reduce overhead
-              if (frameLogCountRef.current % LOG_EVERY_N_FRAMES === 0) {
-                console.log('OpenCV worker processing active');
+          
+          // Send frame to our new MediaPipe Hands worker for processing
+          // This offloads the expensive MediaPipe hand detection to a worker
+          if (mediaPipeHandsWorkerRef.current) {
+            mediaPipeHandsWorkerRef.current.postMessage({
+              command: 'process',
+              data: {
+                frame: frameData
               }
-              
-              // Send frame to OpenCV worker for processing
-              opencvWorkerRef.current.postMessage({
+            });
+          } else {
+            // Fallback to the old pipeline if the hands worker isn't ready
+            if (mediaPipelineWorkerRef.current) {
+              mediaPipelineWorkerRef.current.postMessage({
                 command: 'process-frame',
                 data: frameData
               });
-            } catch (error) {
-              console.error('Error sending frame to OpenCV worker:', error);
             }
           }
-        },
-        5 // Medium priority
-      );
-      
-      frameManagerSubscribersRef.current['opencv_worker'] = true;
-      
-      // Clean up subscription on unmount
-      return () => {
-        unsubscribeOpenCV();
-        frameManagerSubscribersRef.current['opencv_worker'] = false;
-      };
+          
+          // We can still send to OpenCV worker in parallel for other processing
+          if (opencvWorkerRef.current) {
+            opencvWorkerRef.current.postMessage({
+              command: 'process-frame',
+              data: frameData
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error processing video frame:', error);
+        frameProcessingRef.current = false;
+      }
     }
-  }, [isOpenCVReady, isCameraRunning]);
-  
-  // This is now a legacy function kept only for compatibility
-  // The actual frame processing is handled by FrameManager subscriptions
-  const processVideoFrame = () => {
-    // FrameManager now handles the frame capturing and distribution
-    // This function is kept for backward compatibility
-    if (!animationFrameRef.current) {
-      animationFrameRef.current = requestAnimationFrame(processVideoFrame);
-    }
+    
+    // Continue requesting frames
+    animationFrameRef.current = requestAnimationFrame(processVideoFrame);
   };
 
   const addLog = (message: string, type: 'info' | 'error' | 'success' | 'warning' = 'info') => {

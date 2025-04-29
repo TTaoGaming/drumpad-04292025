@@ -6,7 +6,6 @@ import { HandTrackingOptimizer, OptimizationSettings, DEFAULT_OPTIMIZATION_SETTI
 import { debounce, throttle } from '@/lib/utils';
 import orbFeatureDetector from '@/lib/orbFeatureDetector';
 import { getVideoFrame } from '@/lib/cameraManager';
-import { getFrameManager } from '@/lib/FrameManager';
 
 // Helper function to load external script
 const loadExternalScript = (url: string): Promise<void> => {
@@ -1095,8 +1094,8 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
             const videoElement = videoRef.current;
             if (videoElement && videoElement.videoWidth) {
               try {
-                // Get the current frame from FrameManager for contour tracking
-                const frameData = getFrameManager().getCurrentFrame();
+                // Get the current frame for contour tracking
+                const frameData = getVideoFrame(videoElement);
                 if (frameData) {
                   // Process frame with our contour-based ROI tracking
                   orbFeatureDetector.processFrame(frameData);

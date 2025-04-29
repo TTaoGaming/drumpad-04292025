@@ -8,7 +8,6 @@ import React, { useRef, useEffect, useState } from 'react';
 import { EventType, addListener, dispatch } from '@/lib/eventBus';
 import { RegionOfInterest } from '@/lib/types';
 import { getVideoFrame } from '@/lib/cameraManager';
-import { getFrameManager } from '@/lib/FrameManager';
 import {
   saveTemplate,
   clearTemplate,
@@ -104,8 +103,8 @@ const TemplateMatchingCanvas: React.FC<TemplateMatchingCanvasProps> = ({
     const videoElement = document.getElementById('camera-feed') as HTMLVideoElement;
     if (!videoElement || !videoElement.videoWidth) return;
     
-    // Get frame data from FrameManager
-    const frameData = getFrameManager().getCurrentFrame();
+    // Get frame data
+    const frameData = getVideoFrame(videoElement);
     if (!frameData) return;
     
     // Create a temporary canvas to draw the video frame
@@ -307,33 +306,18 @@ const TemplateMatchingCanvas: React.FC<TemplateMatchingCanvasProps> = ({
     setFrameCount(frameCount + 1);
   };
 
-  // Reference to the frame subscription
-  const frameSubscriptionRef = useRef<(() => void) | null>(null);
-  
-  // Run extraction by subscribing to FrameManager
+  // Run extraction every frame
   useEffect(() => {
     if (!visible) return;
     
-    // Get frame manager singleton
-    const frameManager = getFrameManager();
-    
-    // Subscribe to frame updates with medium priority
-    frameSubscriptionRef.current = frameManager.subscribe(
-      'template_matching_canvas',
-      () => {
-        if (isOpenCVReady && visible && canvasRef.current) {
-          extractROIContent();
-        }
-      },
-      3 // Medium priority (higher than visualization, lower than main processing)
-    );
+    const intervalId = setInterval(() => {
+      if (isOpenCVReady) {
+        extractROIContent();
+      }
+    }, 1000 / 20); // Update at 20 FPS for debugging
     
     return () => {
-      // Clean up subscription when component unmounts or visibility changes
-      if (frameSubscriptionRef.current) {
-        frameSubscriptionRef.current();
-        frameSubscriptionRef.current = null;
-      }
+      clearInterval(intervalId);
     };
   }, [visible, roi, isOpenCVReady, isTracking, templateImageData, currentImageData, trackingResult, frameCount]);
 
