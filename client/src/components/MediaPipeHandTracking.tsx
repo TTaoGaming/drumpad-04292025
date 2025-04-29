@@ -182,10 +182,10 @@ const MediaPipeHandTracking: React.FC<MediaPipeHandTrackingProps> = ({ videoRef 
           throw new Error('MediaPipe drawing utilities not found in global scope');
         }
         
-        // Use a specific version in the CDN URL that we know works
+        // Use the latest version of MediaPipe
         const hands = new HandsClass({
           locateFile: (file: string) => {
-            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`;
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
           }
         });
         
@@ -302,10 +302,8 @@ const MediaPipeHandTracking: React.FC<MediaPipeHandTrackingProps> = ({ videoRef 
         
         // Set up camera
         if (videoRef.current) {
-          // Use Camera class from dynamic import
-          console.log('Using CameraClass from dynamic import');
-          
-          // We already have CameraClass from the dynamic import above
+          // Use Camera class from global window object
+          console.log('Using Camera class from CDN global scope');
           
           const camera = new CameraClass(videoRef.current, {
             onFrame: async () => {
