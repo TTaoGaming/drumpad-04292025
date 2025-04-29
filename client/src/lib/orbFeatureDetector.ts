@@ -413,7 +413,10 @@ export class ROIManager {
         
         // Only log occasionally to reduce overhead
         if (this.logCounter % this.LOG_THROTTLE === 0 && contourResult.contourCount !== undefined) {
-          console.log(`[ROIManager] Contour tracking for ROI ${roi.id}: ${contourResult.contourCount} contours (${contourResult.visibilityRatio?.toFixed(2) || 0} visibility)`);
+          // Include hand presence and reference status in the logs
+          const handStatus = contourResult.handPresent ? ' [HAND]' : '';
+          const refStatus = contourResult.hasValidReference ? ' [REF]' : '';
+          console.log(`[ROIManager] Contour tracking for ROI ${roi.id}: ${contourResult.contourCount} contours (${contourResult.visibilityRatio?.toFixed(2) || 0} visibility)${handStatus}${refStatus}`);
         }
         
         // Update tracking status
@@ -541,12 +544,37 @@ export class ROIManager {
       
       // Style based on tracking status (using the contour tracking results)
       if (roi.contourTracking) {
-        if (roi.contourTracking.isOccluded) {
+        // If a hand is present, use a distinct color (purple) to show we're in a temporary state
+        if (roi.contourTracking.handPresent) {
+          // Hand present - purple/magenta
+          ctx.strokeStyle = 'rgba(200, 0, 200, 0.8)';
+          
+          // Display "HAND DETECTED" text
+          ctx.font = '12px sans-serif';
+          ctx.fillStyle = 'rgba(255, 150, 255, 0.9)';
+          ctx.textAlign = 'center';
+          
+          // Add a background for better readability
+          const text = "HAND DETECTED";
+          const textMetrics = ctx.measureText(text);
+          const textWidth = textMetrics.width;
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+          ctx.fillRect(centerX - textWidth/2 - 2, centerY - radius - 20, textWidth + 4, 14);
+          
+          // Draw text
+          ctx.fillStyle = 'rgba(255, 200, 255, 0.9)';
+          ctx.fillText(text, centerX, centerY - radius - 10);
+        }
+        else if (roi.contourTracking.isOccluded) {
           // Occluded - orange
           ctx.strokeStyle = 'rgba(255, 165, 0, 0.8)';
         } else if (roi.contourTracking.isInitialized) {
-          // Tracked - green
-          ctx.strokeStyle = 'rgba(0, 200, 0, 0.8)';
+          // Tracked - green (blue tint if we have a reference image)
+          const baseColor = roi.contourTracking.hasValidReference ? 
+            'rgba(0, 200, 200, 0.8)' : // Cyan/teal for having reference
+            'rgba(0, 200, 0, 0.8)';    // Green for basic tracking
+            
+          ctx.strokeStyle = baseColor;
           
           // Draw tracking status visualization
           if (roi.contourTracking.visibilityRatio !== undefined) {
@@ -555,7 +583,13 @@ export class ROIManager {
             // Draw an arc that shows the visibility ratio
             ctx.beginPath();
             ctx.arc(centerX, centerY, radius + 5, 0, Math.PI * 2 * confidenceLevel);
-            ctx.strokeStyle = `rgba(0, ${Math.round(255 * confidenceLevel)}, ${Math.round(255 * (1 - confidenceLevel))}, 0.9)`;
+            
+            // Color depends on whether we have a reference image
+            const arcColor = roi.contourTracking.hasValidReference ?
+              `rgba(0, ${Math.round(200 * confidenceLevel)}, ${Math.round(255 * confidenceLevel)}, 0.9)` :
+              `rgba(0, ${Math.round(255 * confidenceLevel)}, ${Math.round(255 * (1 - confidenceLevel))}, 0.9)`;
+              
+            ctx.strokeStyle = arcColor;
             ctx.lineWidth = 3;
             ctx.stroke();
           }

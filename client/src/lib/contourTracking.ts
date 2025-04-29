@@ -22,10 +22,16 @@ interface ContourData {
   initialHierarchy: any; // cv.Mat of hierarchy
   contourCount: number;
   imageData: ImageData;
+  referenceImageData?: ImageData; // Reference image taken when hand is away
+  referenceHistogram?: number[]; // Histogram of the reference image for comparison
+  hasValidReference: boolean; // Whether we have a valid reference image
   timestamp: number;
   isVisible: boolean; // Whether the contours are visible (not occluded)
   occlusionTimestamp?: number; // When the contours became occluded
   centerOfMass: Point; // Center of mass of the contours
+  handPresent: boolean; // Whether a hand is currently in the ROI
+  handExitTimestamp?: number; // When the hand last exited the ROI
+  referenceDelayMs: number; // Delay after hand exit before taking reference image
 }
 
 // Storage for contour data
@@ -174,9 +180,14 @@ export async function detectContours(imageData: ImageData): Promise<any | null> 
  * Create a visual debug image showing the contours
  * @param imageData Original image data
  * @param contourResult Result from detectContours
+ * @param hasReference Whether this is a reference image
  * @returns New ImageData with contours drawn, or null if error
  */
-export function createContourVisualization(imageData: ImageData, contourResult: any): ImageData | null {
+export function createContourVisualization(
+  imageData: ImageData, 
+  contourResult: any,
+  hasReference: boolean = false
+): ImageData | null {
   if (!contourResult || !contourConfig.drawContours) return null;
   
   try {
@@ -184,15 +195,55 @@ export function createContourVisualization(imageData: ImageData, contourResult: 
     const dst = src.clone();
     
     try {
-      // Draw contours on the image
-      const color = new cv.Scalar(0, 255, 0, 255); // Green contours
-      const centerColor = new cv.Scalar(255, 0, 0, 255); // Red center point
+      // Choose colors based on reference status
+      const color = hasReference 
+        ? new cv.Scalar(0, 200, 200, 255)  // Cyan for reference contours
+        : new cv.Scalar(0, 255, 0, 255);   // Green for regular contours
       
+      const centerColor = hasReference
+        ? new cv.Scalar(0, 0, 255, 255)    // Blue center for reference
+        : new cv.Scalar(255, 0, 0, 255);   // Red center for regular
+      
+      // Draw contours on the image
       cv.drawContours(dst, contourResult.contours, -1, color, 2);
       
       // Draw the center of mass
       const center = contourResult.centerOfMass;
       cv.circle(dst, new cv.Point(center.x, center.y), 5, centerColor, -1);
+      
+      // Add a label if this is a reference image
+      if (hasReference) {
+        // Put a "REF" text in the top-left corner
+        const text = "REFERENCE";
+        const font = cv.FONT_HERSHEY_SIMPLEX;
+        const fontScale = 0.5;
+        const thickness = 1;
+        const textColor = new cv.Scalar(0, 200, 255, 255);
+        
+        // Add black background for text
+        cv.putText(
+          dst, 
+          text, 
+          new cv.Point(10, 20),
+          font,
+          fontScale, 
+          new cv.Scalar(0, 0, 0, 255), 
+          thickness + 2, 
+          cv.LINE_AA
+        );
+        
+        // Add text in cyan
+        cv.putText(
+          dst, 
+          text, 
+          new cv.Point(10, 20),
+          font,
+          fontScale, 
+          textColor, 
+          thickness, 
+          cv.LINE_AA
+        );
+      }
       
       // Convert back to ImageData
       const tempCanvas = document.createElement('canvas');
@@ -245,7 +296,10 @@ export async function initializeContourTracking(roi: CircleROI, imageData: Image
       imageData: roiImageData,
       timestamp: Date.now(),
       isVisible: true,
-      centerOfMass: contourResult.centerOfMass
+      centerOfMass: contourResult.centerOfMass,
+      hasValidReference: false,
+      handPresent: true, // Assume hand is present during initialization
+      referenceDelayMs: 1000 // Wait 1 second after hand exit to take reference
     });
     
     // Send initialization event
@@ -292,33 +346,96 @@ export async function updateContourTracking(roi: CircleROI, imageData: ImageData
       return { isInitialized: true, isOccluded: initialData.isVisible ? false : true };
     }
     
-    // Calculate the contour visibility ratio (current contours / initial contours)
-    const visibilityRatio = currentContours.contourCount / initialData.contourCount;
     const now = Date.now();
+
+    // First, check if we need to update our reference image
+    // We'll determine if there's a hand in the ROI based on the contour count
+    // A significant increase in contours typically means a hand has entered the frame
     
-    // Determine if the contours are occluded
-    let isCurrentlyOccluded = visibilityRatio < contourConfig.occlusionThreshold;
+    // Calculate difference in contour counts 
+    const contourCountDifference = currentContours.contourCount - initialData.contourCount;
+    const significantIncrease = contourCountDifference > 3; // More than 3 additional contours
+    
+    // Detect hand entry/exit
+    const wasHandPresent = initialData.handPresent;
+    const isHandPresent = significantIncrease;
+    
+    if (!wasHandPresent && isHandPresent) {
+      // Hand just entered the ROI
+      initialData.handPresent = true;
+      initialData.handExitTimestamp = undefined;
+      console.log(`[contourTracking] Hand entered ROI ${roi.id}`);
+    } 
+    else if (wasHandPresent && !isHandPresent) {
+      // Hand just left the ROI
+      initialData.handPresent = false;
+      initialData.handExitTimestamp = now;
+      console.log(`[contourTracking] Hand exited ROI ${roi.id}, will capture reference in ${initialData.referenceDelayMs}ms`);
+    }
+    
+    // Check if we should capture a reference image
+    if (!initialData.hasValidReference && 
+        !initialData.handPresent && 
+        initialData.handExitTimestamp && 
+        now - initialData.handExitTimestamp > initialData.referenceDelayMs) {
+      
+      // Hand has been away long enough, capture reference image
+      initialData.referenceImageData = roiImageData;
+      initialData.hasValidReference = true;
+      initialData.contourCount = currentContours.contourCount; // Update the baseline contour count
+      
+      console.log(`[contourTracking] Captured reference image for ROI ${roi.id} with ${currentContours.contourCount} contours`);
+      
+      dispatch(EventType.NOTIFICATION, {
+        message: `Reference image captured for ROI ${roi.id}`,
+        type: 'success'
+      });
+    }
+    
+    // Now check for occlusion based on appropriate reference
+    let visibilityRatio = 1.0;
+    let isCurrentlyOccluded = false;
+    
+    if (initialData.hasValidReference) {
+      // If we have a reference image, compare to that instead of initial contours
+      visibilityRatio = currentContours.contourCount / initialData.contourCount;
+      
+      // Occlusion means we see significantly fewer contours than in the reference state
+      isCurrentlyOccluded = visibilityRatio < contourConfig.occlusionThreshold;
+      
+      // Ensure hand presence doesn't trigger occlusion
+      if (initialData.handPresent) {
+        isCurrentlyOccluded = false;
+      }
+    } else {
+      // If no reference yet, use basic detection logic
+      visibilityRatio = currentContours.contourCount / initialData.contourCount;
+      isCurrentlyOccluded = visibilityRatio < contourConfig.occlusionThreshold;
+    }
     
     // Handle state changes with delay to prevent flickering
     if (!initialData.isVisible && !isCurrentlyOccluded) {
       // Contours just became visible again
       if (!initialData.occlusionTimestamp || now - initialData.occlusionTimestamp > contourConfig.reappearanceDelayMs) {
         initialData.isVisible = true;
-        dispatch(EventType.NOTIFICATION, {
-          message: `Contours reappeared in ROI ${roi.id}`,
-          type: 'info'
-        });
         
-        // Send CONTOUR_VISIBLE event
-        dispatch(EventType.SETTINGS_VALUE_CHANGE, {
-          section: 'contourTracking',
-          setting: 'contourVisible',
-          value: {
-            roiId: roi.id,
-            isVisible: true,
-            timestamp: now
-          }
-        });
+        if (!initialData.handPresent) {
+          dispatch(EventType.NOTIFICATION, {
+            message: `Object reappeared in ROI ${roi.id}`,
+            type: 'info'
+          });
+          
+          // Send CONTOUR_VISIBLE event
+          dispatch(EventType.SETTINGS_VALUE_CHANGE, {
+            section: 'contourTracking',
+            setting: 'contourVisible',
+            value: {
+              roiId: roi.id,
+              isVisible: true,
+              timestamp: now
+            }
+          });
+        }
       }
     } else if (initialData.isVisible && isCurrentlyOccluded) {
       // Contours just became occluded
@@ -326,21 +443,24 @@ export async function updateContourTracking(roi: CircleROI, imageData: ImageData
         initialData.occlusionTimestamp = now;
       } else if (now - initialData.occlusionTimestamp > contourConfig.occlusionDelayMs) {
         initialData.isVisible = false;
-        dispatch(EventType.NOTIFICATION, {
-          message: `Contours occluded in ROI ${roi.id}`,
-          type: 'warning'
-        });
         
-        // Send CONTOUR_OCCLUDED event
-        dispatch(EventType.SETTINGS_VALUE_CHANGE, {
-          section: 'contourTracking',
-          setting: 'contourOccluded',
-          value: {
-            roiId: roi.id,
-            isVisible: false,
-            timestamp: now
-          }
-        });
+        if (!initialData.handPresent) {
+          dispatch(EventType.NOTIFICATION, {
+            message: `Object occluded in ROI ${roi.id}`,
+            type: 'warning'
+          });
+          
+          // Send CONTOUR_OCCLUDED event
+          dispatch(EventType.SETTINGS_VALUE_CHANGE, {
+            section: 'contourTracking',
+            setting: 'contourOccluded',
+            value: {
+              roiId: roi.id,
+              isVisible: false,
+              timestamp: now
+            }
+          });
+        }
       }
     } else {
       // Reset occlusion timestamp if state is consistent
@@ -348,7 +468,11 @@ export async function updateContourTracking(roi: CircleROI, imageData: ImageData
     }
     
     // Create contour visualization for debugging
-    const visualization = createContourVisualization(roiImageData, currentContours);
+    const visualization = createContourVisualization(
+      roiImageData, 
+      currentContours, 
+      initialData.hasValidReference
+    );
     
     // Get region information stored during extraction
     const roiInfo = (roi as any)._roiRegion;
@@ -381,7 +505,9 @@ export async function updateContourTracking(roi: CircleROI, imageData: ImageData
       originalContourCount: initialData.contourCount,
       visibilityRatio,
       centerOfMass: globalCenterOfMass,
-      visualizationData: visualization
+      visualizationData: visualization,
+      handPresent: initialData.handPresent,
+      hasValidReference: initialData.hasValidReference
     };
   } catch (error) {
     console.error('[contourTracking] Error updating contour tracking:', error);
