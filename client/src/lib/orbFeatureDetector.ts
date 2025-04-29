@@ -7,6 +7,7 @@
 
 import { DrawingPath, Point, RegionOfInterest, CircleROI } from './types';
 import { getVideoFrame } from './cameraManager';
+import { getFrameManager } from './FrameManager';
 import { EventType, dispatch } from './eventBus';
 // Import the new contour tracking functionality
 import { 

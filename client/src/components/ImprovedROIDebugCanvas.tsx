@@ -8,6 +8,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { EventType, addListener, dispatch } from '@/lib/eventBus';
 import { RegionOfInterest, CircleROI } from '@/lib/types';
 import { getVideoFrame } from '@/lib/cameraManager';
+import { getFrameManager } from '@/lib/FrameManager';
 import { contourConfig } from '@/lib/contourTracking';
 
 interface ImprovedROIDebugCanvasProps {
@@ -110,45 +111,40 @@ const ImprovedROIDebugCanvas: React.FC<ImprovedROIDebugCanvasProps> = ({
     };
   }, [roi]);
 
-  // Animation loop for rendering
+  // We no longer need the animation loop as the FrameManager subscription
+  // will handle frame updates. The FPS calculation is now done in renderROIContent.
+  
+  // Reference to the subscription
+  const frameSubscriptionRef = useRef<(() => void) | null>(null);
+  
+  // Subscribe to frame updates from FrameManager
   useEffect(() => {
-    if (!visible) {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
-      }
-      return;
-    }
+    if (!visible) return;
     
-    const renderFrame = () => {
-      const now = performance.now();
-      
-      // Calculate FPS every second
-      if (now - lastFrameTimeRef.current >= 1000) {
-        setFps(frameCountRef.current);
-        frameCountRef.current = 0;
-        lastFrameTimeRef.current = now;
-      }
-      
-      frameCountRef.current++;
-      
-      // Render the ROI content
-      renderROIContent();
-      
-      // Continue the animation loop
-      animationFrameRef.current = requestAnimationFrame(renderFrame);
-    };
+    // Get frame manager singleton
+    const frameManager = getFrameManager();
     
-    // Start the rendering loop
-    animationFrameRef.current = requestAnimationFrame(renderFrame);
+    // Subscribe to frame updates with low priority (non-critical visualization)
+    frameSubscriptionRef.current = frameManager.subscribe(
+      'roi_debug_canvas',
+      () => {
+        // When we get a new frame, just trigger a render
+        // The actual frame data will be retrieved in renderROIContent
+        if (visible && canvasRef.current) {
+          renderROIContent();
+        }
+      },
+      1 // Low priority for visualization components
+    );
     
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
+      // Clean up subscription when component unmounts or visibility changes
+      if (frameSubscriptionRef.current) {
+        frameSubscriptionRef.current();
+        frameSubscriptionRef.current = null;
       }
     };
-  }, [visible, roi]);
+  }, [visible]);
   
   // Render the ROI content to the canvas
   const renderROIContent = () => {
@@ -212,8 +208,8 @@ const ImprovedROIDebugCanvas: React.FC<ImprovedROIDebugCanvasProps> = ({
       return;
     }
     
-    // Get frame data
-    const frameData = getVideoFrame(videoElement);
+    // Get frame data from FrameManager instead of capturing directly
+    const frameData = getFrameManager().getCurrentFrame();
     if (!frameData) return;
     
     // Create a temporary canvas for processing
@@ -332,6 +328,15 @@ const ImprovedROIDebugCanvas: React.FC<ImprovedROIDebugCanvasProps> = ({
       ? `Visibility: ${((contourData.visibilityRatio ?? 0) * 100).toFixed(0)}%`
       : 'Waiting for tracking data...';
     ctx.fillText(visibilityText, width / 2, height - 10);
+    
+    // Update the FPS counter
+    frameCountRef.current++;
+    const now = performance.now();
+    if (now - lastFrameTimeRef.current >= 1000) {
+      setFps(frameCountRef.current);
+      frameCountRef.current = 0;
+      lastFrameTimeRef.current = now;
+    }
   };
 
   if (!visible) return null;

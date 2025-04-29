@@ -137,7 +137,11 @@ export class FrameManager {
     const sortedEntries = Array.from(this.subscribers.entries())
       .sort((a, b) => b[1].priority - a[1].priority);
     
-    this.subscribers = new Map(sortedEntries);
+    // Clear the current map and add the sorted entries
+    this.subscribers.clear();
+    sortedEntries.forEach(([key, value]) => {
+      this.subscribers.set(key, value);
+    });
   }
   
   /**
@@ -197,13 +201,14 @@ export class FrameManager {
     if (!this.frameData) return;
     
     // Subscribers are already sorted by priority
-    for (const subscriber of this.subscribers.values()) {
+    // Using Array.from to avoid iterator compatibility issues
+    Array.from(this.subscribers.values()).forEach(subscriber => {
       try {
-        subscriber.callback(this.frameData);
+        subscriber.callback(this.frameData!);
       } catch (err) {
         console.error(`[FrameManager] Error in subscriber ${subscriber.id}:`, err);
       }
-    }
+    });
   }
   
   /**
