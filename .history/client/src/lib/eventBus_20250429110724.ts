@@ -30,9 +30,7 @@ export enum EventType {
   // Circle ROI events
   CIRCLE_ROI_CREATED = 'circle-roi-created',
   CIRCLE_ROI_UPDATED = 'circle-roi-updated',
-  CIRCLE_ROI_DELETED = 'circle-roi-deleted',
-  // Marker state events
-  MARKER_STATE_CHANGED = 'marker-state-changed'
+  CIRCLE_ROI_DELETED = 'circle-roi-deleted'
 }
 
 type EventCallback = (data: any) => void;

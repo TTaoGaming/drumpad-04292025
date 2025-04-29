@@ -15,8 +15,6 @@ import {
   cleanupContourTracking,
   contourConfig
 } from './contourTracking';
-import markerStateManager from './markerStateManager';
-import logger from './logger';
 
 // Interface to store ROI with its feature information
 interface ROIWithFeatures extends RegionOfInterest {
@@ -574,6 +572,9 @@ export class ROIManager {
         ctx.stroke();
       }
     });
+    
+    // Import MarkerStateManager to get state codes
+    import markerStateManager from './markerStateManager';
     
     // Draw all circular ROIs
     this.activeCircleROIs.forEach(roi => {
