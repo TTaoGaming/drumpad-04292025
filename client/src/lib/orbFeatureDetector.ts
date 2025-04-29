@@ -112,8 +112,8 @@ export class ROIManager {
    */
   private extractROIImageData(roi: ROIWithFeatures, videoElement: HTMLVideoElement): ImageData | null {
     try {
-      // Get the current video frame
-      const frameData = getVideoFrame(videoElement);
+      // Get the current video frame from FrameManager
+      const frameData = getFrameManager().getCurrentFrame();
       if (!frameData) return null;
       
       // Create a temporary canvas to draw the video frame
@@ -215,8 +215,8 @@ export class ROIManager {
    */
   private extractCircleROIImageData(roi: CircleROIWithFeatures, videoElement: HTMLVideoElement): ImageData | null {
     try {
-      // Get the current video frame
-      const frameData = getVideoFrame(videoElement);
+      // Get the current video frame from FrameManager
+      const frameData = getFrameManager().getCurrentFrame();
       if (!frameData) return null;
       
       // Create a temporary canvas to draw the video frame
@@ -397,10 +397,10 @@ export class ROIManager {
         console.log(`[ROIManager] Processing Circle ROI ${roi.id} with center (${roi.center.x.toFixed(3)}, ${roi.center.y.toFixed(3)}) and radius ${roi.radius.toFixed(3)}`);
       }
       
-      // Get full frame from video for contour tracking
-      const frameData = getVideoFrame(videoElement);
+      // Get current frame from FrameManager for contour tracking
+      const frameData = getFrameManager().getCurrentFrame();
       if (!frameData) {
-        console.warn('[ROIManager] Failed to get video frame');
+        console.warn('[ROIManager] Failed to get video frame from FrameManager');
         continue;
       }
       

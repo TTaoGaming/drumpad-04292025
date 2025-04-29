@@ -8,6 +8,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { EventType, addListener, dispatch } from '@/lib/eventBus';
 import { RegionOfInterest } from '@/lib/types';
 import { getVideoFrame } from '@/lib/cameraManager';
+import { getFrameManager } from '@/lib/FrameManager';
 import {
   saveTemplate,
   clearTemplate,
