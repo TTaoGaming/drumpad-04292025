@@ -7,6 +7,17 @@ import { debounce, throttle } from '@/lib/utils';
 import orbFeatureDetector from '@/lib/orbFeatureDetector';
 import { getVideoFrame } from '@/lib/cameraManager';
 
+// Helper function to load external script
+const loadExternalScript = (url: string): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = url;
+    script.onload = () => resolve();
+    script.onerror = (error) => reject(new Error(`Failed to load script: ${url}`));
+    document.head.appendChild(script);
+  });
+};
+
 interface MediaPipeHandTrackerProps {
   videoRef: React.RefObject<HTMLVideoElement>;
 }
@@ -551,47 +562,21 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
           type: 'info'
         });
         
-        // Import MediaPipe libraries
-        const mpHands = await import('@mediapipe/hands');
-        const mpCamera = await import('@mediapipe/camera_utils');
-        const mpDrawing = await import('@mediapipe/drawing_utils');
+        // Load directly from CDN instead of using the npm package
+        // Load all required scripts directly
+        await loadExternalScript('https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js');
+        await loadExternalScript('https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1620248734/camera_utils.js');
+        await loadExternalScript('https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1620248734/drawing_utils.js');
         
-        // Debug the MediaPipe import structure to understand what we're working with
-        console.log('MediaPipe import structure:', mpHands);
+        console.log('MediaPipe scripts loaded from CDN');
         
-        // More comprehensive approach to handle various export structures
-        let HandsClass;
-        
-        // Check if Hands is directly available as a named export
-        if (typeof mpHands.Hands === 'function') {
-          HandsClass = mpHands.Hands;
-          console.log('Using named export Hands');
-        } 
-        // Check if Hands is available as a property of the default export
-        else if (typeof mpHands.default === 'object' && typeof mpHands.default.Hands === 'function') {
-          HandsClass = mpHands.default.Hands;
-          console.log('Using default.Hands export');
-        } 
-        // Check if the default export itself is the Hands constructor
-        else if (typeof mpHands.default === 'function') {
-          HandsClass = mpHands.default;
-          console.log('Using default export directly as Hands constructor');
-        }
-        // Try extracting from the raw module if it's an ES module with a 'default' getter
-        else if (mpHands && typeof mpHands === 'object') {
-          // Try to look for any property that might be the Hands class
-          for (const key in mpHands) {
-            if (typeof mpHands[key] === 'function' && key !== '__esModule') {
-              console.log(`Found potential Hands class as '${key}'`);
-              HandsClass = mpHands[key];
-              break;
-            }
-          }
-        }
+        // Use global objects injected by the script
+        // @ts-ignore - TypeScript doesn't recognize window.Hands as we're loading it dynamically
+        const HandsClass = window.Hands;
         
         if (!HandsClass) {
-          console.error('MediaPipe export structure:', mpHands);
-          throw new Error('MediaPipe Hands class not found');
+          console.error('MediaPipe Hands not found in global scope');
+          throw new Error('MediaPipe Hands class not found in global scope');
         }
         
         // Use a specific version in the CDN URL that we know works
@@ -642,7 +627,8 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
               
               // Draw filtered landmarks if enabled
               if (landmarksSettings.showLandmarks) {
-                mpDrawing.drawLandmarks(ctx, filteredLandmarks, {
+                // @ts-ignore - Using global variables from CDN scripts
+                window.drawLandmarks(ctx, filteredLandmarks, {
                   color: '#ffffff',
                   lineWidth: 2,
                   radius: landmarksSettings.landmarkSize
@@ -651,7 +637,8 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
               
               // Draw connections if enabled
               if (landmarksSettings.showConnections) {
-                mpHands.HAND_CONNECTIONS.forEach((connection: any) => {
+                // @ts-ignore - Using global variables from CDN scripts
+                window.HAND_CONNECTIONS.forEach((connection: any) => {
                   // Determine which finger this connection belongs to
                   let colorIndex = 5; // Default to palm (indigo)
                   
@@ -679,7 +666,8 @@ const MediaPipeHandTracker: React.FC<MediaPipeHandTrackerProps> = ({ videoRef })
                   }
                   
                   // Draw the connection with appropriate color
-                  mpDrawing.drawConnectors(ctx, filteredLandmarks, [connection], {
+                  // @ts-ignore - Using global variables from CDN scripts
+                  window.drawConnectors(ctx, filteredLandmarks, [connection], {
                     color: landmarksSettings.colorScheme === 'single' ? '#FFFFFF' : FINGER_COLORS[colorIndex],
                     lineWidth: landmarksSettings.connectionWidth
                   });
