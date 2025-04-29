@@ -26,8 +26,6 @@ interface ContourData {
   isVisible: boolean; // Whether the contours are visible (not occluded)
   occlusionTimestamp?: number; // When the contours became occluded
   centerOfMass: Point; // Center of mass of the contours
-  huMoments?: number[]; // Shape descriptor using Hu moments
-  shapeSignature?: number[]; // Optional shape signature for more detailed matching
 }
 
 // Storage for contour data
@@ -49,10 +47,6 @@ const contourConfig = {
   occlusionDelayMs: 300,   // Delay before triggering occlusion event (reduces false positives)
   reappearanceDelayMs: 300, // Delay before triggering reappearance event
   
-  // Shape matching
-  useShapeMatching: true, // Whether to use shape matching to maintain identity
-  huMatchThreshold: 0.8,  // Similarity threshold for Hu moments matching (0-1, higher is more strict)
-  
   // Debug
   drawContours: true,
 };
@@ -73,76 +67,6 @@ async function ensureOpenCV(): Promise<boolean> {
   } catch (err) {
     console.error('[contourTracking] Failed to load OpenCV:', err);
     return false;
-  }
-}
-
-/**
- * Calculate Hu Moments for a contour
- * These are shape descriptors that are invariant to translation, rotation, and scale
- * @param contour OpenCV contour
- * @returns Array of 7 Hu moments
- */
-function calculateHuMoments(contour: any): number[] {
-  try {
-    // Calculate moments
-    const moments = cv.moments(contour);
-    
-    // Calculate Hu moments - returns a Mat with 7 moments
-    const huMat = new cv.Mat();
-    cv.HuMoments(moments, huMat);
-    
-    // Convert to array and take logarithm for better comparison
-    const huArray: number[] = [];
-    for (let i = 0; i < 7; i++) {
-      // Use log to handle the large dynamic range of the moments
-      // We use abs since some moments can be negative
-      huArray.push(Math.log(Math.abs(huMat.doubleAt(i, 0)) + 1e-10));
-    }
-    
-    // Clean up
-    huMat.delete();
-    
-    return huArray;
-  } catch (error) {
-    console.error('[contourTracking] Error calculating Hu moments:', error);
-    return [0, 0, 0, 0, 0, 0, 0]; // Return default values on error
-  }
-}
-
-/**
- * Compare two sets of Hu moments to determine shape similarity
- * @param huMoments1 First set of Hu moments
- * @param huMoments2 Second set of Hu moments
- * @returns Similarity score (0-1, where 1 is identical)
- */
-function compareHuMoments(huMoments1: number[], huMoments2: number[]): number {
-  if (!huMoments1 || !huMoments2 || huMoments1.length !== 7 || huMoments2.length !== 7) {
-    return 0;
-  }
-  
-  try {
-    // Calculate a weighted distance between the moment sets
-    // First moments are more stable, so we weight them higher
-    const weights = [2.0, 1.5, 1.0, 1.0, 0.8, 0.8, 0.5];
-    let distance = 0;
-    let totalWeight = 0;
-    
-    for (let i = 0; i < 7; i++) {
-      distance += weights[i] * Math.abs(huMoments1[i] - huMoments2[i]);
-      totalWeight += weights[i];
-    }
-    
-    // Normalize distance (0-1, lower is more similar)
-    const normalizedDistance = distance / totalWeight;
-    
-    // Convert to similarity score (0-1, higher is more similar)
-    // Exponential function to make small differences less significant
-    const similarity = Math.exp(-3 * normalizedDistance);
-    
-    return similarity;
-  } catch (error) {
-    console.error('[contourTracking] Error comparing Hu moments:', error);
-    return 0;
   }
 }
 
@@ -184,13 +108,9 @@ export async function detectContours(imageData: ImageData): Promise<any | null> 
         const area = cv.contourArea(contour);
         
         if (area >= contourConfig.minContourArea) {
-          // Calculate Hu moments for shape matching
-          const huMoments = calculateHuMoments(contour);
-          
           validContours.push({
             index: i,
-            area: area,
-            huMoments: huMoments
+            area: area
           });
         }
       }
@@ -231,13 +151,12 @@ export async function detectContours(imageData: ImageData): Promise<any | null> 
       // Clean up the original contours vector
       contours.delete();
       
-      // Return the filtered contours with shape descriptors
+      // Return the filtered contours
       return {
         contours: filteredContours,
         hierarchy: hierarchy,
         contourCount: filteredContours.size(),
         centerOfMass: centerOfMass,
-        shapeDescriptors: topContours.map(c => c.huMoments)
       };
     } finally {
       // Clean up OpenCV matrices
@@ -268,49 +187,14 @@ export function createContourVisualization(imageData: ImageData, contourResult: 
     
     try {
       // Draw contours on the image
-      const defaultColor = new cv.Scalar(0, 255, 0, 255); // Green for normal contours
-      const matchedColor = new cv.Scalar(0, 0, 255, 255); // Blue for shape-matched contour
+      const color = new cv.Scalar(0, 255, 0, 255); // Green contours
       const centerColor = new cv.Scalar(255, 0, 0, 255); // Red center point
       
-      // Check if we have a shape-matched contour index
-      let matchedContourIndex = -1;
-      if (contourResult.bestMatchIndex !== undefined) {
-        matchedContourIndex = contourResult.bestMatchIndex;
-      }
-      
-      // Draw all contours
-      for (let i = 0; i < contourResult.contours.size(); i++) {
-        // Use different color for the matched contour
-        const color = (i === matchedContourIndex) ? matchedColor : defaultColor;
-        
-        // Draw this contour
-        const contourArray = new cv.MatVector();
-        contourArray.push_back(contourResult.contours.get(i));
-        cv.drawContours(dst, contourArray, 0, color, 2);
-        contourArray.delete();
-      }
+      cv.drawContours(dst, contourResult.contours, -1, color, 2);
       
       // Draw the center of mass
       const center = contourResult.centerOfMass;
       cv.circle(dst, new cv.Point(center.x, center.y), 5, centerColor, -1);
-      
-      // Add text for shape match confidence if available
-      if (contourResult.shapeSimilarity !== undefined && contourResult.shapeSimilarity > 0) {
-        const text = `Shape: ${(contourResult.shapeSimilarity * 100).toFixed(0)}%`;
-        const textColor = contourResult.shapeSimilarity >= contourConfig.huMatchThreshold ? 
-                         new cv.Scalar(0, 0, 255, 255) : // Blue for good match
-                         new cv.Scalar(255, 165, 0, 255); // Orange for poor match
-        
-        cv.putText(
-          dst, 
-          text, 
-          new cv.Point(10, imageData.height - 10),
-          cv.FONT_HERSHEY_SIMPLEX,
-          0.5, // Size
-          textColor,
-          1 // Thickness
-        );
-      }
       
       // Convert back to ImageData using canvas pool
       const tempCanvas = getCanvas(imageData.width, imageData.height);
@@ -357,12 +241,6 @@ export async function initializeContourTracking(roi: CircleROI, imageData: Image
       return false;
     }
     
-    // Calculate Hu moments for largest contour for shape matching
-    let huMoments = null;
-    if (contourResult.contours.size() > 0 && contourResult.shapeDescriptors.length > 0) {
-      huMoments = contourResult.shapeDescriptors[0]; // Use the largest contour's moments
-    }
-    
     // Store the contour data
     contourDataMap.set(roi.id, {
       id: roi.id,
@@ -372,8 +250,7 @@ export async function initializeContourTracking(roi: CircleROI, imageData: Image
       imageData: roiImageData,
       timestamp: Date.now(),
       isVisible: true,
-      centerOfMass: contourResult.centerOfMass,
-      huMoments: huMoments
+      centerOfMass: contourResult.centerOfMass
     });
     
     // Send initialization event
@@ -420,56 +297,12 @@ export async function updateContourTracking(roi: CircleROI, imageData: ImageData
       return { isInitialized: true, isOccluded: initialData.isVisible ? false : true };
     }
     
-    // Variables to track if we found the correct contour by shape
-    let foundMatchingContour = false;
-    let bestMatchScore = 0;
-    let bestMatchIndex = -1;
-    
-    // Try to match contours by shape to maintain identity
-    if (contourConfig.useShapeMatching && initialData.huMoments && 
-        currentContours.shapeDescriptors && currentContours.shapeDescriptors.length > 0) {
-      
-      // Compare shape descriptors of each contour with our original ROI
-      for (let i = 0; i < currentContours.shapeDescriptors.length; i++) {
-        const similarity = compareHuMoments(initialData.huMoments, currentContours.shapeDescriptors[i]);
-        
-        if (similarity > bestMatchScore) {
-          bestMatchScore = similarity;
-          bestMatchIndex = i;
-        }
-      }
-      
-      // If we found a good match by shape
-      if (bestMatchScore >= contourConfig.huMatchThreshold) {
-        foundMatchingContour = true;
-        
-        // Only log occasionally to avoid console spam
-        if (Math.random() < 0.05) {
-          console.log(`[contourTracking] Found matching contour by shape with similarity: ${bestMatchScore.toFixed(3)}`);
-        }
-      } else if (bestMatchIndex >= 0) {
-        // We found a best match, but it's below our threshold
-        if (Math.random() < 0.05) {
-          console.log(`[contourTracking] Best contour match has insufficient similarity: ${bestMatchScore.toFixed(3)}`);
-        }
-      }
-    }
-    
     // Calculate the contour visibility ratio (current contours / initial contours)
     const visibilityRatio = currentContours.contourCount / initialData.contourCount;
     const now = Date.now();
     
     // Determine if the contours are occluded
     let isCurrentlyOccluded = visibilityRatio < contourConfig.occlusionThreshold;
-    
-    // If we're using shape matching and didn't find a matching contour,
-    // consider it occluded even if there are other contours present
-    if (contourConfig.useShapeMatching && !foundMatchingContour && currentContours.contourCount > 0) {
-      isCurrentlyOccluded = true;
-      if (Math.random() < 0.05) {
-        console.log(`[contourTracking] No matching contour found by shape, considering occluded`);
-      }
-    }
     
     // Handle state changes with delay to prevent flickering
     if (!initialData.isVisible && !isCurrentlyOccluded) {
@@ -520,43 +353,19 @@ export async function updateContourTracking(roi: CircleROI, imageData: ImageData
     }
     
     // Create contour visualization for debugging
-    const visualization = createContourVisualization(roiImageData, {
-      ...currentContours,
-      bestMatchIndex: bestMatchIndex,
-      shapeSimilarity: bestMatchScore
-    });
+    const visualization = createContourVisualization(roiImageData, currentContours);
     
     // Get region information stored during extraction
     const roiInfo = (roi as any)._roiRegion;
     
     // Adjust center of mass to global image coordinates if region info exists
     let globalCenterOfMass = currentContours.centerOfMass;
-    
-    // If using shape matching and we found a matching contour,
-    // use the best matching contour's center instead of all contours' average
-    if (foundMatchingContour && bestMatchIndex >= 0 && bestMatchIndex < currentContours.contours.size()) {
-      const bestContour = currentContours.contours.get(bestMatchIndex);
-      const M = cv.moments(bestContour);
-      
-      if (M.m00 !== 0) {
-        // Use the matching contour's center
-        globalCenterOfMass = {
-          x: M.m10 / M.m00,
-          y: M.m01 / M.m00
-        };
-        
-        if (Math.random() < 0.05) {
-          console.log(`[contourTracking] Using shape-matched contour center: (${globalCenterOfMass.x.toFixed(1)}, ${globalCenterOfMass.y.toFixed(1)})`);
-        }
-      }
-    }
-    
     if (roiInfo) {
       // Calculate global coordinates by adding the ROI offset to the center position
       // We need to convert from the ROI's local coordinate system to global normalized coordinates
       globalCenterOfMass = {
-        x: (globalCenterOfMass.x + roiInfo.x) / roiInfo.imageWidth,
-        y: (globalCenterOfMass.y + roiInfo.y) / roiInfo.imageHeight
+        x: (currentContours.centerOfMass.x + roiInfo.x) / roiInfo.imageWidth,
+        y: (currentContours.centerOfMass.y + roiInfo.y) / roiInfo.imageHeight
       };
       
       // Only log occasionally to avoid flooding the console
@@ -565,7 +374,6 @@ export async function updateContourTracking(roi: CircleROI, imageData: ImageData
           local (${currentContours.centerOfMass.x.toFixed(1)}, ${currentContours.centerOfMass.y.toFixed(1)}) 
           ROI offset (${roiInfo.x}, ${roiInfo.y})
           → global (${globalCenterOfMass.x.toFixed(3)}, ${globalCenterOfMass.y.toFixed(3)})
-          Shape match: ${foundMatchingContour ? bestMatchScore.toFixed(3) : "Not found"}
         `);
       }
     }
@@ -578,9 +386,7 @@ export async function updateContourTracking(roi: CircleROI, imageData: ImageData
       originalContourCount: initialData.contourCount,
       visibilityRatio,
       centerOfMass: globalCenterOfMass,
-      visualizationData: visualization,
-      shapeMatched: foundMatchingContour,
-      shapeSimilarity: bestMatchScore
+      visualizationData: visualization
     };
   } catch (error) {
     console.error('[contourTracking] Error updating contour tracking:', error);

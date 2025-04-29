@@ -521,7 +521,11 @@ export async function updateContourTracking(roi: CircleROI, imageData: ImageData
     
     // Create contour visualization for debugging
     const visualization = createContourVisualization(roiImageData, {
-      ...currentContours,
+      contours: currentContours.contours,
+      hierarchy: currentContours.hierarchy,
+      contourCount: currentContours.contourCount,
+      centerOfMass: currentContours.centerOfMass,
+      shapeDescriptors: currentContours.shapeDescriptors,
       bestMatchIndex: bestMatchIndex,
       shapeSimilarity: bestMatchScore
     });

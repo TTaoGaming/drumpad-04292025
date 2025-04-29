@@ -268,49 +268,14 @@ export function createContourVisualization(imageData: ImageData, contourResult: 
     
     try {
       // Draw contours on the image
-      const defaultColor = new cv.Scalar(0, 255, 0, 255); // Green for normal contours
-      const matchedColor = new cv.Scalar(0, 0, 255, 255); // Blue for shape-matched contour
+      const color = new cv.Scalar(0, 255, 0, 255); // Green contours
       const centerColor = new cv.Scalar(255, 0, 0, 255); // Red center point
       
-      // Check if we have a shape-matched contour index
-      let matchedContourIndex = -1;
-      if (contourResult.bestMatchIndex !== undefined) {
-        matchedContourIndex = contourResult.bestMatchIndex;
-      }
-      
-      // Draw all contours
-      for (let i = 0; i < contourResult.contours.size(); i++) {
-        // Use different color for the matched contour
-        const color = (i === matchedContourIndex) ? matchedColor : defaultColor;
-        
-        // Draw this contour
-        const contourArray = new cv.MatVector();
-        contourArray.push_back(contourResult.contours.get(i));
-        cv.drawContours(dst, contourArray, 0, color, 2);
-        contourArray.delete();
-      }
+      cv.drawContours(dst, contourResult.contours, -1, color, 2);
       
       // Draw the center of mass
       const center = contourResult.centerOfMass;
       cv.circle(dst, new cv.Point(center.x, center.y), 5, centerColor, -1);
-      
-      // Add text for shape match confidence if available
-      if (contourResult.shapeSimilarity !== undefined && contourResult.shapeSimilarity > 0) {
-        const text = `Shape: ${(contourResult.shapeSimilarity * 100).toFixed(0)}%`;
-        const textColor = contourResult.shapeSimilarity >= contourConfig.huMatchThreshold ? 
-                         new cv.Scalar(0, 0, 255, 255) : // Blue for good match
-                         new cv.Scalar(255, 165, 0, 255); // Orange for poor match
-        
-        cv.putText(
-          dst, 
-          text, 
-          new cv.Point(10, imageData.height - 10),
-          cv.FONT_HERSHEY_SIMPLEX,
-          0.5, // Size
-          textColor,
-          1 // Thickness
-        );
-      }
       
       // Convert back to ImageData using canvas pool
       const tempCanvas = getCanvas(imageData.width, imageData.height);
@@ -520,11 +485,7 @@ export async function updateContourTracking(roi: CircleROI, imageData: ImageData
     }
     
     // Create contour visualization for debugging
-    const visualization = createContourVisualization(roiImageData, {
-      ...currentContours,
-      bestMatchIndex: bestMatchIndex,
-      shapeSimilarity: bestMatchScore
-    });
+    const visualization = createContourVisualization(roiImageData, currentContours);
     
     // Get region information stored during extraction
     const roiInfo = (roi as any)._roiRegion;
