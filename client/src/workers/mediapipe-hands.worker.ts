@@ -8,7 +8,7 @@ const ctx: Worker = self as any;
 
 // Flag to track initialization status
 let isInitialized = false;
-let handsModule: any = null;
+let mediaPipeHands: any = null;
 
 // Performance tracking
 const startTime = performance.now();
@@ -80,14 +80,14 @@ async function initializeMediaPipe(): Promise<void> {
     
     // Create hands object
     // @ts-ignore - We're using the global Hands from the imported script
-    handsModule = new self.Hands({
+    mediaPipeHands = new self.Hands({
       locateFile: (file: string) => {
         return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
       }
     });
 
     // Configure with default settings
-    handsModule.setOptions({
+    mediaPipeHands.setOptions({
       selfieMode: false,
       maxNumHands: 2,
       modelComplexity: 1,
@@ -96,7 +96,7 @@ async function initializeMediaPipe(): Promise<void> {
     });
 
     // Set up results handler
-    handsModule.onResults((results: any) => {
+    mediaPipeHands.onResults((results: any) => {
       // Process results and send back to main thread
       handleResults(results);
     });
@@ -137,7 +137,7 @@ function handleResults(results: any): void {
 
 // Process an image frame using MediaPipe
 async function processFrame(imageData: ImageData | ImageBitmap): Promise<void> {
-  if (!isInitialized || !handsModule) {
+  if (!isInitialized || !mediaPipeHands) {
     log('MediaPipe not initialized yet, skipping frame');
     return;
   }
@@ -158,7 +158,7 @@ async function processFrame(imageData: ImageData | ImageBitmap): Promise<void> {
       }
       
       // Process the image with MediaPipe Hands
-      await handsModule.send({image: canvas});
+      await mediaPipeHands.send({image: canvas});
     }
     
     endTiming('frameProcessing');
@@ -169,13 +169,13 @@ async function processFrame(imageData: ImageData | ImageBitmap): Promise<void> {
 
 // Update MediaPipe settings
 function updateSettings(settings: any): void {
-  if (!isInitialized || !handsModule) {
+  if (!isInitialized || !mediaPipeHands) {
     log('Cannot update settings, MediaPipe not initialized');
     return;
   }
   
   try {
-    handsModule.setOptions(settings);
+    mediaPipeHands.setOptions(settings);
     log('MediaPipe settings updated');
   } catch (error) {
     log(`Error updating settings: ${error}`, 'error');
@@ -200,9 +200,9 @@ ctx.addEventListener('message', async (event) => {
       break;
       
     case 'terminate':
-      if (handsModule) {
+      if (mediaPipeHands) {
         try {
-          handsModule.close();
+          mediaPipeHands.close();
         } catch (e) {
           // Ignore errors during shutdown
         }

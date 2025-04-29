@@ -34,6 +34,7 @@ function App() {
   // References to workers
   const opencvWorkerRef = useRef<Worker | null>(null);
   const mediaPipelineWorkerRef = useRef<Worker | null>(null);
+  const mediaPipeHandsWorkerRef = useRef<Worker | null>(null); // New worker for MediaPipe Hands
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const frameProcessingRef = useRef<boolean>(false);
   const animationFrameRef = useRef<number | null>(null);
@@ -68,10 +69,17 @@ function App() {
       new URL('./workers/media-pipeline.worker.ts', import.meta.url),
       { type: 'module' }
     );
+    
+    // Initialize our new MediaPipe Hands worker
+    // Don't use module type as it needs to use importScripts() for MediaPipe loading
+    const mediaPipeHandsWorker = new Worker(
+      new URL('./workers/mediapipe-hands.worker.ts', import.meta.url)
+    );
 
     // Store workers in refs
     opencvWorkerRef.current = opencvWorker;
     mediaPipelineWorkerRef.current = mediaPipelineWorker;
+    mediaPipeHandsWorkerRef.current = mediaPipeHandsWorker;
 
     // Set up event listeners for worker messages
     opencvWorker.onmessage = (e) => {
@@ -134,6 +142,63 @@ function App() {
         
         // Continue processing frames
         frameProcessingRef.current = false;
+      }
+    };
+    
+    // Handle events from the MediaPipe Hands worker
+    mediaPipeHandsWorker.onmessage = (e) => {
+      if (e.data.type === 'log') {
+        addLog(`[MediaPipe Hands]: ${e.data.message}`, e.data.level || 'info');
+      } else if (e.data.type === 'status') {
+        // Update the MediaPipe status
+        const isReady = e.data.ready;
+        if (isReady) {
+          addLog('MediaPipe Hands worker ready', 'success');
+        }
+      } else if (e.data.type === 'loaded') {
+        // Worker loaded, initialize it
+        addLog('MediaPipe Hands worker loaded, initializing...');
+        mediaPipeHandsWorker.postMessage({ command: 'init' });
+      } else if (e.data.type === 'results') {
+        // We got hand tracking results from the worker
+        if (e.data.data) {
+          const handLandmarks = e.data.data.landmarks || [];
+          
+          // Only continue processing if we have landmarks
+          if (handLandmarks.length > 0) {
+            const handData = {
+              landmarks: handLandmarks[0], // Just use the first hand for now
+              connections: [],             // Will be filled in by the media pipeline
+              colors: []                   // Will be filled in by the media pipeline
+            };
+            
+            // Update state
+            setHandData(handData);
+            
+            // Forward to the media pipeline for additional processing and visualization
+            if (mediaPipelineWorkerRef.current) {
+              mediaPipelineWorkerRef.current.postMessage({
+                command: 'process-frame',
+                data: {
+                  handLandmarks: handLandmarks[0],
+                  handData: handData
+                }
+              });
+            }
+          }
+          
+          // Update performance metrics
+          if (e.data.performance) {
+            setPerformanceMetrics(prev => ({
+              ...(prev || {}),
+              ...e.data.performance,
+              mediapigeHandsWorker: e.data.performance
+            }));
+          }
+          
+          // Continue processing frames
+          frameProcessingRef.current = false;
+        }
       }
     };
 
@@ -370,19 +435,32 @@ function App() {
         // Capture frame from video
         const frameData = getVideoFrame(videoRef.current);
         
-        if (frameData && mediaPipelineWorkerRef.current) {
+        if (frameData) {
           // Only log occasionally to reduce overhead
           if (++frameLogCountRef.current % LOG_EVERY_N_FRAMES === 0) {
             console.log('Frame processing active');
           }
           
-          // Send frame to Media Pipeline worker for hand detection
-          mediaPipelineWorkerRef.current.postMessage({
-            command: 'process-frame',
-            data: frameData
-          });
+          // Send frame to our new MediaPipe Hands worker for processing
+          // This offloads the expensive MediaPipe hand detection to a worker
+          if (mediaPipeHandsWorkerRef.current) {
+            mediaPipeHandsWorkerRef.current.postMessage({
+              command: 'process',
+              data: {
+                frame: frameData
+              }
+            });
+          } else {
+            // Fallback to the old pipeline if the hands worker isn't ready
+            if (mediaPipelineWorkerRef.current) {
+              mediaPipelineWorkerRef.current.postMessage({
+                command: 'process-frame',
+                data: frameData
+              });
+            }
+          }
           
-          // We could also send to OpenCV worker in parallel for other processing
+          // We can still send to OpenCV worker in parallel for other processing
           if (opencvWorkerRef.current) {
             opencvWorkerRef.current.postMessage({
               command: 'process-frame',
