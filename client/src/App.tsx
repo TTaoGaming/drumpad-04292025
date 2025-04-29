@@ -5,15 +5,12 @@ import ControlsOverlay from "@/components/ControlsOverlay";
 import Notifications from "@/components/Notifications";
 import ConsoleOutput from "@/components/ConsoleOutput";
 import HandVisualization from "@/components/HandVisualization";
-import PerformanceDisplay from "@/components/PerformanceDisplay";
-import PerformanceMonitor from "@/components/PerformanceMonitor";
-import FpsStats from "@/components/PerformanceMetrics";
 import MediaPipeHandTracker from "@/components/MediaPipeHandTracker";
 import DrawingCanvas from "@/components/DrawingCanvas";
 import ImprovedROIDebugCanvas from "@/components/ImprovedROIDebugCanvas";
 import TrackingVisualization from "@/components/TrackingVisualization";
 import SettingsPanel from "@/components/settings/SettingsPanel";
-import PerformanceOptimizationStatus from "@/components/PerformanceOptimizationStatus";
+import UnifiedPerformanceDashboard from "@/components/UnifiedPerformanceDashboard";
 import { EventType, addListener, dispatch } from "@/lib/eventBus";
 import { Notification, HandData, PerformanceMetrics, DrawingPath, CircleROI } from "@/lib/types";
 import { getVideoFrame } from "@/lib/cameraManager";
@@ -613,14 +610,6 @@ function App() {
         isFullscreen={isFullscreen}
       />
       
-      {/* Performance metrics display */}
-      {performanceMetrics && (
-        <PerformanceDisplay
-          performance={performanceMetrics}
-          className="absolute top-16 right-4 z-10"
-        />
-      )}
-      
       <Notifications 
         notifications={notifications}
       />
@@ -632,14 +621,8 @@ function App() {
       {/* Settings Panel */}
       <SettingsPanel />
       
-      {/* Performance Monitor */}
-      <PerformanceMonitor />
-      
-      {/* FPS Statistics with averages */}
-      {isCameraRunning && <FpsStats />}
-      
-      {/* Canvas Pool Performance Monitor */}
-      {isCameraRunning && <PerformanceOptimizationStatus targetFps={60} />}
+      {/* Unified Performance Dashboard */}
+      {isCameraRunning && <UnifiedPerformanceDashboard targetFps={60} />}
     </div>
   );
 }

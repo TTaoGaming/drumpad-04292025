@@ -66,6 +66,13 @@ export interface HandData {
 export interface PerformanceMetrics {
   fps: number;
   processingTime: number;
+  // Module-specific timing metrics
+  captureTime?: number;        // Time spent capturing frame
+  handDetectionTime?: number;  // Time spent on hand detection
+  contourTrackingTime?: number; // Time spent on contour tracking
+  roiProcessingTime?: number;  // Time spent processing ROIs
+  renderTime?: number;         // Time spent rendering
+  // Legacy module timings for backward compatibility
   moduleTimings: {
     [moduleId: string]: number;
   };
