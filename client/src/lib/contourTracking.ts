@@ -350,6 +350,29 @@ export async function updateContourTracking(roi: CircleROI, imageData: ImageData
     // Create contour visualization for debugging
     const visualization = createContourVisualization(roiImageData, currentContours);
     
+    // Get region information stored during extraction
+    const roiInfo = (roi as any)._roiRegion;
+    
+    // Adjust center of mass to global image coordinates if region info exists
+    let globalCenterOfMass = currentContours.centerOfMass;
+    if (roiInfo) {
+      // Calculate global coordinates by adding the ROI offset to the center position
+      // We need to convert from the ROI's local coordinate system to global normalized coordinates
+      globalCenterOfMass = {
+        x: (currentContours.centerOfMass.x + roiInfo.x) / roiInfo.imageWidth,
+        y: (currentContours.centerOfMass.y + roiInfo.y) / roiInfo.imageHeight
+      };
+      
+      // Only log occasionally to avoid flooding the console
+      if (Math.random() < 0.05) { // Log approximately 5% of the time
+        console.log(`[contourTracking] Adjusted center of mass: 
+          local (${currentContours.centerOfMass.x.toFixed(1)}, ${currentContours.centerOfMass.y.toFixed(1)}) 
+          ROI offset (${roiInfo.x}, ${roiInfo.y})
+          → global (${globalCenterOfMass.x.toFixed(3)}, ${globalCenterOfMass.y.toFixed(3)})
+        `);
+      }
+    }
+    
     // Return tracking result with visualization
     return {
       isInitialized: true,
@@ -357,7 +380,7 @@ export async function updateContourTracking(roi: CircleROI, imageData: ImageData
       contourCount: currentContours.contourCount,
       originalContourCount: initialData.contourCount,
       visibilityRatio,
-      centerOfMass: currentContours.centerOfMass,
+      centerOfMass: globalCenterOfMass,
       visualizationData: visualization
     };
   } catch (error) {
@@ -408,6 +431,9 @@ function extractROIImageData(roi: CircleROI, imageData: ImageData): ImageData | 
       imageData.width - x,
       imageData.height - y
     );
+    
+    // Store ROI region information for coordinate transformation
+    (roi as any)._roiRegion = { x, y, size, imageWidth: imageData.width, imageHeight: imageData.height };
     
     // Check for valid size
     if (size <= 0) {

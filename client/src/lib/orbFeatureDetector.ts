@@ -425,21 +425,22 @@ export class ROIManager {
           const displayElement = document.querySelector('.camera-view') as HTMLElement;
           
           if (videoElement && displayElement && contourResult.centerOfMass) {
-            const scaleX = displayElement.clientWidth / videoElement.videoWidth;
-            const scaleY = displayElement.clientHeight / videoElement.videoHeight;
+            // The center of mass is already calculated in global normalized coordinates
+            // by contourTracking.ts - no need to renormalize
             
-            // Update the ROI position with the new tracked position
+            // Set the new center directly from the contour tracking result
             const newCenter = {
-              x: roi.center.x, // Keep x position the same for now
-              y: roi.center.y  // Keep y position the same for now
-              // Note: We could use contourResult.centerOfMass to update position
-              // but that might cause too much movement, so keeping stable for now
+              x: contourResult.centerOfMass.x,
+              y: contourResult.centerOfMass.y
             };
             
             // Only log occasionally
             if (this.logCounter % this.LOG_THROTTLE === 0) {
-              console.log(`[ROIManager] ROI ${roi.id} center of mass: (${contourResult.centerOfMass.x.toFixed(3)}, ${contourResult.centerOfMass.y.toFixed(3)})`);
+              console.log(`[ROIManager] Moving ROI ${roi.id} from (${roi.center.x.toFixed(3)}, ${roi.center.y.toFixed(3)}) to (${newCenter.x.toFixed(3)}, ${newCenter.y.toFixed(3)})`);
             }
+            
+            // Update the ROI center coordinates
+            roi.center = newCenter;
           }
         }
         
